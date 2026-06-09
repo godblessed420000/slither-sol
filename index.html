@@ -7,21 +7,10 @@
 <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0">
 <meta http-equiv="Pragma"        content="no-cache">
 <meta http-equiv="Expires"       content="0">
-<title>SLITHER.SOL — PvP Arena</title>
+<title>SLITHER.SOL — Jun 9 2026 22:05 UTC</title>
 <script>
-// Auto-reload when a new version is deployed — busts stale browser cache
-(function(){
-  var v='Jun 9 2026 22:05 UTC';
-  var k='slither_build';
-  try {
-    if(localStorage.getItem(k)!==v && !location.search.includes('_cb=')){
-      localStorage.setItem(k,v);
-      location.replace(location.pathname+'?_cb='+encodeURIComponent(v));
-    } else {
-      localStorage.setItem(k,v);
-    }
-  } catch(e){}
-})();
+// Stamp browser tab title immediately so version is visible before any JS loads
+document.title = 'SLITHER.SOL — Jun 9 2026 22:05 UTC';
 </script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap');
@@ -836,6 +825,7 @@ canvas{display:block;width:100%;height:100%;}
     <div class="overlay" id="ovLogin">
       <div style="display:flex;flex-direction:column;align-items:center;gap:18px;max-width:420px;width:100%;">
         <div style="font-family:'Orbitron',monospace;font-size:2rem;font-weight:900;background:linear-gradient(90deg,var(--purple),var(--green));-webkit-background-clip:text;-webkit-text-fill-color:transparent;">SLITHER.SOL</div>
+        <div style="font-family:'Share Tech Mono',monospace;font-size:.95rem;font-weight:700;color:#14F195;text-align:center;letter-spacing:2px;background:rgba(20,241,149,.08);border:1px solid rgba(20,241,149,.3);border-radius:6px;padding:5px 18px;">&#9679; <span id="loginVersionText">Jun 9 2026 22:05 UTC</span></div>
         <div style="color:var(--dim);font-size:.76rem;text-align:center;max-width:340px;line-height:1.6;">Real-money PvP snake arena on Solana. Enter your details to get started.</div>
         <div style="background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:28px 32px;width:100%;display:flex;flex-direction:column;gap:12px;box-shadow:0 0 40px rgba(153,69,255,.15);box-sizing:border-box;">
           <div style="font-family:'Orbitron',monospace;font-size:.75rem;color:var(--dim);letter-spacing:2px;text-align:center;">CREATE YOUR ACCOUNT</div>
@@ -5306,15 +5296,20 @@ setInterval(function(){
 
 // ════════════════ INIT ════════════════
 window.addEventListener('load', function() {
-  // Stamp the lobby screen version badge with the live build string
+  // Sync all version badge elements from GAME_BUILD
+  var _bv = GAME_BUILD;
+  document.title = 'SLITHER.SOL — ' + _bv;
+  console.log('%c SLITHER.SOL build: ' + _bv, 'color:#14F195;font-size:14px;font-weight:bold;');
   var vt = document.getElementById('versionText');
   var vb = document.getElementById('versionBadge');
-  if (vt) vt.textContent = GAME_BUILD;
-  if (vb) vb.dataset.v  = GAME_BUILD;
+  if (vt) vt.textContent = _bv;
+  if (vb) vb.dataset.v  = _bv;
   var hvt = document.getElementById('headerVersionText');
   var hvb = document.getElementById('headerVersionBadge');
-  if (hvt) hvt.textContent = GAME_BUILD;
-  if (hvb) hvb.dataset.v  = GAME_BUILD;
+  if (hvt) hvt.textContent = _bv;
+  if (hvb) hvb.dataset.v  = _bv;
+  var lvt = document.getElementById('loginVersionText');
+  if (lvt) lvt.textContent = _bv;
 
   initCanvas();
 
