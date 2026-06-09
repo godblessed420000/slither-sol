@@ -3839,10 +3839,13 @@ async function triggerCashout(){
     W.lamports = Math.floor(_onChain * 1e9);
     saveSession();
   }
-  // gross = full accumulated value: entry wager + all kill earnings this round.
-  // Do NOT cap to _onChain — kill TXs may not have confirmed yet when player cashes out.
-  // execCashout has its own on-chain guard that scales proportionally if needed.
-  var gross = calcVal();
+  // gross = declared game amount: entry wager + all kill earnings this session.
+  // Using t.sol + killSOL (not W.balance) ensures the creator fee is always 10% of
+  // the full game value the player accumulated — regardless of whether their wallet
+  // had extra SOL from other sources, or kill TXs haven't confirmed on-chain yet.
+  var _gameGross = +(((t.sol || 0) + (killSOL || 0)).toFixed(6));
+  // Fallback to wallet balance only if game tracking is broken (t.sol = 0 unexpectedly)
+  var gross = (_gameGross > 0.000001) ? _gameGross : calcVal();
   if(gross < 0.000100){ toast('Wallet balance too low to cashout — fund your wallet first','error'); return; }
   gameRunning=false;
   if(_elSidebar) _elSidebar.style.display=''; setTimeout(resizeC,30);
