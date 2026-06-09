@@ -8,6 +8,21 @@
 <meta http-equiv="Pragma"        content="no-cache">
 <meta http-equiv="Expires"       content="0">
 <title>SLITHER.SOL — PvP Arena</title>
+<script>
+// Auto-reload when a new version is deployed — busts stale browser cache
+(function(){
+  var v='BUILD_VERSION';
+  var k='slither_build';
+  try {
+    if(localStorage.getItem(k)!==v && !location.search.includes('_cb=')){
+      localStorage.setItem(k,v);
+      location.replace(location.pathname+'?_cb='+encodeURIComponent(v));
+    } else {
+      localStorage.setItem(k,v);
+    }
+  } catch(e){}
+})();
+</script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap');
 :root{--purple:#9945FF;--green:#14F195;--blue:#00C2FF;--red:#FF4560;--gold:#FFD700;--bg:#020810;--panel:#080d1a;--border:#141e35;--text:#dde6f0;--dim:#3d4f6a;}
