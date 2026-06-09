@@ -881,6 +881,10 @@ canvas{display:block;width:100%;height:100%;}
         <div style="display:flex;gap:20px;font-size:.65rem;color:var(--dim);">
           <span>&#128274; Secure</span><span>&#128179; Solana Wallet</span><span>&#9675; Mainnet</span>
         </div>
+        <div style="background:rgba(20,241,149,.08);border:1px solid rgba(20,241,149,.25);border-radius:8px;padding:6px 18px;font-family:'Share Tech Mono',monospace;font-size:.72rem;font-weight:700;color:#14F195;letter-spacing:1px;display:inline-flex;align-items:center;gap:6px;">
+          <span style="font-size:.55rem;">&#9679;</span>
+          <span id="loginVersionText">BUILD_VERSION</span>
+        </div>
       </div>
     </div>
 
@@ -1009,9 +1013,9 @@ canvas{display:block;width:100%;height:100%;}
       </div>
       <div style="width:100%;max-width:700px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
         <div style="font-size:.58rem;color:var(--dim);">Mouse to steer &middot; Hold LMB or Space to boost &middot; Hold Q (1s) to cash out</div>
-        <div id="versionBadge" style="display:inline-flex;align-items:center;gap:5px;background:rgba(153,69,255,.08);border:1px solid rgba(153,69,255,.18);border-radius:4px;padding:2px 8px;font-family:'Share Tech Mono',monospace;font-size:.52rem;color:var(--dim);cursor:pointer;user-select:all;" title="Game version — click to copy" onclick="(function(v){navigator.clipboard&&navigator.clipboard.writeText(v).catch(function(){});toast('Version copied: '+v);})(document.getElementById('versionBadge').dataset.v)">
-          <span style="color:rgba(153,69,255,.6);font-size:.48rem;">&#9679;</span>
-          <span id="versionText">v—</span>
+        <div id="versionBadge" style="display:inline-flex;align-items:center;gap:5px;background:rgba(20,241,149,.08);border:1px solid rgba(20,241,149,.25);border-radius:8px;padding:5px 14px;font-family:'Share Tech Mono',monospace;font-size:.7rem;font-weight:700;color:#14F195;cursor:pointer;user-select:all;letter-spacing:1px;" title="Game version — click to copy" onclick="(function(v){navigator.clipboard&&navigator.clipboard.writeText(v).catch(function(){});toast('Version copied: '+v);})(this.dataset.v)" data-v="BUILD_VERSION">
+          <span style="font-size:.5rem;">&#9679;</span>
+          <span id="versionText">BUILD_VERSION</span>
         </div>
       </div>
     </div>
