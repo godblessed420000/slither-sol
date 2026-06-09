@@ -17,9 +17,12 @@ jobs:
 
       - name: Stamp build version
         run: |
-          BUILD="$(date +'%b %-d · %H:%M UTC')"
+          BUILD="$(date +'%b %-d %Y %H:%M UTC')"
           sed -i "s/var GAME_BUILD = .*/var GAME_BUILD = '${BUILD}';/" index.html
+          sed -i "s/BUILD_VERSION/${BUILD}/" index.html
           echo "Stamped version: ${BUILD}"
+          grep "GAME_BUILD" index.html | head -1
+          grep "headerVersionText" index.html | head -1
 
       - name: Install Vercel CLI
         run: npm install -g vercel@latest
