@@ -3826,9 +3826,10 @@ async function triggerCashout(){
     W.lamports = Math.floor(_onChain * 1e9);
     saveSession();
   }
-  // gross = actual SOL in wallet capped to game balance.
-  // With new self-send cashout, player sends gross out and receives 90% back.
-  var gross = _onChain > 0 ? Math.min(calcVal(), _onChain) : calcVal();
+  // gross = full accumulated value: entry wager + all kill earnings this round.
+  // Do NOT cap to _onChain — kill TXs may not have confirmed yet when player cashes out.
+  // execCashout has its own on-chain guard that scales proportionally if needed.
+  var gross = calcVal();
   if(gross < 0.000100){ toast('Wallet balance too low to cashout — fund your wallet first','error'); return; }
   gameRunning=false;
   if(_elSidebar) _elSidebar.style.display=''; setTimeout(resizeC,30);
@@ -3839,13 +3840,23 @@ async function triggerCashout(){
   ['cashoutHud','boostWrap','pingEl','hudTierBadge','activeLobbyBadge','chatBox'].forEach(function(id){ var el=document.getElementById(id); if(el) el.style.display='none'; }); _closeChat();
   var coMsg=document.getElementById('coMsg'); if(coMsg) coMsg.textContent=t.name+' · Kills:'+myKills+' · Score:'+score+' · Length:'+player.segs.length;
   var coAmt=document.getElementById('coAmt');
-  if(coAmt) coAmt.textContent='+'+r.net.toFixed(4)+' SOL returned to wallet ('+r.gross.toFixed(4)+' carried − 10% fee)';
+  var _entrySOL = t.sol || 0;
+  var _killEarn = killSOL || 0;
+  if(myKills>0)
+    coAmt.textContent='+'+r.net.toFixed(4)+' SOL ('+_entrySOL.toFixed(4)+' entry + '+_killEarn.toFixed(4)+' kills − 10% fee)';
+  else
+    coAmt.textContent='+'+r.net.toFixed(4)+' SOL returned to wallet ('+r.gross.toFixed(4)+' carried − 10% fee)';
   var coFees=document.getElementById('coFees');
-  if(coFees) coFees.innerHTML=
-    '<div class="pf-row"><span class="pf-lbl">Total carried</span><span>'+r.gross.toFixed(4)+' SOL</span></div>'+
-    '<div class="pf-row"><span class="pf-lbl">Creator fee (10%)</span><span class="pf-house">-'+r.house.toFixed(4)+' SOL</span></div>'+
-    '<div class="pf-row" style="border-top:1px solid rgba(255,255,255,.07);padding-top:3px;margin-top:2px"><span class="pf-lbl">Returned to your wallet (90%)</span><span class="pf-you">+'+r.net.toFixed(4)+' SOL</span></div>'+
-    (myKills>0?'<div class="pf-row"><span class="pf-lbl">Kills this round</span><span style="color:var(--green)">'+myKills+' kill'+(myKills>1?'s':'')+'</span></div>':'');
+  if(coFees){
+    var _rows='';
+    _rows+='<div class="pf-row"><span class="pf-lbl">Entry wager</span><span>'+_entrySOL.toFixed(4)+' SOL</span></div>';
+    if(myKills>0)
+      _rows+='<div class="pf-row"><span class="pf-lbl">Kill earnings ('+myKills+' kill'+(myKills>1?'s':'')+')</span><span style="color:var(--green)">+'+_killEarn.toFixed(4)+' SOL</span></div>';
+    _rows+='<div class="pf-row"><span class="pf-lbl">Total carried</span><span>'+r.gross.toFixed(4)+' SOL</span></div>';
+    _rows+='<div class="pf-row"><span class="pf-lbl">Creator fee (10%)</span><span class="pf-house">-'+r.house.toFixed(4)+' SOL</span></div>';
+    _rows+='<div class="pf-row" style="border-top:1px solid rgba(255,255,255,.07);padding-top:3px;margin-top:2px"><span class="pf-lbl">You keep (90%)</span><span class="pf-you">+'+r.net.toFixed(4)+' SOL</span></div>';
+    coFees.innerHTML=_rows;
+  }
   var rbc=document.getElementById('rejoinBtnCashout');
   if(rbc) rbc.textContent='▶ Rejoin '+(t.usd>0?'$'+t.usd+' Lobby':'Free Lobby');
   hideAll(); var ov=document.getElementById('ovCashout'); if(ov) ov.classList.remove('hidden');
