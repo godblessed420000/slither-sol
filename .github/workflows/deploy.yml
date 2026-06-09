@@ -15,6 +15,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Stamp build version
+        run: |
+          BUILD="$(date +'%b %-d · %H:%M UTC')"
+          sed -i "s/var GAME_BUILD = .*/var GAME_BUILD = '${BUILD}';/" index.html
+          echo "Stamped version: ${BUILD}"
+
       - name: Install Vercel CLI
         run: npm install -g vercel@latest
 
