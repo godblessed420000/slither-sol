@@ -728,6 +728,10 @@ canvas{display:block;width:100%;height:100%;}
   <!-- Ably removed — replaced with direct WebSocket to Fly.io server -->
 </head>
 <body>
+<!-- ALWAYS-VISIBLE VERSION BANNER — fixed top, z-index above everything -->
+<div id="versionBanner" style="position:fixed;top:0;left:0;right:0;z-index:99999;background:#14F195;color:#000;font-family:'Share Tech Mono',monospace;font-size:.82rem;font-weight:900;text-align:center;padding:5px 10px;letter-spacing:2px;cursor:pointer;" onclick="this.style.display='none'" title="Click to dismiss">
+  &#9679; BUILD: <span id="bannerVersionText">Jun 9 2026 22:05 UTC</span> &nbsp;&#10005;
+</div>
 
 <!-- ══ MOBILE WALLET REFRESH BAR ══════════════════════════════════════════ -->
 <!-- Shown on touch/narrow screens. Fixed to top, hidden during active game. -->
@@ -5310,6 +5314,8 @@ window.addEventListener('load', function() {
   if (hvb) hvb.dataset.v  = _bv;
   var lvt = document.getElementById('loginVersionText');
   if (lvt) lvt.textContent = _bv;
+  var bvt = document.getElementById('bannerVersionText');
+  if (bvt) bvt.textContent = _bv;
 
   initCanvas();
 
