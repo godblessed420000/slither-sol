@@ -2766,10 +2766,13 @@ function _wsConnect(onReady) {
           clearInterval(_lobbyPingTimer);
           if (!gameRunning) {
             _lobbyPingTimer = setInterval(function() {
-              if (gameRunning || !_ws || _ws.readyState !== WebSocket.OPEN) {
-                clearInterval(_lobbyPingTimer); _lobbyPingTimer = null; return;
+              if (gameRunning) { clearInterval(_lobbyPingTimer); _lobbyPingTimer = null; return; }
+              if (_ablyChannel) {
+                try { _ablyChannel.publish('join', { n: _currentName, color: _currentColor, reply: true }); } catch(_) {}
               }
-              _ws.send(JSON.stringify({ type:'join', clientId:_wsClientId, tier:_currentTier, data:{ n:_currentName, color:_currentColor, reply:true } }));
+              if (_ws && _ws.readyState === WebSocket.OPEN) {
+                try { _ws.send(JSON.stringify({ type:'join', clientId:_wsClientId, tier:_currentTier, data:{ n:_currentName, color:_currentColor, reply:true } })); } catch(_) {}
+              }
             }, 4000);
           }
         });
@@ -2780,21 +2783,19 @@ function _wsConnect(onReady) {
 }
 
 // ── Send helper ──────────────────────────────────────────────────────────────
-// pos  → fly.io WebSocket (low-latency 50fps stream — too fast/cheap for Ably)
-// rest → Ably channel (server-verified, cryptographically gated)
-//        Also echoed to fly.io WS so the server keeps room membership for pos routing.
+// pos / ping → fly.io WebSocket only (latency-sensitive, not security-relevant)
+// die / chat → Ably channel ONLY — no fly.io echo.
+//   Echoing die/chat to fly.io would let attackers inject fake die events
+//   directly into fly.io WS and would cause double-processing on receivers.
 function _wsSend(type, data) {
-  if (type === 'pos') {
+  if (type === 'pos' || type === 'ping') {
     if (!_ws || _ws.readyState !== WebSocket.OPEN) return;
     try { _ws.send(JSON.stringify({ type: type, clientId: _wsClientId, data: data || {} })); } catch(e) {}
     return;
   }
+  // All control events go through Ably only — cryptographically gated.
   if (_ablyChannel) {
     try { _ablyChannel.publish(type, data || {}); } catch(e) { console.warn('[ably] publish error:', e); }
-  }
-  // Echo to fly.io WS so it can keep the tier → clientId mapping for pos routing
-  if (_ws && _ws.readyState === WebSocket.OPEN) {
-    try { _ws.send(JSON.stringify({ type: type, clientId: _wsClientId, tier: _currentTier, data: data || {} })); } catch(e) {}
   }
 }
 
@@ -2824,12 +2825,12 @@ function _ablyConnect(tier) {
       if (!cid || cid === _myClientId) return; // skip own echo
       if (type === 'join') {
         _ablyVerifiedPeers[cid] = true;
-        _wsHandleMsg({ type: 'join', clientId: cid, data: d });
+        _wsHandleMsg({ type: 'join', clientId: cid, data: d }, true);
       } else if (type === 'leave') {
         delete _ablyVerifiedPeers[cid];
-        _wsHandleMsg({ type: 'leave', clientId: cid, data: d });
+        _wsHandleMsg({ type: 'leave', clientId: cid, data: d }, true);
       } else if (type === 'die' || type === 'chat' || type === 'start') {
-        _wsHandleMsg({ type: type, clientId: cid, data: d });
+        _wsHandleMsg({ type: type, clientId: cid, data: d }, true);
       }
     } catch(e) { console.warn('[ably] msg error:', e); }
   });
@@ -2853,8 +2854,17 @@ function _ablyConnect(tier) {
 }
 
 // ── Incoming message router ──────────────────────────────────────────────────
-function _wsHandleMsg(msg) {
+// fromAbly=true  → message came through the Ably channel (payment-verified)
+// fromAbly=false → message came through fly.io WebSocket (unauthenticated)
+// die and chat are ONLY processed when fromAbly=true. This blocks:
+//   1. Fake die injections from anyone connecting directly to fly.io WS
+//   2. Double-processing (die sent to Ably AND echoed to fly.io would count twice)
+function _wsHandleMsg(msg, fromAbly) {
   var type = msg.type, cid = msg.clientId, d = msg.data || {};
+
+  // Security gate: die and chat must come from Ably (payment-verified).
+  // Silently drop these if they arrived via the unauthenticated fly.io WS.
+  if ((type === 'die' || type === 'chat') && !fromAbly) return;
 
   // Round-trip ping response — update ping display
   if (type === 'ping') {
@@ -2879,11 +2889,10 @@ function _wsHandleMsg(msg) {
     if (!gameRunning) renderSlots();
     if (isNew && !d.reply) toast((d.n || 'A player') + ' entered the arena!', 'info');
     // Reply so the joining player knows we exist.
-    if (isNew && _currentTier) {
+    // Must reply via Ably — the new player listens on the Ably channel, not fly.io WS.
+    if (isNew && _currentTier && _ablyChannel) {
       var myName2 = userProfile ? userProfile.name.split(' ')[0].slice(0,14) : 'Player';
-      if (_ws && _ws.readyState === WebSocket.OPEN) {
-        _ws.send(JSON.stringify({ type:'join', clientId:_wsClientId, tier:_currentTier, data:{ n:myName2, color:_playerColor, reply:true } }));
-      }
+      try { _ablyChannel.publish('join', { n: myName2, color: _playerColor, reply: true }); } catch(_) {}
     }
     return;
   }
@@ -3006,15 +3015,20 @@ function _wsJoin(tier) {
   function doJoin() {
     if (!_ws || _ws.readyState !== WebSocket.OPEN) return;
     // tier MUST be top-level — server reads { type, clientId, tier, data } from message root
+    // Send join to fly.io WS so the server routes pos messages to the right tier room
     _ws.send(JSON.stringify({ type:'join', clientId:_wsClientId, tier:_currentTier, data:{ n:_currentName, color:_currentColor } }));
-    // Re-announce every 4s while in lobby so late-joiners discover us.
-    // Use a tracked global so only ONE interval runs at a time — prevents spam on rejoin.
+    // Re-announce every 4s so late-joiners discover us.
+    // Announcement goes through Ably — that's where other players listen for peers.
+    // fly.io WS gets it too so the server keeps the room mapping current.
     clearInterval(_lobbyPingTimer);
     _lobbyPingTimer = setInterval(function() {
-      if (gameRunning || !_ws || _ws.readyState !== WebSocket.OPEN) {
-        clearInterval(_lobbyPingTimer); _lobbyPingTimer = null; return;
+      if (gameRunning) { clearInterval(_lobbyPingTimer); _lobbyPingTimer = null; return; }
+      if (_ablyChannel) {
+        try { _ablyChannel.publish('join', { n: _currentName, color: _currentColor, reply: true }); } catch(_) {}
       }
-      _ws.send(JSON.stringify({ type:'join', clientId:_wsClientId, tier:_currentTier, data:{ n:_currentName, color:_currentColor, reply:true } }));
+      if (_ws && _ws.readyState === WebSocket.OPEN) {
+        try { _ws.send(JSON.stringify({ type:'join', clientId:_wsClientId, tier:_currentTier, data:{ n:_currentName, color:_currentColor, reply:true } })); } catch(_) {}
+      }
     }, 4000);
   }
 

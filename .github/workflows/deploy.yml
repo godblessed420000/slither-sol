@@ -17,12 +17,13 @@ jobs:
 
       - name: Stamp build version
         run: |
-          BUILD_NUM=$(git rev-list --count HEAD)
-          BUILD="V${BUILD_NUM}"
-          # Replace the JS variable line
+          # Use the Actions run number — increments with every deploy, no git history needed.
+          BUILD="V${{ github.run_number }}"
+          # Update the JS config variable (drives all version displays at runtime)
           sed -i "s/var GAME_BUILD = .*/var GAME_BUILD = '${BUILD}';/" index.html
-          # Replace all V-number version placeholders
-          sed -i -E "s/V[0-9]+/${BUILD}/g" index.html
+          # Update static HTML placeholders (visible before JS loads)
+          sed -i "s|<title>SLITHER\.SOL — V[0-9]*</title>|<title>SLITHER.SOL — ${BUILD}</title>|g" index.html
+          sed -i "s|document\.title = 'SLITHER\.SOL — V[0-9]*';|document.title = 'SLITHER.SOL — ${BUILD}';|g" index.html
           echo "Stamped: ${BUILD}"
 
       - name: Install Vercel CLI
