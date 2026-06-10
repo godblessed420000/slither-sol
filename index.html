@@ -2616,14 +2616,27 @@ async function payEntryFee(tierKey) {
       var _conn  = _txRes.conn, _bh = _txRes.bh;
       if (!_bh || !_bh.blockhash) throw new Error('RPC blockhash unavailable');
 
+      // ── Freshness guard ──────────────────────────────────────────────────────
+      // Free RPCs sometimes return a CACHED blockhash that's 100-200 slots old.
+      // In that case lastValidBlockHeight is already almost (or already) expired
+      // before we even build the TX, and the poll loop sees it as dead immediately.
+      // We measure slots remaining and discard the blockhash if it's too stale.
+      var _nowHt = 0;
+      try { _nowHt = await _conn.getBlockHeight('confirmed'); } catch(_) {}
+      var _slotsLeft = (_nowHt > 0) ? (_bh.lastValidBlockHeight - _nowHt) : 150;
+      console.log('[entry] attempt ' + (_attempt + 1) + ' blockhash=' + _bh.blockhash.slice(0,8)
+        + ' lastValidBH=' + _bh.lastValidBlockHeight + ' nowHt=' + _nowHt + ' slotsLeft=' + _slotsLeft);
+      if (_slotsLeft < 80) {
+        console.warn('[entry] STALE blockhash — only ' + _slotsLeft + ' slots left, discarding');
+        throw new Error('Blockhash not found'); // triggers retry with fresh RPC race
+      }
+
       var _from  = new solanaWeb3.PublicKey(W.pubkey);
       var _house = new solanaWeb3.PublicKey(HOUSE_WALLET_ADDRESS);
       var _joinTx = new solanaWeb3.Transaction();
       _joinTx.recentBlockhash      = _bh.blockhash;
       _joinTx.lastValidBlockHeight = _bh.lastValidBlockHeight;
       _joinTx.feePayer             = _from;
-      // Priority fee: 500 000 micro-lamports per compute unit.
-      // Validators sort by fee-per-CU — this puts us at the front of the queue.
       if (solanaWeb3.ComputeBudgetProgram) {
         _joinTx.add(solanaWeb3.ComputeBudgetProgram.setComputeUnitLimit({ units: 400 }));
         _joinTx.add(solanaWeb3.ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 500000 }));
@@ -2632,29 +2645,32 @@ async function payEntryFee(tierKey) {
       _joinTx.sign(_localKeypair);
       var _rawTx = _joinTx.serialize();
 
-      // Broadcast to ALL RPCs simultaneously — a single free RPC often silently
-      // drops TX submissions when rate-limited. Sending to all 5 endpoints at once
-      // maximises the chance that at least one routes the TX to the validator network.
-      // All produce the same signature since the TX is pre-signed.
+      // ── Broadcast to ALL RPCs simultaneously ─────────────────────────────────
+      // A single free RPC often silently drops TX submissions when rate-limited.
+      // Sending to all 5 at once maximises validator network propagation.
+      // All return the same signature since the TX is pre-signed.
       toast('Submitting entry fee…', 'info');
       var _sendPromises = SOLANA_RPCS.map(function(ep) {
         return (new solanaWeb3.Connection(ep, { commitment: 'confirmed' }))
           .sendRawTransaction(_rawTx, { skipPreflight: true, maxRetries: 0 })
-          .catch(function() { return null; });
+          .catch(function(e) { console.warn('[entry] send failed on', ep, e.message); return null; });
       });
       var _sendAll = await Promise.all(_sendPromises);
+      console.log('[entry] send results:', _sendAll.map(function(s,i) { return SOLANA_RPCS[i].split('/')[2] + ':' + (s ? s.slice(0,8) : 'null'); }).join(', '));
       _txSig = _sendAll.find(function(s) { return s; }) || null;
       if (!_txSig) throw new Error('All RPC endpoints rejected the transaction — check network');
       toast('Entry fee sent — confirming…', 'info');
 
-      // Poll for confirmation. Re-broadcast every 8s to keep the TX alive in
-      // case a validator drops it from their mempool before including it.
+      // ── Poll for confirmation ─────────────────────────────────────────────────
+      // We do NOT check getBlockHeight here — that call can also return stale data
+      // from free RPCs and trigger a false "expired" before the TX has a chance to land.
+      // Instead we rely on the wall-clock timeout (well within the actual validity window)
+      // and re-broadcast every 8s so the TX stays alive in validator mempools.
       var _pollOk = false;
       var _pollMs = Date.now();
       var _nextRebcast = Date.now() + 8000;
-      while (Date.now() - _pollMs < 40000) {
+      while (Date.now() - _pollMs < 45000) {
         await new Promise(function(r){ setTimeout(r, 1500); });
-        // Periodic re-broadcast to all endpoints
         if (Date.now() > _nextRebcast) {
           _nextRebcast = Date.now() + 8000;
           SOLANA_RPCS.forEach(function(ep) {
@@ -2663,19 +2679,10 @@ async function payEntryFee(tierKey) {
               .catch(function() {});
           });
         }
-        // Fast-fail: if block height passed, TX is dead → retry with fresh blockhash
-        try {
-          var _curHeight = await _conn.getBlockHeight('confirmed');
-          if (_curHeight > _bh.lastValidBlockHeight) {
-            throw new Error('block height exceeded — retrying');
-          }
-        } catch(_bhe) {
-          if ((_bhe.message || '').includes('block height exceeded')) throw _bhe;
-        }
-        // Check confirmation
         try {
           var _statRes = await _conn.getSignatureStatuses([_txSig]);
           var _st = _statRes && _statRes.value && _statRes.value[0];
+          console.log('[entry] status:', _st ? (_st.confirmationStatus + (_st.err ? ' ERR:' + JSON.stringify(_st.err) : '')) : 'null');
           if (_st) {
             if (_st.err) throw new Error('TX rejected on-chain: ' + JSON.stringify(_st.err));
             if (_st.confirmationStatus === 'confirmed' || _st.confirmationStatus === 'finalized') {
@@ -2686,7 +2693,7 @@ async function payEntryFee(tierKey) {
           if ((_se.message || '').includes('TX rejected')) throw _se;
         }
       }
-      if (!_pollOk) throw new Error('block height exceeded — timed out');
+      if (!_pollOk) throw new Error('Blockhash not found'); // triggers retry with fresh blockhash
 
       console.log('[entry] join TX confirmed (attempt ' + (_attempt + 1) + '):', _txSig.slice(0, 12));
       _joinErr = null;
@@ -2696,8 +2703,8 @@ async function payEntryFee(tierKey) {
       var _msg = (_je && _je.message) || '';
       var _isExpiry = _msg.includes('block height exceeded') || _msg.includes('Blockhash not found') || _msg.includes('expired');
       if (_isExpiry && _attempt < 2) {
-        console.warn('[entry] TX expired — fresh blockhash retry ' + (_attempt + 2) + '/3');
-        toast('Network slow — retrying entry fee…', 'info');
+        console.warn('[entry] retrying (attempt ' + (_attempt + 2) + '/3):', _msg);
+        toast('Network slow — retrying…', 'info');
         continue;
       }
       break;
