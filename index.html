@@ -706,6 +706,8 @@ canvas{display:block;width:100%;height:100%;}
   }();
   </script>
   <script src="https://unpkg.com/@solana/web3.js@1.87.6/lib/index.iife.min.js"></script>
+  <!-- Ably Realtime SDK — used for server-verified game control events (join, die, chat) -->
+  <script src="https://cdn.ably.com/lib/ably.min-2.js"></script>
   <script>
   // After the Solana IIFE loads, re-apply the Buffer so the IIFE can't overwrite it
   // with something broken. Also guards against the IIFE setting window.Buffer to undefined.
@@ -2560,15 +2562,29 @@ async function doWithdraw() {
 
 async function payEntryFee(tierKey) {
   var t = TIERS[tierKey]; if (!t) return false;
-  if (tierKey === 'free') return 'FREE-' + Math.random().toString(36).slice(2,10).toUpperCase();
+
+  // ── Free tier: no payment — just get an Ably token scoped to game-free ──────
+  if (tierKey === 'free') {
+    var _fPub = W.pubkey || ('guest_' + Date.now());
+    try {
+      var _fRes = await fetch('/api/ably-auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ playerPubkey: _fPub })
+      });
+      if (_fRes.ok) { var _fData = await _fRes.json(); _ablyToken = _fData.tokenRequest; }
+    } catch(_fe) { console.warn('[ably-auth] free tier token failed:', _fe.message); }
+    return 'FREE-' + Math.random().toString(36).slice(2,10).toUpperCase();
+  }
 
   if (!_localKeypair || !W.pubkey) {
     toast('Wallet not ready — sign out and back in', 'error'); return false;
   }
 
-  // Hard balance check — must confirm on-chain that the player holds at least t.sol.
-  // Try up to twice so a single RPC hiccup doesn't unfairly block a funded player.
-  var _required = t.sol + 0.000015; // stake + buffer for 2 Solana network fees
+  // ── Hard balance check (fail-closed, retry once) ────────────────────────────
+  // Need t.sol (stake) + 10% join fee + ~0.000020 for two Solana network fees.
+  var _joinFee  = +(t.sol * HOUSE_CUT).toFixed(6);
+  var _required = t.sol + _joinFee + 0.000020;
   for (var _bi = 0; _bi < 2; _bi++) {
     try {
       var _bRes = await _fetchBalanceWithFallback(W.pubkey);
@@ -2579,19 +2595,73 @@ async function payEntryFee(tierKey) {
     }
   }
   if ((W.onChainBalance || 0) < _required) {
-    toast('Balance too low — need ' + t.sol.toFixed(4) + ' SOL ($' + t.usd + ') · Add funds → ' + (W.pubkey||'').slice(0,8) + '…', 'error');
+    toast('Balance too low — need ' + _required.toFixed(4) + ' SOL ($' + t.usd + ' + fees) · Add funds → ' + (W.pubkey||'').slice(0,8) + '…', 'error');
     return false;
   }
 
-  // No join TX — the player's stake stays in their own wallet.
-  // 10% creator fee is collected at kill time (kill TX) and on cashout (cashout TX).
-  // Sending the full entry to the house on join would drain the wallet and leave
-  // nothing to fund the kill/cashout transactions.
-  W.balance  = W.onChainBalance || _bestBal || 0;
+  // ── Send join TX: 10% of entry to creator wallet ────────────────────────────
+  // This is the on-chain proof of payment that the server will verify before
+  // issuing an Ably token. Without a valid token, Ably refuses the connection.
+  var _joinLam = Math.floor(_joinFee * 1e9);
+  var _txSig;
+  try {
+    if (typeof window.Buffer !== 'undefined' && typeof window.Buffer.from === 'function') {
+      window.Buffer.Buffer = window.Buffer;
+      try { globalThis.Buffer = window.Buffer; } catch(e) {}
+    }
+    var _txRes  = await _getConnForTx();
+    var _conn   = _txRes.conn, _bh = _txRes.bh;
+    if (!_bh || !_bh.blockhash) throw new Error('RPC blockhash unavailable');
+
+    var _from  = new solanaWeb3.PublicKey(W.pubkey);
+    var _house = new solanaWeb3.PublicKey(HOUSE_WALLET_ADDRESS);
+    var _joinTx = new solanaWeb3.Transaction();
+    _joinTx.recentBlockhash      = _bh.blockhash;
+    _joinTx.lastValidBlockHeight = _bh.lastValidBlockHeight;
+    _joinTx.feePayer             = _from;
+    _joinTx.add(solanaWeb3.SystemProgram.transfer({ fromPubkey: _from, toPubkey: _house, lamports: _joinLam }));
+    _joinTx.sign(_localKeypair);
+
+    _txSig = await _conn.sendRawTransaction(_joinTx.serialize(), { skipPreflight: false, maxRetries: 3 });
+    toast('Entry fee sent — verifying…', 'info');
+    await _conn.confirmTransaction({ signature: _txSig, blockhash: _bh.blockhash, lastValidBlockHeight: _bh.lastValidBlockHeight }, 'confirmed');
+    console.log('[entry] join TX confirmed:', _txSig.slice(0,12));
+  } catch(_je) {
+    toast('Entry fee TX failed: ' + (_je.message || 'unknown error'), 'error');
+    console.error('[entry] join TX error:', _je);
+    return false;
+  }
+
+  // ── Server verifies TX and issues scoped Ably token ─────────────────────────
+  try {
+    var _vRes = await fetch('/api/verify-entry', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ txSignature: _txSig, playerPubkey: W.pubkey, tier: String(tierKey) })
+    });
+    if (!_vRes.ok) {
+      var _vErr = await _vRes.json().catch(function(){ return {}; });
+      toast('Server verification failed: ' + (_vErr.error || _vRes.status), 'error');
+      return false;
+    }
+    var _vData = await _vRes.json();
+    _ablyToken = _vData.tokenRequest;
+    console.log('[entry] Ably token issued for game-' + tierKey);
+  } catch(_ve) {
+    toast('Could not reach verification server — try again', 'error');
+    return false;
+  }
+
+  // Refresh balance after paying join fee
+  try {
+    var _postBal = await _fetchBalanceWithFallback(W.pubkey);
+    W.onChainBalance = _postBal.lamports / 1e9;
+  } catch(_) {}
+  W.balance  = W.onChainBalance || 0;
   W.lamports = Math.floor(W.balance * 1e9);
   saveSession(); updateWalletDisplays();
-  console.log('[entry] stake locked: ' + W.balance.toFixed(6) + ' SOL in wallet — fee collected at kill/cashout');
-  return 'STAKE-' + Math.random().toString(36).slice(2,10).toUpperCase();
+  console.log('[entry] balance after join fee: ' + W.balance.toFixed(6) + ' SOL');
+  return _txSig;
 }
 
 // ════════════════ ABLY LIVE MULTIPLAYER ════════════════
@@ -2614,6 +2684,14 @@ var _wpMyId      = null;   // my wallet address as presence peer ID
 var _wpPeers     = {};     // walletAddr → { n, color, lastSeen }
 var _wpPingTimer = null;   // re-announce timer (every 10s)
 var _wpConnTimer = null;   // connect timeout
+
+// ── Ably — server-verified control event channel ─────────────────────────────
+// Players must prove on-chain payment before receiving a scoped Ably token.
+// Only players visible in Ably are drawn and can trigger kill credits.
+var _ablyClient        = null;  // Ably.Realtime instance
+var _ablyChannel       = null;  // game-{tier} channel
+var _ablyToken         = null;  // tokenRequest from /api/verify-entry or /api/ably-auth
+var _ablyVerifiedPeers = {};    // cid → true for every player who sent `join` via Ably
 
 // ── Dynamic arena sizing ─────────────────────────────────────────────────────
 // Called whenever a remote player joins or leaves mid-game.
@@ -2702,9 +2780,76 @@ function _wsConnect(onReady) {
 }
 
 // ── Send helper ──────────────────────────────────────────────────────────────
+// pos  → fly.io WebSocket (low-latency 50fps stream — too fast/cheap for Ably)
+// rest → Ably channel (server-verified, cryptographically gated)
+//        Also echoed to fly.io WS so the server keeps room membership for pos routing.
 function _wsSend(type, data) {
-  if (!_ws || _ws.readyState !== WebSocket.OPEN) return;
-  try { _ws.send(JSON.stringify({ type: type, clientId: _wsClientId, data: data || {} })); } catch(e) {}
+  if (type === 'pos') {
+    if (!_ws || _ws.readyState !== WebSocket.OPEN) return;
+    try { _ws.send(JSON.stringify({ type: type, clientId: _wsClientId, data: data || {} })); } catch(e) {}
+    return;
+  }
+  if (_ablyChannel) {
+    try { _ablyChannel.publish(type, data || {}); } catch(e) { console.warn('[ably] publish error:', e); }
+  }
+  // Echo to fly.io WS so it can keep the tier → clientId mapping for pos routing
+  if (_ws && _ws.readyState === WebSocket.OPEN) {
+    try { _ws.send(JSON.stringify({ type: type, clientId: _wsClientId, tier: _currentTier, data: data || {} })); } catch(e) {}
+  }
+}
+
+// ── Ably connect: subscribe to game-{tier} with a server-issued scoped token ─
+// The token is only issued after the server confirms the join TX on Solana.
+// Without a valid token Ably refuses the connection, so no-pay = no channel access.
+// Only players who appear on the Ably channel are added to _remoteMap; attackers
+// who connect directly to fly.io WebSocket will send pos but those are ignored.
+function _ablyConnect(tier) {
+  if (!_ablyToken) { console.warn('[ably] no token — payEntryFee must succeed first'); return; }
+  if (_ablyClient) { try { _ablyClient.close(); } catch(_) {} _ablyClient = null; _ablyChannel = null; }
+  _ablyVerifiedPeers = {};
+
+  var _myClientId = W.pubkey || _wsClientId || ('guest_' + Date.now());
+  _ablyClient = new Ably.Realtime({
+    authCallback: function(_, cb) { cb(null, _ablyToken); },
+    clientId: _myClientId,
+    closeOnUnload: true
+  });
+
+  var _chan = 'game-' + tier;
+  _ablyChannel = _ablyClient.channels.get(_chan);
+
+  _ablyChannel.subscribe(function(msg) {
+    try {
+      var type = msg.name, cid = msg.clientId, d = msg.data || {};
+      if (!cid || cid === _myClientId) return; // skip own echo
+      if (type === 'join') {
+        _ablyVerifiedPeers[cid] = true;
+        _wsHandleMsg({ type: 'join', clientId: cid, data: d });
+      } else if (type === 'leave') {
+        delete _ablyVerifiedPeers[cid];
+        _wsHandleMsg({ type: 'leave', clientId: cid, data: d });
+      } else if (type === 'die' || type === 'chat' || type === 'start') {
+        _wsHandleMsg({ type: type, clientId: cid, data: d });
+      }
+    } catch(e) { console.warn('[ably] msg error:', e); }
+  });
+
+  _ablyClient.connection.on('connected', function() {
+    console.log('[ably] connected to', _chan);
+    _wsStatus('🟢', 'Live', 'var(--green)', 'rgba(20,241,149,.3)');
+    _ablyChannel.publish('join', { n: _currentName, color: _currentColor });
+  });
+
+  _ablyClient.connection.on('failed', function(stateChange) {
+    var _reason = stateChange && stateChange.reason && stateChange.reason.message;
+    console.error('[ably] connection failed:', _reason);
+    _wsStatus('🔴', 'Auth failed', 'var(--red)', 'rgba(255,69,96,.3)');
+    toast('Lobby auth failed — payment not verified. Try rejoining.', 'error');
+  });
+
+  _ablyClient.connection.on('disconnected', function() {
+    _wsStatus('🟡', 'Reconnecting…', 'var(--gold)', 'rgba(255,215,0,.3)');
+  });
 }
 
 // ── Incoming message router ──────────────────────────────────────────────────
@@ -2760,6 +2905,11 @@ function _wsHandleMsg(msg) {
   // ── Position updates ────────────────────────────────────────────────────
   if (type === 'pos') {
     if (!gameRunning || !cid) return;
+    // Security gate: only render players who sent a verified `join` through the
+    // Ably channel. Attackers who bypass payment and connect to fly.io directly
+    // will send pos updates, but they'll never appear in _ablyVerifiedPeers,
+    // so they stay invisible and cannot trigger kill credits.
+    if (!_ablyVerifiedPeers[cid]) return;
     var rp = _remoteMap[cid];
     if (!rp) {
       var lobby = _lobbyPeers[cid] || {};
@@ -2870,6 +3020,11 @@ function _wsJoin(tier) {
 
   _wsConnect(doJoin);
   _startPub();
+  // Connect to Ably with the server-issued token from payEntryFee.
+  // This establishes the verified control channel — join, die, and chat events
+  // flow through Ably. Players without a valid token cannot appear in _ablyVerifiedPeers
+  // and therefore cannot be drawn or exchange kill credits.
+  _ablyConnect(tier);
 }
 
 // ── Position broadcast (50fps — feasible over direct WebSocket, not Ably) ───
@@ -2906,6 +3061,13 @@ function _wsLeave() {
   if (_ws && _ws.readyState === WebSocket.OPEN) {
     try { _ws.send(JSON.stringify({ type:'leave', clientId:_wsClientId, data:{} })); } catch(e) {}
   }
+  // Close Ably connection and clear the token so the next game gets a fresh one
+  if (_ablyChannel) { try { _ablyChannel.publish('leave', {}); } catch(_) {} }
+  if (_ablyClient)  { try { _ablyClient.close(); }             catch(_) {} }
+  _ablyClient        = null;
+  _ablyChannel       = null;
+  _ablyToken         = null;
+  _ablyVerifiedPeers = {};
   _wsClientId  = null;  // must be null BEFORE closing to suppress auto-reconnect in onclose
   _currentTier = null;
   _lobbyPeers  = {};
@@ -3250,9 +3412,11 @@ async function doJoinGame() {
   }
   var srvNames={us:'US East',eu:'EU West',as:'Asia'};
   var el;
-  // Free lobby — skip payment overlay, jump straight in
+  // Free lobby — skip payment overlay but still fetch an Ably token
   if(isFree){
     activeTier=selectedLobbyTier;
+    var _freeSig = await payEntryFee('free'); // fetches Ably token, no TX
+    if (!_freeSig) { toast('Could not connect to lobby — try again', 'error'); return; }
     enterLobby(selectedLobbyTier,null);
     return;
   }
@@ -3375,15 +3539,16 @@ async function quickRejoin() {
   if (!t) { showStart(); return; }
   var isFree = (activeTier === 'free');
   if (!isFree) {
-    if (W.balance < t.sol) {
+    var _ibest = Math.max(W.balance||0, W.onChainBalance||0);
+    if (_ibest > 0 && _ibest < t.sol) {
       toast('Need '+t.sol.toFixed(4)+' SOL to rejoin — add funds first','error');
       openAdd(); return;
     }
-    // Deduct entry fee for the new round
-    W.balance -= t.sol;
-    W.lamports  = Math.floor(W.balance * 1e9);
-    saveSession(); updateWalletDisplays();
   }
+  // payEntryFee sends the join TX and fetches a fresh Ably token for this new round.
+  // This ensures every game session is independently verified — even quick rejoins.
+  var _rjSig = await payEntryFee(activeTier);
+  if (!_rjSig) return; // payEntryFee already toasted the error
   hideAll();
   enterLobby(activeTier, null);
 }
@@ -4614,7 +4779,7 @@ function confirmAddFriend(name,color,fullAddr){
 }
 function copyFriendCode(){ var code=W.connected?(W.pubkey||'no wallet'):'Sign in first'; if(navigator.clipboard) navigator.clipboard.writeText(code).catch(function(){}); toast('Copied!'); }
 function showInvitePopup(from,tier){ pendingInvite={fromName:from,tier:tier}; var m=document.getElementById('ipMsg'); if(m) m.textContent=from+' invited you to their $'+tier+' lobby!'; var p=document.getElementById('invitePopup'); if(p) p.classList.add('show'); clearTimeout(inviteDismissTimer); inviteDismissTimer=setTimeout(dismissInvite,12000); }
-function acceptInvite(){
+async function acceptInvite(){
   if(!pendingInvite) return;
   var tier=pendingInvite.tier, name=pendingInvite.fromName;
   dismissInvite();
@@ -4624,10 +4789,12 @@ function acceptInvite(){
     if(!userProfile){ toast('Sign in first','error'); return; }
     var _ibest = Math.max(W.balance||0, W.onChainBalance||0);
     if(_ibest > 0 && _ibest < t.sol){ toast('Need '+t.sol.toFixed(4)+' SOL to join — sync wallet first','error'); openAdd(); return; }
-    // Entry fee deducted by payEntryFee — don't double-deduct here
   }
   toast('Joining '+name+"'s $"+tier+' lobby...','info');
-  setTimeout(function(){ enterLobby(tier,null); }, 800);
+  var _invSig = await payEntryFee(tier);
+  if (!_invSig) return;
+  activeTier = tier;
+  enterLobby(tier, null);
 }
 function dismissInvite(){ pendingInvite=null; var p=document.getElementById('invitePopup'); if(p) p.classList.remove('show'); clearTimeout(inviteDismissTimer); }
 // Sync friend status + stats from presence peers; randomize mock-only entries

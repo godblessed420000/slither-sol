@@ -1,0 +1,11 @@
+{
+  "name": "slither-sol",
+  "version": "1.0.0",
+  "private": true,
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "ably": "^2.3.0"
+  }
+}
