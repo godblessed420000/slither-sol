@@ -16,30 +16,33 @@ const TOKEN_TTL_MS   = 12 * 60 * 1000;
 const MAX_TX_AGE_SEC = 300; // 5 minutes
 
 // Fetch live SOL price from multiple APIs in parallel — first valid wins.
-// Fallback is intentionally HIGH ($1000) so that if all APIs fail, the minimum
-// lamport requirement is LOW (permissive). This prevents false-rejecting legit
-// players when APIs are down. The TX is still verified on-chain; the amount
-// check is just a sanity guard against someone paying 1 lamport.
+// Binance is excluded: it returns 451 (geo-blocked) from Vercel's US regions.
+// Jupiter is primary: it aggregates Solana DEX prices and is always accurate.
+// Fallback is HIGH ($1000) so if all sources fail the minimum required is LOW,
+// preventing false-rejections when APIs are down. The on-chain TX is still
+// verified; the amount check is just a sanity guard against 1-lamport cheats.
 async function getLiveSolPrice() {
   const apis = [
     async () => {
-      const r = await fetch('https://api.binance.com/api/v3/ticker/price?symbol=SOLUSDT',
-        { signal: AbortSignal.timeout(3000) });
-      const p = parseFloat((await r.json()).price);
-      if (p > 10 && p < 50000) return p;
+      // Jupiter DEX aggregator — most accurate real-time SOL price, Solana-native
+      const r = await fetch('https://price.jup.ag/v6/price?ids=So11111111111111111111111111111111111111112',
+        { signal: AbortSignal.timeout(4000) });
+      const d = await r.json();
+      const p = parseFloat(d?.data?.['So11111111111111111111111111111111111111112']?.price);
+      if (p > 10 && p < 5000) return p;
     },
     async () => {
       const r = await fetch('https://api.kraken.com/0/public/Ticker?pair=SOLUSD',
-        { signal: AbortSignal.timeout(3000) });
+        { signal: AbortSignal.timeout(4000) });
       const d = await r.json();
       const p = parseFloat(Object.values(d.result || {})[0]?.c?.[0]);
-      if (p > 10 && p < 50000) return p;
+      if (p > 10 && p < 5000) return p;
     },
     async () => {
       const r = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd',
-        { signal: AbortSignal.timeout(4000) });
+        { signal: AbortSignal.timeout(5000) });
       const p = (await r.json())?.solana?.usd;
-      if (p > 10 && p < 50000) return p;
+      if (p > 10 && p < 5000) return p;
     },
   ];
 

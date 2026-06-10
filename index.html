@@ -5520,35 +5520,22 @@ setInterval(function(){
 },7000);
 
 // ════════════════ INIT ════════════════
-// ── Live SOL/USD price — polled from 3 independent sources every 30 s ──────────
-var _solPriceSources = [
-  { name:'CoinGecko',  url:'https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd',
-    parse: function(d){ return d.solana && d.solana.usd; } },
-  { name:'Binance',    url:'https://api.binance.com/api/v3/ticker/price?symbol=SOLUSDT',
-    parse: function(d){ return d.price ? parseFloat(d.price) : null; } },
-  { name:'Kraken',     url:'https://api.kraken.com/0/public/Ticker?pair=SOLUSD',
-    parse: function(d){ return d.result && d.result.SOLUSD ? parseFloat(d.result.SOLUSD.c[0]) : null; } }
-];
+// ── Live SOL/USD price — fetched via server-side proxy every 30 s ───────────
+// Direct calls to Binance/CoinGecko are blocked by CORS or geo-restricted (451).
+// /api/sol-price races Jupiter, Kraken, and CoinGecko server-side and returns
+// the first valid price with no CORS issues.
 async function _fetchSolPrice() {
-  var prices = [];
-  await Promise.allSettled(_solPriceSources.map(async function(src) {
-    try {
-      var ctrl = new AbortController();
-      var tid  = setTimeout(function(){ ctrl.abort(); }, 4000);
-      var resp = await fetch(src.url, { signal: ctrl.signal });
-      clearTimeout(tid);
-      var data = await resp.json();
-      var p    = src.parse(data);
-      if (p && p > 1 && p < 100000) prices.push(p);
-    } catch(_) { /* source failed — skip */ }
-  }));
-  if (prices.length === 0) return; // all sources failed — keep current price
-  prices.sort(function(a,b){ return a-b; });
-  var median = prices[Math.floor(prices.length / 2)]; // median of available prices
-  if (Math.abs(median - SOL_USD) / SOL_USD > 0.5) return; // sanity: reject >50% change
-  SOL_USD = +median.toFixed(2);
-  _refreshTierPrices();
-  console.log('[SOL price] $' + SOL_USD + ' (median of ' + prices.length + ' source' + (prices.length>1?'s':'') + ')');
+  try {
+    var resp = await fetch('/api/sol-price');
+    if (!resp.ok) return;
+    var data = await resp.json();
+    var p = data && data.price ? parseFloat(data.price) : 0;
+    if (p > 10 && p < 5000) {
+      SOL_USD = +p.toFixed(2);
+      _refreshTierPrices();
+      console.log('[SOL price] $' + SOL_USD + ' (via /api/sol-price)');
+    }
+  } catch(_) { /* keep current price */ }
 }
 setInterval(_fetchSolPrice, 30000); // refresh every 30 s
 
