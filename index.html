@@ -2622,27 +2622,48 @@ async function payEntryFee(tierKey) {
       _joinTx.recentBlockhash      = _bh.blockhash;
       _joinTx.lastValidBlockHeight = _bh.lastValidBlockHeight;
       _joinTx.feePayer             = _from;
-      // Priority fee: 100 000 micro-lamports per compute unit ≈ $0.003 extra.
-      // Validators sort by fee-per-CU — paying this means we jump the queue
-      // and land in the next block instead of sitting in the mempool until expiry.
+      // Priority fee: 500 000 micro-lamports per compute unit.
+      // Validators sort by fee-per-CU — this puts us at the front of the queue.
       if (solanaWeb3.ComputeBudgetProgram) {
         _joinTx.add(solanaWeb3.ComputeBudgetProgram.setComputeUnitLimit({ units: 400 }));
-        _joinTx.add(solanaWeb3.ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 100000 }));
+        _joinTx.add(solanaWeb3.ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 500000 }));
       }
       _joinTx.add(solanaWeb3.SystemProgram.transfer({ fromPubkey: _from, toPubkey: _house, lamports: _joinLam }));
       _joinTx.sign(_localKeypair);
+      var _rawTx = _joinTx.serialize();
 
-      _txSig = await _conn.sendRawTransaction(_joinTx.serialize(), { skipPreflight: true, maxRetries: 8 });
+      // Broadcast to ALL RPCs simultaneously — a single free RPC often silently
+      // drops TX submissions when rate-limited. Sending to all 5 endpoints at once
+      // maximises the chance that at least one routes the TX to the validator network.
+      // All produce the same signature since the TX is pre-signed.
+      toast('Submitting entry fee…', 'info');
+      var _sendPromises = SOLANA_RPCS.map(function(ep) {
+        return (new solanaWeb3.Connection(ep, { commitment: 'confirmed' }))
+          .sendRawTransaction(_rawTx, { skipPreflight: true, maxRetries: 0 })
+          .catch(function() { return null; });
+      });
+      var _sendAll = await Promise.all(_sendPromises);
+      _txSig = _sendAll.find(function(s) { return s; }) || null;
+      if (!_txSig) throw new Error('All RPC endpoints rejected the transaction — check network');
       toast('Entry fee sent — confirming…', 'info');
 
-      // Poll getSignatureStatuses instead of confirmTransaction().
-      // This lets us detect a dead TX immediately (via block height check)
-      // rather than waiting the full 60s blockhash window to throw.
+      // Poll for confirmation. Re-broadcast every 8s to keep the TX alive in
+      // case a validator drops it from their mempool before including it.
       var _pollOk = false;
       var _pollMs = Date.now();
-      while (Date.now() - _pollMs < 35000) {
-        await new Promise(function(r){ setTimeout(r, 2000); });
-        // Fast-fail: if the chain has moved past the valid block height, TX is dead
+      var _nextRebcast = Date.now() + 8000;
+      while (Date.now() - _pollMs < 40000) {
+        await new Promise(function(r){ setTimeout(r, 1500); });
+        // Periodic re-broadcast to all endpoints
+        if (Date.now() > _nextRebcast) {
+          _nextRebcast = Date.now() + 8000;
+          SOLANA_RPCS.forEach(function(ep) {
+            (new solanaWeb3.Connection(ep, { commitment: 'confirmed' }))
+              .sendRawTransaction(_rawTx, { skipPreflight: true, maxRetries: 0 })
+              .catch(function() {});
+          });
+        }
+        // Fast-fail: if block height passed, TX is dead → retry with fresh blockhash
         try {
           var _curHeight = await _conn.getBlockHeight('confirmed');
           if (_curHeight > _bh.lastValidBlockHeight) {
@@ -2650,9 +2671,8 @@ async function payEntryFee(tierKey) {
           }
         } catch(_bhe) {
           if ((_bhe.message || '').includes('block height exceeded')) throw _bhe;
-          // getBlockHeight RPC error — ignore and keep polling status
         }
-        // Check confirmation status
+        // Check confirmation
         try {
           var _statRes = await _conn.getSignatureStatuses([_txSig]);
           var _st = _statRes && _statRes.value && _statRes.value[0];
@@ -2664,7 +2684,6 @@ async function payEntryFee(tierKey) {
           }
         } catch(_se) {
           if ((_se.message || '').includes('TX rejected')) throw _se;
-          // Transient RPC error — keep polling
         }
       }
       if (!_pollOk) throw new Error('block height exceeded — timed out');
