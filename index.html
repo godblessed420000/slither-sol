@@ -2633,8 +2633,7 @@ async function payEntryFee(tierKey) {
       _joinTx.lastValidBlockHeight = _bh.lastValidBlockHeight;
       _joinTx.feePayer             = _from;
       if (solanaWeb3.ComputeBudgetProgram) {
-        _joinTx.add(solanaWeb3.ComputeBudgetProgram.setComputeUnitLimit({ units: 400 }));
-        _joinTx.add(solanaWeb3.ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 500000 }));
+        _joinTx.add(solanaWeb3.ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 100000 }));
       }
       _joinTx.add(solanaWeb3.SystemProgram.transfer({ fromPubkey: _from, toPubkey: _house, lamports: _joinLam }));
       _joinTx.sign(_localKeypair);
