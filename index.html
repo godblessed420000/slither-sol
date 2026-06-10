@@ -2600,35 +2600,55 @@ async function payEntryFee(tierKey) {
   }
 
   // ── Send join TX: 10% of entry to creator wallet ────────────────────────────
-  // This is the on-chain proof of payment that the server will verify before
-  // issuing an Ably token. Without a valid token, Ably refuses the connection.
+  // Retries up to 3× with a fresh blockhash each time — handles "block height
+  // exceeded" which happens when the network is slow to confirm.
   var _joinLam = Math.floor(_joinFee * 1e9);
-  var _txSig;
-  try {
-    if (typeof window.Buffer !== 'undefined' && typeof window.Buffer.from === 'function') {
-      window.Buffer.Buffer = window.Buffer;
-      try { globalThis.Buffer = window.Buffer; } catch(e) {}
+  var _txSig, _joinErr;
+  if (typeof window.Buffer !== 'undefined' && typeof window.Buffer.from === 'function') {
+    window.Buffer.Buffer = window.Buffer;
+    try { globalThis.Buffer = window.Buffer; } catch(e) {}
+  }
+  for (var _attempt = 0; _attempt < 3; _attempt++) {
+    try {
+      // Fetch a fresh blockhash on every attempt — expired blockhash is the whole problem
+      var _txRes = await _getConnForTx();
+      var _conn  = _txRes.conn, _bh = _txRes.bh;
+      if (!_bh || !_bh.blockhash) throw new Error('RPC blockhash unavailable');
+
+      var _from    = new solanaWeb3.PublicKey(W.pubkey);
+      var _house   = new solanaWeb3.PublicKey(HOUSE_WALLET_ADDRESS);
+      var _joinTx  = new solanaWeb3.Transaction();
+      _joinTx.recentBlockhash      = _bh.blockhash;
+      _joinTx.lastValidBlockHeight = _bh.lastValidBlockHeight;
+      _joinTx.feePayer             = _from;
+      _joinTx.add(solanaWeb3.SystemProgram.transfer({ fromPubkey: _from, toPubkey: _house, lamports: _joinLam }));
+      _joinTx.sign(_localKeypair);
+
+      // skipPreflight: true — submit immediately (matches working kill TX pattern).
+      // Server verifies the confirmed TX anyway so client-side simulation is redundant.
+      _txSig = await _conn.sendRawTransaction(_joinTx.serialize(), { skipPreflight: true, maxRetries: 5 });
+      toast('Entry fee sent — confirming…', 'info');
+      await _conn.confirmTransaction({
+        signature: _txSig, blockhash: _bh.blockhash, lastValidBlockHeight: _bh.lastValidBlockHeight
+      }, 'confirmed');
+      console.log('[entry] join TX confirmed (attempt ' + (_attempt + 1) + '):', _txSig.slice(0, 12));
+      _joinErr = null;
+      break;
+    } catch(_je) {
+      _joinErr = _je;
+      var _msg = (_je && _je.message) || '';
+      var _isExpiry = _msg.includes('block height exceeded') || _msg.includes('expired') || _msg.includes('Blockhash not found');
+      if (_isExpiry && _attempt < 2) {
+        console.warn('[entry] blockhash expired — retrying with fresh blockhash (attempt ' + (_attempt + 2) + '/3)');
+        toast('Network slow — retrying…', 'info');
+        continue;
+      }
+      break;
     }
-    var _txRes  = await _getConnForTx();
-    var _conn   = _txRes.conn, _bh = _txRes.bh;
-    if (!_bh || !_bh.blockhash) throw new Error('RPC blockhash unavailable');
-
-    var _from  = new solanaWeb3.PublicKey(W.pubkey);
-    var _house = new solanaWeb3.PublicKey(HOUSE_WALLET_ADDRESS);
-    var _joinTx = new solanaWeb3.Transaction();
-    _joinTx.recentBlockhash      = _bh.blockhash;
-    _joinTx.lastValidBlockHeight = _bh.lastValidBlockHeight;
-    _joinTx.feePayer             = _from;
-    _joinTx.add(solanaWeb3.SystemProgram.transfer({ fromPubkey: _from, toPubkey: _house, lamports: _joinLam }));
-    _joinTx.sign(_localKeypair);
-
-    _txSig = await _conn.sendRawTransaction(_joinTx.serialize(), { skipPreflight: false, maxRetries: 3 });
-    toast('Entry fee sent — verifying…', 'info');
-    await _conn.confirmTransaction({ signature: _txSig, blockhash: _bh.blockhash, lastValidBlockHeight: _bh.lastValidBlockHeight }, 'confirmed');
-    console.log('[entry] join TX confirmed:', _txSig.slice(0,12));
-  } catch(_je) {
-    toast('Entry fee TX failed: ' + (_je.message || 'unknown error'), 'error');
-    console.error('[entry] join TX error:', _je);
+  }
+  if (_joinErr) {
+    toast('Entry fee TX failed: ' + ((_joinErr.message || '').split('\n')[0] || 'network error — try again'), 'error');
+    console.error('[entry] join TX failed after retries:', _joinErr);
     return false;
   }
 
