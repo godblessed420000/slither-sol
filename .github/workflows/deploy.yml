@@ -17,14 +17,13 @@ jobs:
 
       - name: Stamp build version
         run: |
-          BUILD="$(date +'%b %-d %Y %H:%M UTC')"
+          BUILD_NUM=$(git rev-list --count HEAD)
+          BUILD="V${BUILD_NUM}"
           # Replace the JS variable line
           sed -i "s/var GAME_BUILD = .*/var GAME_BUILD = '${BUILD}';/" index.html
-          # Replace all date-format version strings: "Mon DD YYYY HH:MM UTC"
-          sed -i -E "s/[A-Z][a-z]{2} [0-9]{1,2} [0-9]{4} [0-9]{2}:[0-9]{2} UTC/${BUILD}/g" index.html
+          # Replace all V-number version placeholders
+          sed -i -E "s/V[0-9]+/${BUILD}/g" index.html
           echo "Stamped: ${BUILD}"
-          grep "loginVersionText" index.html | grep -o 'Jun.*UTC\|[A-Z][a-z].*UTC' | head -1 || echo "(not found)"
-          grep "headerVersionText" index.html | grep -o 'Jun.*UTC\|[A-Z][a-z].*UTC' | head -1 || echo "(not found)"
 
       - name: Install Vercel CLI
         run: npm install -g vercel@latest
