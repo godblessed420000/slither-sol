@@ -2566,17 +2566,20 @@ async function payEntryFee(tierKey) {
     toast('Wallet not ready — sign out and back in', 'error'); return false;
   }
 
-  // Fetch live balance to confirm the player actually has the stake.
-  try {
-    var _bRes = await _fetchBalanceWithFallback(W.pubkey);
-    W.onChainBalance = _bRes.lamports / 1e9;
-  } catch(_bErr) {
-    console.warn('[payEntryFee] balance fetch failed:', _bErr.message);
+  // Hard balance check — must confirm on-chain that the player holds at least t.sol.
+  // Try up to twice so a single RPC hiccup doesn't unfairly block a funded player.
+  var _required = t.sol + 0.000015; // stake + buffer for 2 Solana network fees
+  for (var _bi = 0; _bi < 2; _bi++) {
+    try {
+      var _bRes = await _fetchBalanceWithFallback(W.pubkey);
+      W.onChainBalance = _bRes.lamports / 1e9;
+      break;
+    } catch(_bErr) {
+      if (_bi === 0) await new Promise(function(r){ setTimeout(r, 800); });
+    }
   }
-
-  var _bestBal = Math.max(W.onChainBalance || 0, W.balance || 0);
-  if (_bestBal > 0 && _bestBal < t.sol) {
-    toast('Balance too low (' + _bestBal.toFixed(4) + ' SOL) — need ' + t.sol.toFixed(4) + ' SOL ($' + t.usd + ') to enter', 'error');
+  if ((W.onChainBalance || 0) < _required) {
+    toast('Balance too low — need ' + t.sol.toFixed(4) + ' SOL ($' + t.usd + ') · Add funds → ' + (W.pubkey||'').slice(0,8) + '…', 'error');
     return false;
   }
 
@@ -4012,7 +4015,7 @@ function killPlayer(reason, killedBy){
   // dying player's wallet → killer's wallet for the carried SOL amount.
   // This runs async/fire-and-forget so the death UI is not delayed.
   var _isValidKillerWallet = killedBy && killedBy.length >= 32 && !killedBy.startsWith('guest_') && activeTier !== 'free';
-  if (_isValidKillerWallet && carriedSol >= 0.000100 && _localKeypair && W.pubkey) {
+  if (_isValidKillerWallet && _localKeypair && W.pubkey) {
     (async function _killTransfer() {
       try {
         // Reinforce Buffer global (async IIFE re-enters scope where bare Buffer might be gone)
@@ -4020,10 +4023,12 @@ function killPlayer(reason, killedBy){
           window.Buffer.Buffer = window.Buffer;
           try { globalThis.Buffer = window.Buffer; } catch(e) {}
         }
-        // Cap transfer at real on-chain balance (kill credits can inflate W.balance beyond wallet funds)
+        // Always use the game stake (t.sol) as the transfer target — never W.balance,
+        // which can be inflated by kill credits or stale. Cap at actual on-chain funds.
+        var _t        = TIERS[activeTier] || {};
+        var _stake    = (_t.sol && _t.sol > 0) ? _t.sol : (carriedSol || 0);
         var _onChain  = W.onChainBalance || 0;
-        var _xferAmt  = Math.min(carriedSol, _onChain);
-        _xferAmt      = Math.max(0, _xferAmt - 0.000005); // reserve ~5k lamports for Solana network fee
+        var _xferAmt  = Math.min(_stake, Math.max(0, _onChain - 0.000005));
         if (_xferAmt < 0.000050) return; // too small — skip TX
 
         // 90% → killer, 10% → creator Coinbase wallet
@@ -4062,13 +4067,14 @@ function killPlayer(reason, killedBy){
     })();
   }
 
-  // Broadcast 90% of estimated transfer to the killer (10% already going to creator in the TX).
-  // Use cached on-chain balance to estimate; the async TX uses a fresh RPC fetch.
-  var _estOnChain  = (_isValidKillerWallet && W.onChainBalance > 0.0001) ? W.onChainBalance : carriedSol;
-  var _estXfer     = Math.max(0, Math.min(carriedSol, _estOnChain) - 0.000005);
+  // Broadcast 90% of the game stake to the killer (10% already going to creator in the TX).
+  var _bcastTier   = TIERS[activeTier] || {};
+  var _bcastStake  = (_bcastTier.sol && _bcastTier.sol > 0) ? _bcastTier.sol : carriedSol;
+  var _estOnChain  = W.onChainBalance || carriedSol;
+  var _estXfer     = Math.min(_bcastStake, Math.max(0, _estOnChain - 0.000005));
   var _solForKiller = (_isValidKillerWallet && _estXfer >= 0.000050)
-    ? +(_estXfer * (1 - HOUSE_CUT)).toFixed(6) // 90% — matches kill TX
-    : carriedSol; // free/guest: no TX, credit full amount (0 for free tier anyway)
+    ? +(_estXfer * (1 - HOUSE_CUT)).toFixed(6) // 90% of stake
+    : carriedSol;
   _wsSend('die', {n: player.name, killed_by: killedBy||null, sol: _solForKiller});
   // Zero out carried balance — it transfers to the killer
   W.balance = 0; W.lamports = 0; saveSession();
