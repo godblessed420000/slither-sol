@@ -2560,103 +2560,35 @@ async function doWithdraw() {
 
 async function payEntryFee(tierKey) {
   var t = TIERS[tierKey]; if (!t) return false;
-  // Free lobby — no SOL needed
   if (tierKey === 'free') return 'FREE-' + Math.random().toString(36).slice(2,10).toUpperCase();
 
-  // Guard: wallet must be ready
   if (!_localKeypair || !W.pubkey) {
     toast('Wallet not ready — sign out and back in', 'error'); return false;
   }
-  if (typeof solanaWeb3 === 'undefined') {
-    toast('Solana library not loaded — refresh page', 'error'); return false;
-  }
-  if (typeof window.Buffer === 'undefined' || typeof window.Buffer.from !== 'function') {
-    toast('Buffer polyfill missing — refresh page', 'error'); return false;
-  }
 
-  // Try to refresh on-chain balance — but NEVER block on a failed fetch.
-  // If the RPC call fails or returns 0 due to a stale cache we still attempt
-  // the TX; the Solana network itself will reject it with "insufficient funds"
-  // and we surface that as a friendly error.
+  // Fetch live balance to confirm the player actually has the stake.
   try {
     var _bRes = await _fetchBalanceWithFallback(W.pubkey);
     W.onChainBalance = _bRes.lamports / 1e9;
   } catch(_bErr) {
-    console.warn('[payEntryFee] balance pre-fetch failed — will attempt TX anyway:', _bErr.message);
+    console.warn('[payEntryFee] balance fetch failed:', _bErr.message);
   }
 
-  // Soft guard: only block if we have a *confirmed* reading that is clearly too low.
-  // Use whichever is higher — on-chain or game balance — as the best estimate.
   var _bestBal = Math.max(W.onChainBalance || 0, W.balance || 0);
   if (_bestBal > 0 && _bestBal < t.sol) {
-    toast('Balance too low (' + _bestBal.toFixed(4) + ' SOL) — need ' + t.sol.toFixed(4) + ' SOL for entry', 'error');
+    toast('Balance too low (' + _bestBal.toFixed(4) + ' SOL) — need ' + t.sol.toFixed(4) + ' SOL ($' + t.usd + ') to enter', 'error');
     return false;
   }
-  // If _bestBal === 0 (unknown / not fetched yet), fall through and let the network validate.
 
-  // Reinforce Buffer global before building TX
-  if (typeof window.Buffer !== 'undefined' && typeof window.Buffer.from === 'function') {
-    window.Buffer.Buffer = window.Buffer;
-    try { globalThis.Buffer = window.Buffer; } catch(e) {}
-  }
-
-  var txSent = false;
-  try {
-    var txResult  = await _getConnForTx();
-    var conn      = txResult.conn, bh = txResult.bh;
-    if (!bh || !bh.blockhash) throw new Error('Failed to fetch blockhash');
-
-    var fromKey  = new solanaWeb3.PublicKey(W.pubkey);
-    var houseKey = new solanaWeb3.PublicKey(HOUSE_WALLET_ADDRESS);
-    var lamports = Math.floor(t.sol * 1e9);
-
-    var tx = new solanaWeb3.Transaction();
-    tx.recentBlockhash      = bh.blockhash;
-    tx.lastValidBlockHeight = bh.lastValidBlockHeight;
-    tx.feePayer             = fromKey;
-    tx.add(solanaWeb3.SystemProgram.transfer({
-      fromPubkey: fromKey, toPubkey: houseKey, lamports: lamports
-    }));
-
-    tx.sign(_localKeypair);
-    var rawTx = tx.serialize();
-
-    txSent = true;
-    var sig = await conn.sendRawTransaction(rawTx, {
-      skipPreflight: true, maxRetries: 4, preflightCommitment: 'confirmed'
-    });
-    console.log('[entry fee] sig:', sig, 'amount:', t.sol, 'SOL');
-
-    // Deduct entry fee from both tracked balances
-    W.balance        = Math.max(0, (W.balance || 0) - t.sol);
-    W.lamports       = Math.floor(W.balance * 1e9);
-    W.onChainBalance = Math.max(0, (W.onChainBalance || 0) - t.sol - 0.000005);
-    saveSession(); updateWalletDisplays();
-    toast('✓ Entry fee sent · TX: ' + sig.slice(0,8) + '…', 'info');
-    return sig;
-
-  } catch(e) {
-    console.error('[payEntryFee]', e.message);
-    // Detect "insufficient lamports / funds" from the RPC response
-    var _em = (e.message || '').toLowerCase();
-    var _isInsufficientFunds = _em.indexOf('insufficient') !== -1 || _em.indexOf('lamport') !== -1 ||
-                               _em.indexOf('funds') !== -1 || _em.indexOf('0x1') !== -1;
-    if (txSent) {
-      // TX left the browser — may still land; deduct defensively and let player in
-      W.balance        = Math.max(0, (W.balance || 0) - t.sol);
-      W.lamports       = Math.floor(W.balance * 1e9);
-      W.onChainBalance = Math.max(0, (W.onChainBalance || 0) - t.sol - 0.000005);
-      saveSession(); updateWalletDisplays();
-      toast('Entry TX submitted (unconfirmed) — joining anyway', 'info');
-      return 'UNCONFIRMED-' + Math.random().toString(36).slice(2,10).toUpperCase();
-    }
-    if (_isInsufficientFunds) {
-      toast('Not enough SOL — wallet needs at least ' + t.sol.toFixed(4) + ' SOL · Fund via Coinbase → your address', 'error');
-    } else {
-      toast('Entry fee TX failed: ' + (e.message || 'RPC error').slice(0, 70), 'error');
-    }
-    return false;
-  }
+  // No join TX — the player's stake stays in their own wallet.
+  // 10% creator fee is collected at kill time (kill TX) and on cashout (cashout TX).
+  // Sending the full entry to the house on join would drain the wallet and leave
+  // nothing to fund the kill/cashout transactions.
+  W.balance  = W.onChainBalance || _bestBal || 0;
+  W.lamports = Math.floor(W.balance * 1e9);
+  saveSession(); updateWalletDisplays();
+  console.log('[entry] stake locked: ' + W.balance.toFixed(6) + ' SOL in wallet — fee collected at kill/cashout');
+  return 'STAKE-' + Math.random().toString(36).slice(2,10).toUpperCase();
 }
 
 // ════════════════ ABLY LIVE MULTIPLAYER ════════════════
@@ -3844,7 +3776,7 @@ async function triggerCashout(){
 
   // Hard guard: wallet must cover at least the minimum fee before ending the game.
   // If not, player stays alive and gets an actionable error.
-  var _minFee = +(gross * (HOUSE_CUT + ESCROW_CUT)).toFixed(6); // 12% of entry
+  var _minFee = +(gross * HOUSE_CUT).toFixed(6); // 10% of entry
   if (_onChain > 0 && _onChain < _minFee) {
     toast('Wallet too low — need ' + gross.toFixed(4) + ' SOL (' + (t.usd ? '$'+t.usd : '') + ') to cashout this lobby. Add funds first.', 'error');
     return; // game stays running — player is NOT kicked out
