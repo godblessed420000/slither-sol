@@ -2612,24 +2612,19 @@ async function payEntryFee(tierKey) {
   for (var _attempt = 0; _attempt < 3; _attempt++) {
     _txSig = null;
     try {
-      var _txRes = await _getConnForTx();
-      var _conn  = _txRes.conn, _bh = _txRes.bh;
-      if (!_bh || !_bh.blockhash) throw new Error('RPC blockhash unavailable');
-
-      // ── Freshness guard ──────────────────────────────────────────────────────
-      // Free RPCs sometimes return a CACHED blockhash that's 100-200 slots old.
-      // In that case lastValidBlockHeight is already almost (or already) expired
-      // before we even build the TX, and the poll loop sees it as dead immediately.
-      // We measure slots remaining and discard the blockhash if it's too stale.
-      var _nowHt = 0;
-      try { _nowHt = await _conn.getBlockHeight('confirmed'); } catch(_) {}
-      var _slotsLeft = (_nowHt > 0) ? (_bh.lastValidBlockHeight - _nowHt) : 150;
-      console.log('[entry] attempt ' + (_attempt + 1) + ' blockhash=' + _bh.blockhash.slice(0,8)
-        + ' lastValidBH=' + _bh.lastValidBlockHeight + ' nowHt=' + _nowHt + ' slotsLeft=' + _slotsLeft);
-      if (_slotsLeft < 80) {
-        console.warn('[entry] STALE blockhash — only ' + _slotsLeft + ' slots left, discarding');
-        throw new Error('Blockhash not found'); // triggers retry with fresh RPC race
-      }
+      // ── Get blockhash via server-side proxy ──────────────────────────────────
+      // Browser CORS policy blocks most Solana RPCs directly (we see 400/403).
+      // /api/blockhash fetches server-side from reliable nodes with no CORS limit,
+      // guaranteeing a fresh blockhash every time.
+      var _bhResp = await fetch('/api/blockhash').then(function(r) {
+        if (!r.ok) throw new Error('blockhash proxy error ' + r.status);
+        return r.json();
+      });
+      if (!_bhResp || !_bhResp.blockhash) throw new Error('RPC blockhash unavailable');
+      var _bh = _bhResp;
+      // publicnode is the only browser-CORS-enabled RPC — use it for status polling
+      var _conn = new solanaWeb3.Connection('https://solana-rpc.publicnode.com', { commitment: 'confirmed' });
+      console.log('[entry] attempt ' + (_attempt + 1) + ' blockhash=' + _bh.blockhash.slice(0,8) + ' lastValidBH=' + _bh.lastValidBlockHeight);
 
       var _from  = new solanaWeb3.PublicKey(W.pubkey);
       var _house = new solanaWeb3.PublicKey(HOUSE_WALLET_ADDRESS);
