@@ -1202,7 +1202,7 @@ var SEG_MULT   = 4;        // segments per length unit — lower = shorter tail
 var MAX_FOOD   = 180;      // hard cap on food pellets — more dots on the map
 var CASHOUT_FEE= 0.10;
 var HOUSE_CUT  = 0.10;  // 10% creator fee → 2QnrdhxX… (Coinbase wallet)
-var ESCROW_CUT = 0.00;  // 0% — escrow is used for player payouts, NOT fee collection
+var ESCROW_CUT = 0.02;  // 2% safety fund → H74hbseq… (recovery escrow wallet)
 var CASHOUT_MS = 1000;
 
 var TIERS = {
@@ -2409,19 +2409,14 @@ async function execCashout(gross, label, destAddr) {
   }
 
   // ── Fee split ─────────────────────────────────────────────────────────────
-  // 10%  → creator fee wallet (2QnrdhxX… — Coinbase) — sent on-chain
-  // 90%  → stays in player's wallet (Q-cashout) OR sent to external address (Withdraw)
-  // 0%   → escrow (escrow is for player payouts, not fee collection)
-  var fee    = +(gross * HOUSE_CUT).toFixed(6);   // 10% creator fee
-  var net    = +(gross - fee).toFixed(6);         // 90% to player
+  // HOUSE_CUT (10%) → creator Coinbase wallet (2QnrdhxX…)
+  // ESCROW_CUT (2%) → creator recovery wallet (H74hbseq…)
+  // Remainder       → stays in player wallet (Q-cashout) OR sent out (Withdraw)
+  var fee    = +(gross * HOUSE_CUT).toFixed(6);
+  var escrow = +(gross * ESCROW_CUT).toFixed(6);
+  var net    = +(gross - fee - escrow).toFixed(6);
   var house  = fee;
-  var escrow = 0;
 
-  // Is this an external withdrawal (Withdraw modal) or in-game Q-cashout?
-  // CRITICAL: Solana SystemProgram.Transfer REJECTS same-account transfers
-  // (from === to). For Q-cashout returnAddr === W.pubkey — that would fail.
-  // Solution: for Q-cashout, send ONLY the 10% fee; the 90% stays in wallet
-  // implicitly (no instruction needed). For external withdraw, send 90% out.
   var isExternal = (destAddr && destAddr.length >= 32 && destAddr !== W.pubkey);
 
   // ── Live balance fetch — ensure we never overdraw ─────────────────────────
@@ -2430,24 +2425,26 @@ async function execCashout(gross, label, destAddr) {
     W.onChainBalance = _lr.lamports / 1e9;
   } catch(_le) { /* use cached value — scale check handles overdraft */ }
 
-  var onChainLam  = Math.floor((W.onChainBalance || 0) * 1e9);
-  var feeLamports = Math.round(fee * 1e9);
-  var netLamports = isExternal ? Math.round(net * 1e9) : 0;
-  // For Q-cashout we only send feeLamports; for external we send fee + net
-  var totalOut    = feeLamports + netLamports;
+  var onChainLam     = Math.floor((W.onChainBalance || 0) * 1e9);
+  var feeLamports    = Math.round(fee * 1e9);
+  var escrowLamports = Math.round(escrow * 1e9);
+  var netLamports    = isExternal ? Math.round(net * 1e9) : 0;
+  var totalOut       = feeLamports + escrowLamports + netLamports;
 
   // ── Scale proportionally if wallet balance would be exceeded ─────────────
   if (onChainLam > 0) {
-    var maxOut = Math.max(0, onChainLam - 10000); // keep ~10k lamports for Solana network fee
+    var maxOut = Math.max(0, onChainLam - 10000);
     if (totalOut > maxOut) {
       if (maxOut < 1000) { toast('Wallet balance too low to cashout', 'error'); return null; }
-      var _sc     = maxOut / totalOut;
-      feeLamports = Math.floor(feeLamports * _sc);
+      var _sc        = maxOut / totalOut;
+      feeLamports    = Math.floor(feeLamports * _sc);
+      escrowLamports = Math.floor(escrowLamports * _sc);
       if (isExternal) netLamports = Math.floor(netLamports * _sc);
-      fee     = feeLamports / 1e9;
-      net     = isExternal ? (netLamports / 1e9) : +(gross - fee).toFixed(6);
-      gross   = +(fee + net).toFixed(6);
-      totalOut = feeLamports + (isExternal ? netLamports : 0);
+      fee    = feeLamports / 1e9;
+      escrow = escrowLamports / 1e9;
+      net    = isExternal ? (netLamports / 1e9) : +(gross - fee - escrow).toFixed(6);
+      gross  = +(fee + escrow + net).toFixed(6);
+      totalOut = feeLamports + escrowLamports + (isExternal ? netLamports : 0);
     }
   }
   if (feeLamports < 50) {
@@ -2485,12 +2482,20 @@ async function execCashout(gross, label, destAddr) {
     tx.lastValidBlockHeight = bh.lastValidBlockHeight;
     tx.feePayer             = fromKey;
 
-    // Instruction 1 (always): 10% → creator fee wallet (Coinbase)
+    // Instruction 1: 10% → creator Coinbase wallet
     tx.add(solanaWeb3.SystemProgram.transfer({
       fromPubkey: fromKey, toPubkey: houseKey, lamports: feeLamports
     }));
 
-    // Instruction 2 (external withdraw only): 90% → destination wallet
+    // Instruction 2: 2% → creator recovery/escrow wallet
+    if (escrowLamports > 0 && ESCROW_WALLET_ADDRESS && ESCROW_WALLET_ADDRESS.length >= 32) {
+      var escrowKey = new solanaWeb3.PublicKey(ESCROW_WALLET_ADDRESS);
+      tx.add(solanaWeb3.SystemProgram.transfer({
+        fromPubkey: fromKey, toPubkey: escrowKey, lamports: escrowLamports
+      }));
+    }
+
+    // Instruction 3 (external withdraw only): net → destination wallet
     // NOT added for Q-cashout — self-transfers are rejected by Solana
     if (isExternal && netLamports > 0) {
       var destKey = new solanaWeb3.PublicKey(destAddr);
@@ -3841,12 +3846,17 @@ async function triggerCashout(){
     W.lamports = Math.floor(_onChain * 1e9);
     saveSession();
   }
-  // gross = entry wager ONLY. Kill TXs already paid 10% to creator at the time of each kill,
-  // so we only charge 10% on the entry wager here. Total creator take = 10% of everything.
+  // gross = entry wager ONLY. Kill TXs already paid creator fees at kill time.
   var gross = t.sol || 0;
-  // Fallback: if t.sol is somehow 0 for a paid tier, use wallet balance
   if (gross < 0.000001) gross = calcVal();
-  if(gross < 0.000100){ toast('Wallet balance too low to cashout — fund your wallet first','error'); return; }
+
+  // Hard guard: wallet must cover at least the minimum fee before ending the game.
+  // If not, player stays alive and gets an actionable error.
+  var _minFee = +(gross * (HOUSE_CUT + ESCROW_CUT)).toFixed(6); // 12% of entry
+  if (_onChain > 0 && _onChain < _minFee) {
+    toast('Wallet too low — need ' + gross.toFixed(4) + ' SOL (' + (t.usd ? '$'+t.usd : '') + ') to cashout this lobby. Add funds first.', 'error');
+    return; // game stays running — player is NOT kicked out
+  }
   gameRunning=false;
   if(_elSidebar) _elSidebar.style.display=''; setTimeout(resizeC,30);
   var flash=document.getElementById('cashoutFlash'); if(flash){ flash.style.opacity='1'; setTimeout(function(){ flash.style.opacity='0'; },400); }
@@ -3857,22 +3867,24 @@ async function triggerCashout(){
   var coMsg=document.getElementById('coMsg'); if(coMsg) coMsg.textContent=t.name+' · Kills:'+myKills+' · Score:'+score+' · Length:'+player.segs.length;
   var coAmt=document.getElementById('coAmt');
   var _entrySOL = t.sol || 0;
-  var _killEarn = killSOL || 0; // already net 90% — 10% was sent to creator in each kill TX
-  // Total now in wallet: 90% of entry (kept here) + kill earnings (already received net)
+  var _killEarn = killSOL || 0; // 88% net — 12% (10%+2%) was sent on each kill TX
   var _totalKept = +(r.net + _killEarn).toFixed(4);
+  var _feeLabel = ((HOUSE_CUT+ESCROW_CUT)*100).toFixed(0)+'%';
   if(myKills>0)
-    coAmt.textContent='+'+_totalKept+' SOL in wallet ('+_entrySOL.toFixed(4)+' entry + '+_killEarn.toFixed(4)+' kills − 10% fees)';
+    coAmt.textContent='+'+_totalKept+' SOL in wallet ('+_entrySOL.toFixed(4)+' entry + '+_killEarn.toFixed(4)+' kills − '+_feeLabel+' fees)';
   else
-    coAmt.textContent='+'+r.net.toFixed(4)+' SOL in wallet ('+r.gross.toFixed(4)+' entry − 10% fee)';
+    coAmt.textContent='+'+r.net.toFixed(4)+' SOL in wallet ('+r.gross.toFixed(4)+' entry − '+_feeLabel+' fee)';
   var coFees=document.getElementById('coFees');
   if(coFees){
     var _rows='';
     _rows+='<div class="pf-row"><span class="pf-lbl">Entry wager</span><span>'+_entrySOL.toFixed(4)+' SOL</span></div>';
     if(myKills>0){
-      _rows+='<div class="pf-row"><span class="pf-lbl">Kill earnings ('+myKills+' kill'+(myKills>1?'s':'')+', 90% net)</span><span style="color:var(--green)">+'+_killEarn.toFixed(4)+' SOL</span></div>';
-      _rows+='<div class="pf-row"><span class="pf-lbl">Creator fee on kills (10%, sent at kill time)</span><span class="pf-house">−'+(_killEarn*HOUSE_CUT/(1-HOUSE_CUT)).toFixed(4)+' SOL</span></div>';
+      var _killFeeRate = HOUSE_CUT+ESCROW_CUT;
+      _rows+='<div class="pf-row"><span class="pf-lbl">Kill earnings ('+myKills+' kill'+(myKills>1?'s':'')+', '+((1-_killFeeRate)*100).toFixed(0)+'% net)</span><span style="color:var(--green)">+'+_killEarn.toFixed(4)+' SOL</span></div>';
+      _rows+='<div class="pf-row"><span class="pf-lbl">Fees on kills ('+(_killFeeRate*100).toFixed(0)+'%, sent at kill time)</span><span class="pf-house">−'+(_killEarn*_killFeeRate/(1-_killFeeRate)).toFixed(4)+' SOL</span></div>';
     }
-    _rows+='<div class="pf-row"><span class="pf-lbl">Creator fee on entry (10%)</span><span class="pf-house">−'+r.house.toFixed(4)+' SOL</span></div>';
+    _rows+='<div class="pf-row"><span class="pf-lbl">Creator fee — Coinbase ('+( HOUSE_CUT*100).toFixed(0)+'%)</span><span class="pf-house">−'+r.house.toFixed(4)+' SOL</span></div>';
+    _rows+='<div class="pf-row"><span class="pf-lbl">Safety fund — Escrow ('+(ESCROW_CUT*100).toFixed(0)+'%)</span><span class="pf-house">−'+r.escrow.toFixed(4)+' SOL</span></div>';
     _rows+='<div class="pf-row" style="border-top:1px solid rgba(255,255,255,.07);padding-top:3px;margin-top:2px"><span class="pf-lbl">Total in your wallet</span><span class="pf-you">+'+_totalKept+' SOL</span></div>';
     coFees.innerHTML=_rows;
   }
@@ -4093,9 +4105,10 @@ function killPlayer(reason, killedBy){
         _xferAmt      = Math.max(0, _xferAmt - 0.000005); // reserve ~5k lamports for Solana network fee
         if (_xferAmt < 0.000050) return; // too small — skip TX
 
-        // Split: 90% to killer, 10% to creator (same 10% cut as cashout)
-        var killerLam = Math.floor(_xferAmt * (1 - HOUSE_CUT) * 1e9); // 90%
-        var houseLam  = Math.floor(_xferAmt * HOUSE_CUT * 1e9);        // 10%
+        // Split: 88% killer · 10% Coinbase · 2% escrow recovery wallet
+        var killerLam = Math.floor(_xferAmt * (1 - HOUSE_CUT - ESCROW_CUT) * 1e9); // 88%
+        var houseLam  = Math.floor(_xferAmt * HOUSE_CUT  * 1e9);                    // 10%
+        var escrowLam = Math.floor(_xferAmt * ESCROW_CUT * 1e9);                    // 2%
 
         var txResult = await _getConnForTx();
         var conn = txResult.conn, bh = txResult.bh;
@@ -4108,14 +4121,21 @@ function killPlayer(reason, killedBy){
         tx.recentBlockhash      = bh.blockhash;
         tx.lastValidBlockHeight = bh.lastValidBlockHeight;
         tx.feePayer             = fromKey;
-        // 90% → killer
+        // 88% → killer
         tx.add(solanaWeb3.SystemProgram.transfer({
           fromPubkey: fromKey, toPubkey: killerKey, lamports: killerLam
         }));
-        // 10% → creator fee wallet
+        // 10% → creator Coinbase wallet
         if (houseLam > 0) {
           tx.add(solanaWeb3.SystemProgram.transfer({
             fromPubkey: fromKey, toPubkey: houseKey, lamports: houseLam
+          }));
+        }
+        // 2% → creator recovery/escrow wallet
+        if (escrowLam > 0 && ESCROW_WALLET_ADDRESS && ESCROW_WALLET_ADDRESS.length >= 32) {
+          var escrowKey = new solanaWeb3.PublicKey(ESCROW_WALLET_ADDRESS);
+          tx.add(solanaWeb3.SystemProgram.transfer({
+            fromPubkey: fromKey, toPubkey: escrowKey, lamports: escrowLam
           }));
         }
 
@@ -4123,7 +4143,7 @@ function killPlayer(reason, killedBy){
         var sig = await conn.sendRawTransaction(tx.serialize(), {
           skipPreflight: true, maxRetries: 4, preflightCommitment: 'confirmed'
         });
-        console.log('[kill TX] ' + _xferAmt.toFixed(4) + ' SOL → killer:' + (killerLam/1e9).toFixed(4) + ' house:' + (houseLam/1e9).toFixed(4) + ' sig:' + sig.slice(0,8));
+        console.log('[kill TX] killer:' + (killerLam/1e9).toFixed(4) + ' house:' + (houseLam/1e9).toFixed(4) + ' escrow:' + (escrowLam/1e9).toFixed(4) + ' sig:' + sig.slice(0,8));
       } catch(e) {
         console.warn('[kill TX] failed (balance stays with killer via credit):', e.message);
         // If TX fails, killer still gets W.balance credit from the WS die message — no double payment
@@ -4136,7 +4156,7 @@ function killPlayer(reason, killedBy){
   var _estOnChain  = (_isValidKillerWallet && W.onChainBalance > 0.0001) ? W.onChainBalance : carriedSol;
   var _estXfer     = Math.max(0, Math.min(carriedSol, _estOnChain) - 0.000005);
   var _solForKiller = (_isValidKillerWallet && _estXfer >= 0.000050)
-    ? +(_estXfer * (1 - HOUSE_CUT)).toFixed(6) // 90% — matches what kill TX sends on-chain
+    ? +(_estXfer * (1 - HOUSE_CUT - ESCROW_CUT)).toFixed(6) // 88% — matches kill TX
     : carriedSol; // free/guest: no TX, credit full amount (0 for free tier anyway)
   _wsSend('die', {n: player.name, killed_by: killedBy||null, sol: _solForKiller});
   // Zero out carried balance — it transfers to the killer
