@@ -2463,6 +2463,33 @@ async function execCashout(gross, label, destAddr) {
     try { globalThis.Buffer = window.Buffer; } catch(e) {}
   }
 
+  // Cross-call anti-double-charge: if a previous cashout TX was broadcast and may still
+  // be in flight, check it server-side before sending a new one.
+  var _coLsKey = 'sol_cashout_' + (W.pubkey||'').slice(0, 16);
+  try {
+    var _coLsRaw = localStorage.getItem(_coLsKey);
+    if (_coLsRaw) {
+      var _coLsData = null;
+      try { _coLsData = JSON.parse(_coLsRaw); } catch(_) {}
+      var _coAge = _coLsData ? (Date.now() - (_coLsData.ts || 0)) : Infinity;
+      if (_coLsData && _coLsData.sig && _coAge < 300000) {
+        var _coChk = await fetch('/api/tx-status?sig=' + encodeURIComponent(_coLsData.sig))
+          .then(function(r){ return r.json(); }).catch(function(){ return null; });
+        if (_coChk && _coChk.confirmed === true) {
+          try { localStorage.removeItem(_coLsKey); } catch(_) {}
+          toast('Previous cashout TX already confirmed — no duplicate sent', 'info');
+          return null;
+        }
+        if (!_coChk || (_coChk.confirmed === null && _coAge < 90000)) {
+          try { localStorage.removeItem(_coLsKey); } catch(_) {}
+          toast('Previous cashout TX still confirming — please wait', 'error');
+          return null;
+        }
+      }
+      try { localStorage.removeItem(_coLsKey); } catch(_) {} // expired or failed — safe to proceed
+    }
+  } catch(_coLse) { try { localStorage.removeItem(_coLsKey); } catch(_) {} }
+
   var txSent = false;
   try {
     toast('Building cashout transaction…', 'info');
@@ -2476,9 +2503,12 @@ async function execCashout(gross, label, destAddr) {
                   '| net(90%):', net.toFixed(6), 'SOL stays in wallet (no self-send)');
     }
 
-    var txResult = await _getConnForTx();
-    var conn = txResult.conn, bh = txResult.bh;
-    if (!bh || !bh.blockhash) throw new Error('Failed to get blockhash from RPC');
+    var _coBhResp = await fetch('/api/blockhash').then(function(r) {
+      if (!r.ok) throw new Error('blockhash proxy error ' + r.status);
+      return r.json();
+    });
+    if (!_coBhResp || !_coBhResp.blockhash) throw new Error('RPC blockhash unavailable for cashout');
+    var bh = _coBhResp;
 
     var fromKey  = new solanaWeb3.PublicKey(W.pubkey);
     var houseKey = new solanaWeb3.PublicKey(HOUSE_WALLET_ADDRESS); // 2QnrdhxX… creator fee
@@ -2508,9 +2538,17 @@ async function execCashout(gross, label, destAddr) {
 
     toast('Broadcasting to Solana mainnet…', 'info');
     txSent = true;
-    var sig = await conn.sendRawTransaction(rawTx, {
-      skipPreflight: true, maxRetries: 4, preflightCommitment: 'confirmed'
+    var _coSendPs = SOLANA_RPCS.map(function(ep) {
+      return Promise.race([
+        (new solanaWeb3.Connection(ep, { commitment: 'confirmed' }))
+          .sendRawTransaction(rawTx, { skipPreflight: true, maxRetries: 3 }),
+        new Promise(function(_, rej){ setTimeout(function(){ rej(new Error('timeout')); }, 5000); })
+      ]).catch(function(e){ console.warn('[cashout] send', ep.split('/')[2], e.message); return null; });
     });
+    var _coSendAll = await Promise.all(_coSendPs);
+    var sig = _coSendAll.find(function(s){ return s; }) || null;
+    if (!sig) throw new Error('All RPC endpoints rejected cashout TX — check network');
+    try { localStorage.setItem(_coLsKey, JSON.stringify({ sig: sig, ts: Date.now() })); } catch(_) {}
     console.log('[cashout] ✓ sig:', sig);
 
     // ── Update game balance ────────────────────────────────────────────────
@@ -2530,6 +2568,7 @@ async function execCashout(gross, label, destAddr) {
       toast('✓ Cashed out! ' + net.toFixed(4) + ' SOL in wallet (10% fee sent) · TX: ' + sig.slice(0,8) + '…', 'info');
     }
     setTimeout(function() { if (W.pubkey) refreshBalance(null); }, 4000);
+    try { localStorage.removeItem(_coLsKey); } catch(_) {}
     return { gross:gross, house:house, escrow:escrow, net:net, sig:sig };
 
   } catch(e) {
@@ -2610,25 +2649,60 @@ async function payEntryFee(tierKey) {
   // Outer loop retries up to 3× with a fresh blockhash if the TX still expires.
   var _joinLam = Math.floor(_joinFee * 1e9);
   var _txSig, _joinErr;
+  var _lsKey = 'sol_entry_' + tierKey + '_' + (W.pubkey||'').slice(0, 16);
+  // Cross-session anti-double-charge: if a previous attempt broadcast a TX that
+  // later confirmed (after we gave up and returned false), recover it here instead
+  // of sending a fresh TX and charging the player twice.
+  try {
+    var _lsRaw = localStorage.getItem(_lsKey);
+    if (_lsRaw) {
+      var _lsData = null;
+      try { _lsData = JSON.parse(_lsRaw); } catch(_) {}
+      var _lsAge = _lsData ? (Date.now() - (_lsData.ts || 0)) : Infinity;
+      if (_lsData && _lsData.sig && _lsAge < 300000) {
+        var _lsChk = await fetch('/api/tx-status?sig=' + encodeURIComponent(_lsData.sig))
+          .then(function(r){ return r.json(); }).catch(function(){ return null; });
+        if (_lsChk && _lsChk.confirmed === true) {
+          _txSig = _lsData.sig;
+          try { localStorage.removeItem(_lsKey); } catch(_) {}
+          console.log('[entry] recovered confirmed TX from localStorage:', _lsData.sig.slice(0,12));
+        } else if (!_lsChk || (_lsChk.confirmed === null && _lsAge < 90000)) {
+          // Still < 90 s old and status unknown — TX may still be in flight; block new TX
+          _joinErr = new Error('Previous entry TX still confirming — wait 90 s then check wallet');
+        } else {
+          try { localStorage.removeItem(_lsKey); } catch(_) {} // expired or failed — safe to retry
+        }
+      } else {
+        try { localStorage.removeItem(_lsKey); } catch(_) {} // too old or corrupt — clear
+      }
+    }
+  } catch(_lse) { try { localStorage.removeItem(_lsKey); } catch(_) {} }
   if (typeof window.Buffer !== 'undefined' && typeof window.Buffer.from === 'function') {
     window.Buffer.Buffer = window.Buffer;
     try { globalThis.Buffer = window.Buffer; } catch(e) {}
   }
   // Reuse one connection across attempts for status polling
   var _pollConn = new solanaWeb3.Connection('https://solana-rpc.publicnode.com', { commitment: 'confirmed' });
-  for (var _attempt = 0; _attempt < 3; _attempt++) {
+  for (var _attempt = 0; _attempt < 3 && !_joinErr; _attempt++) {
     // ── Anti-double-charge: check prev TX BEFORE clearing it ─────────────────
     // A TX can land on-chain AFTER our poll timeout but BEFORE the retry builds
     // a new TX. Without this check both TXs confirm and the player is charged twice.
     if (_txSig) {
       try {
-        var _prevChk = await _pollConn.getSignatureStatuses([_txSig]).catch(function() { return null; });
-        var _prevSt = _prevChk && _prevChk.value && _prevChk.value[0];
-        if (_prevSt && !_prevSt.err && (_prevSt.confirmationStatus === 'confirmed' || _prevSt.confirmationStatus === 'finalized')) {
-          console.log('[entry] prev TX confirmed during retry window — reusing:', _txSig.slice(0,12));
-          _joinErr = null;
-          break; // use existing confirmed TX — no new payment needed
+        // Server-side check: browser cannot reliably query Solana RPCs due to CORS
+        var _prevChk = await fetch('/api/tx-status?sig=' + encodeURIComponent(_txSig))
+          .then(function(r){ return r.json(); }).catch(function(){ return null; });
+        if (_prevChk && _prevChk.confirmed === true) {
+          console.log('[entry] prev TX confirmed — reusing to prevent double charge:', _txSig.slice(0,12));
+          try { localStorage.removeItem(_lsKey); } catch(_) {}
+          _joinErr = null; break;
         }
+        if (_prevChk && _prevChk.confirmed === null) {
+          // Cannot determine status — fail safe: do NOT send new TX
+          _joinErr = new Error('TX status unknown — wait 60 s and check wallet before retrying');
+          break;
+        }
+        // confirmed === false: TX definitively failed — safe to retry with fresh TX
       } catch(_) {}
     }
     _txSig = null;
@@ -2667,6 +2741,7 @@ async function payEntryFee(tierKey) {
       var _sendAll = await Promise.all(_sendPromises);
       _txSig = _sendAll.find(function(s) { return s; }) || null;
       if (!_txSig) throw new Error('All RPC endpoints rejected the transaction — check network');
+      try { localStorage.setItem(_lsKey, JSON.stringify({ sig: _txSig, ts: Date.now() })); } catch(_) {}
       toast('Entry fee sent — confirming…', 'info');
 
       // Poll every 1s. Re-broadcast every 8s to keep TX alive in validator mempools.
@@ -2697,9 +2772,31 @@ async function payEntryFee(tierKey) {
           if ((_se.message || '').includes('TX rejected')) throw _se;
         }
       }
-      if (!_pollOk) throw new Error('Blockhash not found');
+      if (!_pollOk) {
+        // Poll timed out — check server-side before retrying to prevent double charge.
+        // The blockhash is valid for ~60 s; after 45 s of polling there is a ~15 s window
+        // where the TX could still confirm. Never retry blindly inside that window.
+        var _tmChk = await fetch('/api/tx-status?sig=' + encodeURIComponent(_txSig))
+          .then(function(r){ return r.json(); }).catch(function(){ return null; });
+        if (_tmChk && _tmChk.confirmed === true) {
+          try { localStorage.removeItem(_lsKey); } catch(_) {}
+          _pollOk = true; break;
+        }
+        if (!_tmChk || _tmChk.confirmed === null) {
+          // Status still unknown — wait for blockhash to definitively expire (~62 s total)
+          await new Promise(function(r){ setTimeout(r, 17000); });
+          var _tmChk2 = await fetch('/api/tx-status?sig=' + encodeURIComponent(_txSig))
+            .then(function(r){ return r.json(); }).catch(function(){ return null; });
+          if (_tmChk2 && _tmChk2.confirmed === true) {
+            try { localStorage.removeItem(_lsKey); } catch(_) {}
+            _pollOk = true; break;
+          }
+        }
+        throw new Error('block height exceeded');
+      }
 
       console.log('[entry] join TX confirmed (attempt ' + (_attempt + 1) + '):', _txSig.slice(0,12));
+      try { localStorage.removeItem(_lsKey); } catch(_) {}
       _joinErr = null;
       break;
     } catch(_je) {
@@ -2716,6 +2813,11 @@ async function payEntryFee(tierKey) {
   }
   if (_joinErr) {
     var _errMsg = (_joinErr.message || '').split('\n')[0] || 'network error';
+    // Keep localStorage if TX is still potentially in flight — next attempt will recheck.
+    // Clear it for all definitive failures so stale sigs don't block future joins.
+    if (!_errMsg.includes('still confirming') && !_errMsg.includes('status unknown')) {
+      try { localStorage.removeItem(_lsKey); } catch(_) {}
+    }
     toast('Entry fee TX failed: ' + _errMsg + ' — please try again', 'error');
     console.error('[entry] join TX failed after retries:', _joinErr);
     return false;
