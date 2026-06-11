@@ -2609,21 +2609,31 @@ async function payEntryFee(tierKey) {
     window.Buffer.Buffer = window.Buffer;
     try { globalThis.Buffer = window.Buffer; } catch(e) {}
   }
+  // Reuse one connection across attempts for status polling
+  var _pollConn = new solanaWeb3.Connection('https://solana-rpc.publicnode.com', { commitment: 'confirmed' });
   for (var _attempt = 0; _attempt < 3; _attempt++) {
+    // ── Anti-double-charge: check prev TX BEFORE clearing it ─────────────────
+    // A TX can land on-chain AFTER our poll timeout but BEFORE the retry builds
+    // a new TX. Without this check both TXs confirm and the player is charged twice.
+    if (_txSig) {
+      try {
+        var _prevChk = await _pollConn.getSignatureStatuses([_txSig]).catch(function() { return null; });
+        var _prevSt = _prevChk && _prevChk.value && _prevChk.value[0];
+        if (_prevSt && !_prevSt.err && (_prevSt.confirmationStatus === 'confirmed' || _prevSt.confirmationStatus === 'finalized')) {
+          console.log('[entry] prev TX confirmed during retry window — reusing:', _txSig.slice(0,12));
+          _joinErr = null;
+          break; // use existing confirmed TX — no new payment needed
+        }
+      } catch(_) {}
+    }
     _txSig = null;
     try {
-      // ── Get blockhash via server-side proxy ──────────────────────────────────
-      // Browser CORS policy blocks most Solana RPCs directly (we see 400/403).
-      // /api/blockhash fetches server-side from reliable nodes with no CORS limit,
-      // guaranteeing a fresh blockhash every time.
       var _bhResp = await fetch('/api/blockhash').then(function(r) {
         if (!r.ok) throw new Error('blockhash proxy error ' + r.status);
         return r.json();
       });
       if (!_bhResp || !_bhResp.blockhash) throw new Error('RPC blockhash unavailable');
       var _bh = _bhResp;
-      // publicnode is the only browser-CORS-enabled RPC — use it for status polling
-      var _conn = new solanaWeb3.Connection('https://solana-rpc.publicnode.com', { commitment: 'confirmed' });
       console.log('[entry] attempt ' + (_attempt + 1) + ' blockhash=' + _bh.blockhash.slice(0,8) + ' lastValidBH=' + _bh.lastValidBlockHeight);
 
       var _from  = new solanaWeb3.PublicKey(W.pubkey);
@@ -2639,32 +2649,27 @@ async function payEntryFee(tierKey) {
       _joinTx.sign(_localKeypair);
       var _rawTx = _joinTx.serialize();
 
-      // ── Broadcast to ALL RPCs simultaneously ─────────────────────────────────
-      // A single free RPC often silently drops TX submissions when rate-limited.
-      // Sending to all 5 at once maximises validator network propagation.
-      // All return the same signature since the TX is pre-signed.
+      // Broadcast to all RPCs. Each has a 5s timeout so a hung endpoint
+      // doesn't freeze the whole flow — the others proceed independently.
       toast('Submitting entry fee…', 'info');
       var _sendPromises = SOLANA_RPCS.map(function(ep) {
-        return (new solanaWeb3.Connection(ep, { commitment: 'confirmed' }))
-          .sendRawTransaction(_rawTx, { skipPreflight: true, maxRetries: 0 })
-          .catch(function(e) { console.warn('[entry] send failed on', ep, e.message); return null; });
+        return Promise.race([
+          (new solanaWeb3.Connection(ep, { commitment: 'confirmed' }))
+            .sendRawTransaction(_rawTx, { skipPreflight: true, maxRetries: 0 }),
+          new Promise(function(_, rej){ setTimeout(function(){ rej(new Error('timeout')); }, 5000); })
+        ]).catch(function(e){ console.warn('[entry] send', ep.split('/')[2], e.message); return null; });
       });
       var _sendAll = await Promise.all(_sendPromises);
-      console.log('[entry] send results:', _sendAll.map(function(s,i) { return SOLANA_RPCS[i].split('/')[2] + ':' + (s ? s.slice(0,8) : 'null'); }).join(', '));
       _txSig = _sendAll.find(function(s) { return s; }) || null;
       if (!_txSig) throw new Error('All RPC endpoints rejected the transaction — check network');
       toast('Entry fee sent — confirming…', 'info');
 
-      // ── Poll for confirmation ─────────────────────────────────────────────────
-      // We do NOT check getBlockHeight here — that call can also return stale data
-      // from free RPCs and trigger a false "expired" before the TX has a chance to land.
-      // Instead we rely on the wall-clock timeout (well within the actual validity window)
-      // and re-broadcast every 8s so the TX stays alive in validator mempools.
+      // Poll every 1s. Re-broadcast every 8s to keep TX alive in validator mempools.
       var _pollOk = false;
       var _pollMs = Date.now();
       var _nextRebcast = Date.now() + 8000;
       while (Date.now() - _pollMs < 45000) {
-        await new Promise(function(r){ setTimeout(r, 1500); });
+        await new Promise(function(r){ setTimeout(r, 1000); });
         if (Date.now() > _nextRebcast) {
           _nextRebcast = Date.now() + 8000;
           SOLANA_RPCS.forEach(function(ep) {
@@ -2674,9 +2679,9 @@ async function payEntryFee(tierKey) {
           });
         }
         try {
-          var _statRes = await _conn.getSignatureStatuses([_txSig]);
+          var _statRes = await _pollConn.getSignatureStatuses([_txSig]);
           var _st = _statRes && _statRes.value && _statRes.value[0];
-          console.log('[entry] status:', _st ? (_st.confirmationStatus + (_st.err ? ' ERR:' + JSON.stringify(_st.err) : '')) : 'null');
+          console.log('[entry] status:', _st ? (_st.confirmationStatus + (_st.err ? ' ERR:'+JSON.stringify(_st.err) : '')) : 'null');
           if (_st) {
             if (_st.err) throw new Error('TX rejected on-chain: ' + JSON.stringify(_st.err));
             if (_st.confirmationStatus === 'confirmed' || _st.confirmationStatus === 'finalized') {
@@ -2687,9 +2692,9 @@ async function payEntryFee(tierKey) {
           if ((_se.message || '').includes('TX rejected')) throw _se;
         }
       }
-      if (!_pollOk) throw new Error('Blockhash not found'); // triggers retry with fresh blockhash
+      if (!_pollOk) throw new Error('Blockhash not found');
 
-      console.log('[entry] join TX confirmed (attempt ' + (_attempt + 1) + '):', _txSig.slice(0, 12));
+      console.log('[entry] join TX confirmed (attempt ' + (_attempt + 1) + '):', _txSig.slice(0,12));
       _joinErr = null;
       break;
     } catch(_je) {
@@ -3996,8 +4001,12 @@ function cancelCharge(){
   var bar=document.getElementById('cashoutBar'); if(bar) bar.style.width='0%';
 }
 
+var _cashoutInProgress = false;
 async function triggerCashout(){
-  cancelCharge(); if(!gameRunning||!player||!player.alive) return;
+  if (_cashoutInProgress) return; // prevent double-fire from rapid taps or key holds
+  _cashoutInProgress = true;
+  cancelCharge();
+  if (!gameRunning || !player || !player.alive) { _cashoutInProgress = false; return; }
   var t=TIERS[activeTier];
   var isFree=(activeTier==='free');
 
