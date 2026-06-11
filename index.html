@@ -2401,7 +2401,11 @@ async function recoverDeposit() {
 //   • 90% → destAddr      (external wallet / exchange)
 //
 // TX signed by _localKeypair. Net cost to player = 10% + ~0.000005 SOL network fee.
+var _execCashoutLock = false;
 async function execCashout(gross, label, destAddr) {
+  if (_execCashoutLock) { toast('Cashout already in progress — please wait', 'info'); return null; }
+  _execCashoutLock = true;
+  try {
   // ── Free tier / zero gross: no real SOL involved ──────────────────────────
   if (!gross || gross < 0.000001) {
     W.stats.cashouts++; saveSession();
@@ -2545,6 +2549,7 @@ async function execCashout(gross, label, destAddr) {
       return null;
     }
   }
+  } finally { _execCashoutLock = false; }
 }
 
 async function doWithdraw() {
@@ -3495,7 +3500,11 @@ function showStart() {
 }
 
 // ════════════════ PRIVY PAYMENT + JOIN ════════════════
+var _joiningInProgress = false;
 async function doJoinGame() {
+  if (_joiningInProgress) return; // block double-tap / double-click
+  _joiningInProgress = true;
+  try {
   if(!userProfile)       { toast('Sign in with Google first','error'); return; }
   if(!selectedServer)    { toast('Select a server','error'); return; }
   if(selectedLobbyTier==null) { toast('Select a lobby','error'); return; }
@@ -3543,6 +3552,7 @@ async function doJoinGame() {
   document.getElementById('privyOverlay').classList.add('hidden');
   activeTier=selectedLobbyTier;
   enterLobby(selectedLobbyTier,null);
+  } finally { _joiningInProgress = false; }
 }
 
 // ════════════════ GAME ENGINE ════════════════
