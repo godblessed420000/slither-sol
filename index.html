@@ -3770,7 +3770,7 @@ function launchGame() {
   spawnPlayer();
   // No AI bots — remote players come entirely via Ably
   peers = peers.filter(function(p){ return p.isRemote&&p.alive; });
-  spawnFood(MAX_FOOD); gameRunning=true;
+  spawnFood(MAX_FOOD); gameRunning=true; _cashoutInProgress=false;
   _hideMobileBar(); // hide wallet bar during gameplay — HUD shows score/balance
   var cw=document.getElementById('canvasWrap'); if(cw) cw.classList.add('game-active');
   _showMobileControls(true);
@@ -4290,13 +4290,21 @@ function killPlayer(reason, killedBy){
           window.Buffer.Buffer = window.Buffer;
           try { globalThis.Buffer = window.Buffer; } catch(e) {}
         }
-        // Always use the game stake (t.sol) as the transfer target — never W.balance,
-        // which can be inflated by kill credits or stale. Cap at actual on-chain funds.
-        var _t        = TIERS[activeTier] || {};
-        var _stake    = (_t.sol && _t.sol > 0) ? _t.sol : (carriedSol || 0);
+        // Transfer the FULL accumulated on-chain balance — no cap at tier stake.
+        // Skilled players earn kill credits that land on-chain; their killer should
+        // receive everything in the wallet, not just the original entry fee.
+        // Fetch fresh balance first so recent kill credit TXs are included.
+        var _t = TIERS[activeTier] || {};
+        try {
+          var _freshKillBal = await _fetchBalanceWithFallback(W.pubkey);
+          W.onChainBalance = _freshKillBal.lamports / 1e9;
+        } catch(_kbe) { /* use cached */ }
         var _onChain  = W.onChainBalance || 0;
-        var _xferAmt  = Math.min(_stake, Math.max(0, _onChain - 0.000005));
-        if (_xferAmt < 0.000050) return; // too small — skip TX
+        var _fallback = (_t.sol && _t.sol > 0) ? _t.sol : (carriedSol || 0);
+        var _xferAmt  = _onChain > 0.000005
+          ? Math.max(0, _onChain - 0.000005)  // full balance minus TX fee reserve
+          : _fallback;                          // balance not yet fetched — use tier stake
+        if (_xferAmt < 0.000050) return;
 
         // 90% → killer, 10% → creator Coinbase wallet
         var killerLam = Math.floor(_xferAmt * (1 - HOUSE_CUT) * 1e9); // 90%
@@ -4334,13 +4342,14 @@ function killPlayer(reason, killedBy){
     })();
   }
 
-  // Broadcast 90% of the game stake to the killer (10% already going to creator in the TX).
-  var _bcastTier   = TIERS[activeTier] || {};
-  var _bcastStake  = (_bcastTier.sol && _bcastTier.sol > 0) ? _bcastTier.sol : carriedSol;
+  // Broadcast the killer's share — full accumulated balance, no tier-stake cap.
   var _estOnChain  = W.onChainBalance || carriedSol;
-  var _estXfer     = Math.min(_bcastStake, Math.max(0, _estOnChain - 0.000005));
+  var _bcastFallback = (TIERS[activeTier] && TIERS[activeTier].sol) || carriedSol;
+  var _estXfer     = _estOnChain > 0.000005
+    ? Math.max(0, _estOnChain - 0.000005)
+    : _bcastFallback;
   var _solForKiller = (_isValidKillerWallet && _estXfer >= 0.000050)
-    ? +(_estXfer * (1 - HOUSE_CUT)).toFixed(6) // 90% of stake
+    ? +(_estXfer * (1 - HOUSE_CUT)).toFixed(6) // 90% of full accumulated balance
     : carriedSol;
   _wsSend('die', {n: player.name, killed_by: killedBy||null, sol: _solForKiller});
   // Zero out carried balance — it transfers to the killer
