@@ -4231,8 +4231,8 @@ function loop(){ if(!gameRunning&&!_spectating) return; update(); draw(); reques
 function update(){
   if(!player||!player.alive){
     if(_spectating){
-      // Zoom out for a wider spectating view; scroll wheel still adjusts via _zoomOffset
-      var _spTargetZ=Math.max(MIN_ZOOM,Math.min(0.72,0.50+_zoomOffset));
+      // Lock to maximum zoom-out while spectating; scroll wheel can zoom in from there
+      var _spTargetZ=Math.max(MIN_ZOOM,Math.min(MAX_ZOOM,MIN_ZOOM+Math.max(0,_zoomOffset)));
       CAM_ZOOM+=(_spTargetZ-CAM_ZOOM)*0.05;
       var _sNow=performance.now(),_sExtCap=BASE_SPEED*BOOST_MULT*60;
       var _st=_specTargetId?peers.find(function(p){return p.remoteId===_specTargetId;}):null;
