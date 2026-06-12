@@ -3236,10 +3236,9 @@ function _wsJoin(tier) {
     // fly.io WS gets it too so the server keeps the room mapping current.
     clearInterval(_lobbyPingTimer);
     _lobbyPingTimer = setInterval(function() {
-      // Keep announcing while connected — this lets mid-game joiners discover us.
-      // Skip only if actively playing (pos broadcast at 50fps is already a heartbeat).
+      // Always re-announce so mid-game joiners can discover us via _ablyVerifiedPeers.
+      // Pos at 50fps shows our position; this join is what makes us visible/killable.
       if (!_ablyChannel) { clearInterval(_lobbyPingTimer); _lobbyPingTimer = null; return; }
-      if (gameRunning && player && player.alive) return;
       try { _ablyChannel.publish('join', { n: _currentName, color: _currentColor, reply: true }); } catch(_) {}
       if (_ws && _ws.readyState === WebSocket.OPEN) {
         try { _ws.send(JSON.stringify({ type:'join', clientId:_wsClientId, tier:_currentTier, data:{ n:_currentName, color:_currentColor, reply:true } })); } catch(_) {}
