@@ -4569,6 +4569,8 @@ function startSpectating(){
   }
   // No peers right now — watch the empty arena; auto-follow when someone joins
   var ov=document.getElementById('ovDeath'); if(ov) ov.classList.add('hidden');
+  // Full-screen canvas: hide sidebar and resize (mirrors launchGame behaviour)
+  if(_elSidebar) _elSidebar.style.display='none'; setTimeout(resizeC,30);
   // Lift minimap above the specHud bar so the full 108px is visible
   var _mm=document.getElementById('minimap'); if(_mm) _mm.style.bottom='70px';
   var sh=document.getElementById('specHud'); if(sh) sh.style.display='flex';
@@ -4589,6 +4591,7 @@ function _exitSpectate(){
   var sh=document.getElementById('specHud'); if(sh) sh.style.display='none';
   var ov=document.getElementById('ovDeath'); if(ov) ov.classList.remove('hidden');
   var _mm=document.getElementById('minimap'); if(_mm) _mm.style.bottom='';
+  if(_elSidebar) _elSidebar.style.display=''; setTimeout(resizeC,30);
 }
 function draw(){
   ctx.clearRect(0,0,gc.width,gc.height);
