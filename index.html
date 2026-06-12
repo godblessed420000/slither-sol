@@ -4001,6 +4001,20 @@ function onMouse(e){
 }
 function onTouch(e){
   e.preventDefault();
+  if(e.touches.length===2){
+    // Two fingers — handle pinch zoom
+    var dx=e.touches[0].clientX-e.touches[1].clientX;
+    var dy=e.touches[0].clientY-e.touches[1].clientY;
+    var d=Math.sqrt(dx*dx+dy*dy);
+    if(_pinchDist!==null){
+      var delta=(d-_pinchDist)*0.004;
+      _zoomOffset=Math.max(-0.55,Math.min(0.55,_zoomOffset+delta));
+    }
+    _pinchDist=d;
+    return;
+  }
+  // Single finger — aim
+  _pinchDist=null;
   var t=e.touches[0]; var r=gc.getBoundingClientRect();
   var sx=gc.width/r.width, sy=gc.height/r.height;
   mouseX=(t.clientX-r.left)*sx;
@@ -4022,6 +4036,7 @@ function onKU(e){
 var _joyActive=false, _joyTouchId=-1, _joyBX=0, _joyBY=0, _joyDX=0, _joyDY=0;
 var _joyMaxR=38; // max knob travel in CSS px — (outerR 64 – knobR 26)
 var _joyInited=false;
+var _pinchDist=null; // null = no pinch active
 var _isTouchDev=('ontouchstart' in window)||navigator.maxTouchPoints>0;
 
 function _showMobileControls(show){
@@ -4108,6 +4123,19 @@ function _initJoystick(){
       toast(_autoCircle?'🔄 Auto-circle ON':'⬛ Auto-circle OFF','info');
     }
   },{passive:false});
+
+  // ── Pinch-to-zoom on the game canvas ──────────
+  gc.addEventListener('touchstart',function(e){
+    if(e.touches.length===2){
+      var dx=e.touches[0].clientX-e.touches[1].clientX;
+      var dy=e.touches[0].clientY-e.touches[1].clientY;
+      _pinchDist=Math.sqrt(dx*dx+dy*dy);
+    } else {
+      _pinchDist=null;
+    }
+  },{passive:true});
+  gc.addEventListener('touchend',  function(){ _pinchDist=null; },{passive:true});
+  gc.addEventListener('touchcancel',function(){ _pinchDist=null; },{passive:true});
 }
 
 function _joyMoveKnob(cx,cy,knob){
