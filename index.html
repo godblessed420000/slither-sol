@@ -362,7 +362,7 @@ canvas{display:block;width:100%;height:100%;}
 .btn-search:hover{border-color:var(--purple);color:var(--purple);}
 
 /* ══ SERVER CARDS ══ */
-.server-card{flex:1;background:var(--panel);border:2px solid var(--border);border-radius:10px;padding:12px 10px;display:flex;flex-direction:column;align-items:center;gap:5px;cursor:pointer;transition:border-color .2s,box-shadow .2s,transform .15s;}
+.server-card{flex:1;background:var(--panel);border:2px solid var(--border);border-radius:8px;padding:8px 7px;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;transition:border-color .2s,box-shadow .2s,transform .15s;}
 .server-card:hover{transform:translateY(-2px);}
 .server-card.selected{border-color:var(--blue);box-shadow:0 0 18px rgba(0,194,255,.35);}
 
@@ -927,26 +927,26 @@ canvas{display:block;width:100%;height:100%;}
         </div>
       </div>
 
-      <div style="width:100%;max-width:700px;">
-        <div style="font-family:'Orbitron',monospace;font-size:.56rem;color:var(--dim);text-transform:uppercase;letter-spacing:2px;margin-bottom:8px;">&#9312; Choose Server</div>
-        <div style="display:flex;gap:10px;">
+      <div style="width:100%;max-width:480px;">
+        <div style="font-family:'Orbitron',monospace;font-size:.48rem;color:var(--dim);text-transform:uppercase;letter-spacing:2px;margin-bottom:5px;">&#9312; Choose Server</div>
+        <div style="display:flex;gap:7px;">
           <div class="server-card" id="srv-us" onclick="selectServer('us')">
-            <div style="font-size:1.3rem;">&#127482;&#127480;</div>
-            <div style="font-family:'Orbitron',monospace;font-size:.7rem;font-weight:700;color:var(--text);">US East</div>
-            <div style="font-size:.58rem;color:var(--green);" id="ping-us">&#9679; 12ms</div>
-            <div style="font-size:.54rem;color:var(--dim);" id="players-us">142 online</div>
+            <div style="font-size:1rem;">&#127482;&#127480;</div>
+            <div style="font-family:'Orbitron',monospace;font-size:.55rem;font-weight:700;color:var(--text);">US East</div>
+            <div style="font-size:.46rem;color:var(--green);" id="ping-us">&#9679; 12ms</div>
+            <div style="font-size:.43rem;color:var(--dim);" id="players-us">142 online</div>
           </div>
           <div class="server-card" id="srv-eu" onclick="selectServer('eu')">
-            <div style="font-size:1.3rem;">&#127466;&#127482;</div>
-            <div style="font-family:'Orbitron',monospace;font-size:.7rem;font-weight:700;color:var(--text);">EU West</div>
-            <div style="font-size:.58rem;color:var(--green);" id="ping-eu">&#9679; 38ms</div>
-            <div style="font-size:.54rem;color:var(--dim);" id="players-eu">98 online</div>
+            <div style="font-size:1rem;">&#127466;&#127482;</div>
+            <div style="font-family:'Orbitron',monospace;font-size:.55rem;font-weight:700;color:var(--text);">EU West</div>
+            <div style="font-size:.46rem;color:var(--green);" id="ping-eu">&#9679; 38ms</div>
+            <div style="font-size:.43rem;color:var(--dim);" id="players-eu">98 online</div>
           </div>
           <div class="server-card" id="srv-as" onclick="selectServer('as')">
-            <div style="font-size:1.3rem;">&#127462;&#127480;</div>
-            <div style="font-family:'Orbitron',monospace;font-size:.7rem;font-weight:700;color:var(--text);">Asia</div>
-            <div style="font-size:.58rem;color:var(--gold);" id="ping-as">&#9679; 95ms</div>
-            <div style="font-size:.54rem;color:var(--dim);" id="players-as">54 online</div>
+            <div style="font-size:1rem;">&#127462;&#127480;</div>
+            <div style="font-family:'Orbitron',monospace;font-size:.55rem;font-weight:700;color:var(--text);">Asia</div>
+            <div style="font-size:.46rem;color:var(--gold);" id="ping-as">&#9679; 95ms</div>
+            <div style="font-size:.43rem;color:var(--dim);" id="players-as">54 online</div>
           </div>
         </div>
       </div>
