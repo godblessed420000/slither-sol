@@ -2895,6 +2895,7 @@ var _ablyClient        = null;  // Ably.Realtime instance
 var _ablyChannel       = null;  // game-{tier} channel
 var _ablyToken         = null;  // tokenRequest from /api/verify-entry or /api/ably-auth
 var _ablyVerifiedPeers = {};    // cid → true for every player who sent `join` via Ably
+var _pendingVerifyTs   = {};    // cid → timestamp of last re-announce request (throttle)
 
 // ── Dynamic arena sizing ─────────────────────────────────────────────────────
 // Called whenever a remote player joins or leaves mid-game.
@@ -3010,7 +3011,7 @@ function _wsSend(type, data) {
 function _ablyConnect(tier) {
   if (!_ablyToken) { console.warn('[ably] no token — payEntryFee must succeed first'); return; }
   if (_ablyClient) { try { _ablyClient.close(); } catch(_) {} _ablyClient = null; _ablyChannel = null; }
-  _ablyVerifiedPeers = {};
+  _ablyVerifiedPeers = {}; _pendingVerifyTs = {};
 
   var _myClientId = W.pubkey || _wsClientId || ('guest_' + Date.now());
   _ablyClient = new Ably.Realtime({
@@ -3116,12 +3117,22 @@ function _wsHandleMsg(msg, fromAbly) {
 
   // ── Position updates ────────────────────────────────────────────────────
   if (type === 'pos') {
-    if ((!gameRunning && !_spectating) || !cid) return;
+    if ((!gameRunning && !_spectating && !_ablyChannel) || !cid) return;
     // Security gate: only render players who sent a verified `join` through the
     // Ably channel. Attackers who bypass payment and connect to fly.io directly
     // will send pos updates, but they'll never appear in _ablyVerifiedPeers,
     // so they stay invisible and cannot trigger kill credits.
-    if (!_ablyVerifiedPeers[cid]) return;
+    if (!_ablyVerifiedPeers[cid]) {
+      // Race window: WS pos can arrive before the Ably join/reply handshake completes.
+      // Re-announce ourselves via Ably (throttled per cid) to trigger their reply,
+      // which will set _ablyVerifiedPeers[cid] and unblock future pos frames.
+      var _pvNow = Date.now();
+      if (_ablyChannel && (!_pendingVerifyTs[cid] || _pvNow - _pendingVerifyTs[cid] > 4000)) {
+        _pendingVerifyTs[cid] = _pvNow;
+        try { _ablyChannel.publish('join', { n: _currentName, color: _currentColor, reply: true }); } catch(_) {}
+      }
+      return;
+    }
     var rp = _remoteMap[cid];
     if (!rp) {
       var lobby = _lobbyPeers[cid] || {};
@@ -3225,14 +3236,15 @@ function _wsJoin(tier) {
     // fly.io WS gets it too so the server keeps the room mapping current.
     clearInterval(_lobbyPingTimer);
     _lobbyPingTimer = setInterval(function() {
-      if (gameRunning) { clearInterval(_lobbyPingTimer); _lobbyPingTimer = null; return; }
-      if (_ablyChannel) {
-        try { _ablyChannel.publish('join', { n: _currentName, color: _currentColor, reply: true }); } catch(_) {}
-      }
+      // Keep announcing while connected — this lets mid-game joiners discover us.
+      // Skip only if actively playing (pos broadcast at 50fps is already a heartbeat).
+      if (!_ablyChannel) { clearInterval(_lobbyPingTimer); _lobbyPingTimer = null; return; }
+      if (gameRunning && player && player.alive) return;
+      try { _ablyChannel.publish('join', { n: _currentName, color: _currentColor, reply: true }); } catch(_) {}
       if (_ws && _ws.readyState === WebSocket.OPEN) {
         try { _ws.send(JSON.stringify({ type:'join', clientId:_wsClientId, tier:_currentTier, data:{ n:_currentName, color:_currentColor, reply:true } })); } catch(_) {}
       }
-    }, 4000);
+    }, 6000);
   }
 
   _wsConnect(doJoin);
@@ -3284,7 +3296,7 @@ function _wsLeave() {
   _ablyClient        = null;
   _ablyChannel       = null;
   _ablyToken         = null;
-  _ablyVerifiedPeers = {};
+  _ablyVerifiedPeers = {}; _pendingVerifyTs = {};
   _wsClientId  = null;  // must be null BEFORE closing to suppress auto-reconnect in onclose
   _currentTier = null;
   _lobbyPeers  = {};
@@ -3734,12 +3746,12 @@ function enterLobby(tier,e) {
   // Join the live WebSocket room for this tier
   _wsJoin(tier);
 
-  // ── Live arena countdown: launch after 3 seconds regardless of server ──
-  // Server also fires `start` immediately on join (see server.js v4).
-  // This client-side timer is a safety fallback if the WS is slow to connect.
-  var cd = 3;
+  // ── Live arena: launch after 1 second regardless of player count ──
+  // Server fires `start` immediately on join — this 1s timer is a fallback.
+  // Arena is always live; no minimum player count required.
+  var cd = 1;
   var ls = document.getElementById('lobbyStatus');
-  if(ls) ls.textContent = 'Entering arena in ' + cd + 's…';
+  if(ls) ls.textContent = 'Entering arena…';
   lobbyTimer = setInterval(function() {
     cd--;
     var realPlayers = Object.keys(_lobbyPeers).length;
@@ -3747,7 +3759,7 @@ function enterLobby(tier,e) {
     renderSlots();
     if(cd > 0){
       var ls2 = document.getElementById('lobbyStatus');
-      if(ls2) ls2.textContent = 'Entering arena in ' + cd + 's' + (realPlayers > 0 ? ' — '+realPlayers+' player'+(realPlayers>1?'s':'')+' already inside!' : '…');
+      if(ls2) ls2.textContent = 'Entering arena…' + (realPlayers > 0 ? ' '+realPlayers+' player'+(realPlayers>1?'s':'')+' already inside!' : '');
     } else {
       clearInterval(lobbyTimer); lobbyTimer = null;
       if(!gameRunning) launchGame();
@@ -4236,9 +4248,11 @@ function update(){
         }
         camX=_st.x; camY=_st.y;
       } else {
+        // Target died/left — try to find any alive peer and auto-follow them
         var _snp=peers.find(function(p){return p.alive&&p.isRemote;});
-        if(_snp){_specTargetId=_snp.remoteId;camX=_snp.x;camY=_snp.y;_updateSpecHud();}
-        else _exitSpectate();
+        if(_snp){_specTargetId=_snp.remoteId;camX=_snp.x;camY=_snp.y;}
+        else _specTargetId=null; // no one alive — keep camera still, wait for joiners
+        _updateSpecHud();
       }
     }
     return;
@@ -4541,14 +4555,17 @@ function _updateSpecHud(){
   var el=document.getElementById('specTargetName');
   if(!el) return;
   var t=_specTargetId?peers.find(function(p){return p.remoteId===_specTargetId;}):null;
-  el.textContent=t?t.name:'—';
+  if(t&&t.alive) el.textContent=t.name;
+  else el.textContent='Waiting for players…';
 }
 function startSpectating(){
   var alivePeers=peers.filter(function(p){return p.alive&&p.isRemote;});
-  if(!alivePeers.length){ toast('No one alive to spectate','info'); return; }
   _spectating=true;
-  _specTargetId=alivePeers[0].remoteId;
-  camX=alivePeers[0].x; camY=alivePeers[0].y;
+  if(alivePeers.length){
+    _specTargetId=alivePeers[0].remoteId;
+    camX=alivePeers[0].x; camY=alivePeers[0].y;
+  }
+  // No peers right now — watch the empty arena; auto-follow when someone joins
   var ov=document.getElementById('ovDeath'); if(ov) ov.classList.add('hidden');
   var sh=document.getElementById('specHud'); if(sh) sh.style.display='flex';
   _updateSpecHud();
