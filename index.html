@@ -1036,10 +1036,22 @@ canvas{display:block;width:100%;height:100%;}
         <div class="rp-earn" id="dEarn"></div>
         <div class="rp-sub" id="dStats"></div>
         <div style="display:flex;gap:10px;margin-top:4px;flex-wrap:wrap;justify-content:center;">
+          <button class="btn" style="background:linear-gradient(135deg,#6c3fcf,#9b59f7);color:#fff;font-size:.68rem;padding:8px 16px;" onclick="startSpectating()">&#128065; Watch Live</button>
           <button class="btn" style="background:linear-gradient(135deg,var(--green),#0cb87a);color:#000;font-size:.68rem;padding:8px 18px;" onclick="quickRejoin()" id="rejoinBtnDeath">&#9654; Play Again</button>
           <button class="btn" style="background:linear-gradient(135deg,var(--red),#cc1133);color:#fff;font-size:.68rem;padding:8px 14px;" onclick="showStart()">Change Lobby</button>
           <button class="btn btn-withdraw" onclick="openWithdraw()">Withdraw</button>
         </div>
+      </div>
+    </div>
+
+    <!-- SPECTATING HUD -->
+    <div id="specHud" style="display:none;position:absolute;bottom:14px;left:50%;transform:translateX(-50%);z-index:120;background:rgba(0,0,0,.80);border:1px solid rgba(255,255,255,.13);border-radius:10px;padding:7px 14px;flex-direction:row;align-items:center;gap:10px;pointer-events:auto;white-space:nowrap;">
+      <span style="font-size:.46rem;color:var(--dim);letter-spacing:1.5px;text-transform:uppercase;">&#128065; Spectating</span>
+      <span id="specTargetName" style="font-family:'Orbitron',monospace;font-size:.68rem;color:var(--green);font-weight:700;"></span>
+      <div style="display:flex;gap:5px;margin-left:4px;">
+        <button class="btn" style="font-size:.52rem;padding:4px 10px;" onclick="_switchSpecTarget(-1)">&#9664;</button>
+        <button class="btn" style="font-size:.52rem;padding:4px 10px;" onclick="_switchSpecTarget(1)">&#9654;</button>
+        <button class="btn" style="font-size:.52rem;padding:4px 10px;background:linear-gradient(135deg,var(--red),#cc1133);color:#fff;" onclick="_exitSpectate()">Exit</button>
       </div>
     </div>
 
@@ -3104,7 +3116,7 @@ function _wsHandleMsg(msg, fromAbly) {
 
   // ── Position updates ────────────────────────────────────────────────────
   if (type === 'pos') {
-    if (!gameRunning || !cid) return;
+    if ((!gameRunning && !_spectating) || !cid) return;
     // Security gate: only render players who sent a verified `join` through the
     // Ably channel. Attackers who bypass payment and connect to fly.io directly
     // will send pos updates, but they'll never appear in _ablyVerifiedPeers,
@@ -3585,6 +3597,8 @@ function setPlayerColor(color) {
 }
 
 function showStart() {
+  _wsLeave(); // close any lingering Ably/WS connection (spectating, death screen, etc.)
+  _spectating=false; _specTargetId=null; var _shEl2=document.getElementById('specHud'); if(_shEl2) _shEl2.style.display='none';
   hideAll();
   _showMobileBar(); // restore wallet bar when returning to lobby
   if(!userProfile){ var ov=document.getElementById('ovLogin'); if(ov) ov.classList.remove('hidden'); }
@@ -3660,6 +3674,7 @@ async function doJoinGame() {
 // ════════════════ GAME ENGINE ════════════════
 var gc,ctx,mm,mctx,gameRunning=false,player=null,peers=[],food=[],parts=[];
 var camX=0,camY=0,mouseX=400,mouseY=300,boosting=false,boostE=100;
+var _spectating=false,_specTargetId=null;
 // Named boost handlers — defined once so removeEventListener actually works
 function _boostOn(e){ if(e && e.button!=null && e.button!==0) return; if(player && player.segs && player.segs.length < 100) return; boosting=true; }
 function _boostOff(e){ if(e && e.button!=null && e.button!==0) return; boosting=false; }
@@ -3883,6 +3898,7 @@ function launchGame() {
   // No AI bots — remote players come entirely via Ably
   peers = peers.filter(function(p){ return p.isRemote&&p.alive; });
   spawnFood(MAX_FOOD); gameRunning=true; _cashoutInProgress=false;
+  _spectating=false; _specTargetId=null; var _shEl=document.getElementById('specHud'); if(_shEl) _shEl.style.display='none';
   _hideMobileBar(); // hide wallet bar during gameplay — HUD shows score/balance
   var cw=document.getElementById('canvasWrap'); if(cw) cw.classList.add('game-active');
   _showMobileControls(true);
@@ -4199,10 +4215,34 @@ async function triggerCashout(){
 // Cashout value = TOTAL SOL currently carried (entry + all kill earnings accumulated this round)
 function calcVal(){ return Math.max(0, +((W.balance||0).toFixed(6))); }
 
-function loop(){ if(!gameRunning) return; update(); draw(); requestAnimationFrame(loop); }
+function loop(){ if(!gameRunning&&!_spectating) return; update(); draw(); requestAnimationFrame(loop); }
 
 function update(){
-  if(!player||!player.alive) return;
+  if(!player||!player.alive){
+    if(_spectating){
+      var _sNow=performance.now(),_sExtCap=BASE_SPEED*BOOST_MULT*60;
+      var _st=_specTargetId?peers.find(function(p){return p.remoteId===_specTargetId;}):null;
+      if(_st&&_st.alive){
+        if(_st.targetX!==undefined){
+          var _se=_sNow-(_st.lastT||_sNow);
+          var _spx=Math.min(_st.targetX+_sExtCap,Math.max(_st.targetX-_sExtCap,_st.targetX+(_st.velX||0)*_se));
+          var _spy=Math.min(_st.targetY+_sExtCap,Math.max(_st.targetY-_sExtCap,_st.targetY+(_st.velY||0)*_se));
+          _st.x+=(_spx-_st.x)*_LERP; _st.y+=(_spy-_st.y)*_LERP;
+          var _sda=_st.targetAngle-_st.angle;
+          while(_sda>Math.PI)_sda-=Math.PI*2; while(_sda<-Math.PI)_sda+=Math.PI*2;
+          _st.angle+=_sda*_LERP;
+          _st.segs.unshift({x:_st.x,y:_st.y});
+          var _smaxS=Math.max(_st.length*SEG_MULT,45); if(_st.segs.length>_smaxS)_st.segs.length=_smaxS;
+        }
+        camX=_st.x; camY=_st.y;
+      } else {
+        var _snp=peers.find(function(p){return p.alive&&p.isRemote;});
+        if(_snp){_specTargetId=_snp.remoteId;camX=_snp.x;camY=_snp.y;_updateSpecHud();}
+        else _exitSpectate();
+      }
+    }
+    return;
+  }
 
   // ── Player steering (slither.io-accurate turn rate) ──
   // Mobile joystick: when stick is pushed, translate direction into a canvas aim point
@@ -4469,7 +4509,7 @@ function killPlayer(reason, killedBy){
   if(_elSidebar) _elSidebar.style.display=''; setTimeout(resizeC,30);
   for(var i=0;i<Math.min(player.segs.length,70);i++) addFood(player.segs[i].x+(Math.random()-.5)*18,player.segs[i].y+(Math.random()-.5)*18);
   player.segs = []; // wipe body immediately — prevents ghost rendering on any trailing draw call
-  cleanupL(); cancelCharge();
+  cleanupL(true); cancelCharge(); // keepAbly=true so spectating can still receive pos updates
   var t=TIERS[activeTier];
   var el;
   el=document.getElementById('dKiller'); if(el) el.textContent=reason;
@@ -4497,6 +4537,37 @@ function killPeer(p){
   for(var i=0;i<Math.min(p.segs.length,80);i++) addFood(p.segs[i].x+(Math.random()-.5)*14,p.segs[i].y+(Math.random()-.5)*14);
 }
 
+function _updateSpecHud(){
+  var el=document.getElementById('specTargetName');
+  if(!el) return;
+  var t=_specTargetId?peers.find(function(p){return p.remoteId===_specTargetId;}):null;
+  el.textContent=t?t.name:'—';
+}
+function startSpectating(){
+  var alivePeers=peers.filter(function(p){return p.alive&&p.isRemote;});
+  if(!alivePeers.length){ toast('No one alive to spectate','info'); return; }
+  _spectating=true;
+  _specTargetId=alivePeers[0].remoteId;
+  camX=alivePeers[0].x; camY=alivePeers[0].y;
+  var ov=document.getElementById('ovDeath'); if(ov) ov.classList.add('hidden');
+  var sh=document.getElementById('specHud'); if(sh) sh.style.display='flex';
+  _updateSpecHud();
+  loop();
+}
+function _switchSpecTarget(dir){
+  var alivePeers=peers.filter(function(p){return p.alive&&p.isRemote;});
+  if(!alivePeers.length){ _exitSpectate(); return; }
+  var idx=alivePeers.findIndex(function(p){return p.remoteId===_specTargetId;});
+  if(idx<0) idx=0; else idx=(idx+dir+alivePeers.length)%alivePeers.length;
+  _specTargetId=alivePeers[idx].remoteId;
+  camX=alivePeers[idx].x; camY=alivePeers[idx].y;
+  _updateSpecHud();
+}
+function _exitSpectate(){
+  _spectating=false; _specTargetId=null;
+  var sh=document.getElementById('specHud'); if(sh) sh.style.display='none';
+  var ov=document.getElementById('ovDeath'); if(ov) ov.classList.remove('hidden');
+}
 function draw(){
   ctx.clearRect(0,0,gc.width,gc.height);
   // Background grid drawn in world space (will be clipped to circle)
@@ -4505,7 +4576,7 @@ function draw(){
   ctx.save();
   ctx.translate(gc.width/2, gc.height/2);
   ctx.scale(CAM_ZOOM, CAM_ZOOM);
-  ctx.translate(-player.x, -player.y);
+  ctx.translate(-camX, -camY);
   var t=TIERS[activeTier]||TIERS[1];
   var cx=WORLD/2, cy=WORLD/2;
   // Dark area outside arena
@@ -4525,10 +4596,10 @@ function draw(){
   ctx.strokeStyle='rgba(255,69,96,.25)'; ctx.lineWidth=28; ctx.stroke();
   // ── Viewport bounds for culling (world-space, with buffer) ──
   var vBuf=180;
-  var vx1=player.x - gc.width/(2*CAM_ZOOM) - vBuf;
-  var vx2=player.x + gc.width/(2*CAM_ZOOM) + vBuf;
-  var vy1=player.y - gc.height/(2*CAM_ZOOM) - vBuf;
-  var vy2=player.y + gc.height/(2*CAM_ZOOM) + vBuf;
+  var vx1=camX - gc.width/(2*CAM_ZOOM) - vBuf;
+  var vx2=camX + gc.width/(2*CAM_ZOOM) + vBuf;
+  var vy1=camY - gc.height/(2*CAM_ZOOM) - vBuf;
+  var vy2=camY + gc.height/(2*CAM_ZOOM) + vBuf;
 
   // Batch food by color — plain filled circles, no shadowBlur (shadow is a major GPU cost)
   var _fc={};
@@ -4709,7 +4780,7 @@ function updateLB(){
 }
 
 function updatePing(){ /* real RTT shown by _wsPingLoop → _wsHandleMsg; this stub kept for cleanupL clearInterval ref */ }
-function cleanupL(){
+function cleanupL(keepAbly){
   gc.removeEventListener('mousemove',onMouse);
   window.removeEventListener('keydown',onKD);
   window.removeEventListener('keyup',onKU);
@@ -4719,7 +4790,7 @@ function cleanupL(){
   // Reset joystick state so next game starts clean
   _joyActive=false; _joyDX=0; _joyDY=0;
   var cw=document.getElementById('canvasWrap'); if(cw) cw.classList.remove('game-active');
-  _wsLeave();
+  if(!keepAbly) _wsLeave();
 }
 
 // ════════════════ FRIENDS ════════════════
