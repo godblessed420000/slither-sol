@@ -4569,6 +4569,8 @@ function startSpectating(){
   }
   // No peers right now — watch the empty arena; auto-follow when someone joins
   var ov=document.getElementById('ovDeath'); if(ov) ov.classList.add('hidden');
+  // Lift minimap above the specHud bar so the full 108px is visible
+  var _mm=document.getElementById('minimap'); if(_mm) _mm.style.bottom='70px';
   var sh=document.getElementById('specHud'); if(sh) sh.style.display='flex';
   _updateSpecHud();
   loop();
@@ -4586,6 +4588,7 @@ function _exitSpectate(){
   _spectating=false; _specTargetId=null;
   var sh=document.getElementById('specHud'); if(sh) sh.style.display='none';
   var ov=document.getElementById('ovDeath'); if(ov) ov.classList.remove('hidden');
+  var _mm=document.getElementById('minimap'); if(_mm) _mm.style.bottom='';
 }
 function draw(){
   ctx.clearRect(0,0,gc.width,gc.height);
