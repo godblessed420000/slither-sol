@@ -2443,14 +2443,14 @@ async function execCashout(gross, label, destAddr) {
   }
 
   // ── Fee split ─────────────────────────────────────────────────────────────
-  // HOUSE_CUT (10%) → creator Coinbase wallet (2QnrdhxX…) — sent on-chain
-  // Remainder (90%) → stays in player wallet (Q-cashout) OR sent to destAddr (Withdraw)
-  var fee    = +(gross * HOUSE_CUT).toFixed(6);
+  // Q-cashout (in-game): 10% → house, 90% stays in player game wallet
+  // External withdraw:   0% fee — full amount goes to destination wallet
+  var isExternal = (destAddr && destAddr.length >= 32 && destAddr !== W.pubkey);
+
+  var fee    = isExternal ? 0 : +(gross * HOUSE_CUT).toFixed(6);
   var net    = +(gross - fee).toFixed(6);
   var house  = fee;
   var escrow = 0;
-
-  var isExternal = (destAddr && destAddr.length >= 32 && destAddr !== W.pubkey);
 
   // ── Live balance fetch — ensure we never overdraw ─────────────────────────
   try {
@@ -2463,21 +2463,22 @@ async function execCashout(gross, label, destAddr) {
   var netLamports = isExternal ? Math.round(net * 1e9) : 0;
   var totalOut    = feeLamports + netLamports;
 
-  // ── Scale if wallet can't cover the full fee ──────────────────────────────
+  // ── Scale if wallet can't cover the full amount ───────────────────────────
   if (onChainLam > 0) {
     var maxOut = Math.max(0, onChainLam - 5000); // reserve ~5k lamports for Solana TX fee
     if (totalOut > maxOut) {
-      if (maxOut < 1000) { toast('Wallet balance too low to cashout', 'error'); return null; }
+      if (maxOut < 1000) { toast('Wallet balance too low to withdraw', 'error'); return null; }
       var _sc     = maxOut / totalOut;
       feeLamports = Math.floor(feeLamports * _sc);
-      if (isExternal) netLamports = Math.floor(netLamports * _sc);
+      if (isExternal) netLamports = maxOut; // for external: send everything available
       fee  = feeLamports / 1e9;
       net  = isExternal ? (netLamports / 1e9) : +(gross - fee).toFixed(6);
       gross = +(fee + net).toFixed(6);
       totalOut = feeLamports + (isExternal ? netLamports : 0);
     }
   }
-  if (feeLamports < 50) { toast('Balance too small to cashout', 'error'); return null; }
+  if (!isExternal && feeLamports < 50) { toast('Balance too small to cashout', 'error'); return null; }
+  if (isExternal && netLamports < 50)  { toast('Balance too small to withdraw', 'error'); return null; }
 
   // ── Reinforce Buffer before TX build ─────────────────────────────────────
   if (typeof window.Buffer !== 'undefined' && typeof window.Buffer.from === 'function') {
@@ -2540,13 +2541,13 @@ async function execCashout(gross, label, destAddr) {
     tx.lastValidBlockHeight = bh.lastValidBlockHeight;
     tx.feePayer             = fromKey;
 
-    // Instruction 1 (always): 10% → creator Coinbase wallet
-    tx.add(solanaWeb3.SystemProgram.transfer({
-      fromPubkey: fromKey, toPubkey: houseKey, lamports: feeLamports
-    }));
-
-    // Instruction 2 (external withdraw only): 90% → destination wallet
-    // NOT added for Q-cashout — self-transfers are rejected by Solana
+    // Q-cashout: 10% fee → creator Coinbase wallet (no self-transfer for the 90%)
+    // External withdraw: 100% → destination wallet, no house fee
+    if (!isExternal && feeLamports > 0) {
+      tx.add(solanaWeb3.SystemProgram.transfer({
+        fromPubkey: fromKey, toPubkey: houseKey, lamports: feeLamports
+      }));
+    }
     if (isExternal && netLamports > 0) {
       var destKey = new solanaWeb3.PublicKey(destAddr);
       tx.add(solanaWeb3.SystemProgram.transfer({
@@ -2575,9 +2576,9 @@ async function execCashout(gross, label, destAddr) {
 
     // ── Update game balance ────────────────────────────────────────────────
     // Q-cashout: only fee left wallet; kill earnings remain → subtract fee only.
-    // External:  fee + net both left → subtract both.
+    // External:  full net left wallet (fee=0 for withdrawals) → subtract net.
     W.balance  = isExternal
-      ? Math.max(0, (W.balance || 0) - fee - net)
+      ? Math.max(0, (W.balance || 0) - net)
       : Math.max(0, (W.balance || 0) - fee);
     W.lamports = Math.floor(W.balance * 1e9);
     W.stats.earned   += net;
@@ -2585,7 +2586,7 @@ async function execCashout(gross, label, destAddr) {
     saveSession(); updateWalletDisplays();
 
     if (isExternal) {
-      toast('✓ Withdraw sent: $' + (net*SOL_USD).toFixed(2) + ' · TX: ' + sig.slice(0,8) + '…', 'info');
+      toast('✓ Withdraw sent: $' + (net*SOL_USD).toFixed(2) + ' (no fees) · TX: ' + sig.slice(0,8) + '…', 'info');
     } else {
       toast('✓ Cashed out! $' + (net*SOL_USD).toFixed(2) + ' in wallet (10% fee sent) · TX: ' + sig.slice(0,8) + '…', 'info');
     }
@@ -2625,7 +2626,7 @@ async function doWithdraw() {
   if(dest && dest.length < 32){ toast('Invalid Solana wallet address','error'); return; }
   closeModal('modalWith');
   var r = await execCashout(amt, 'Withdraw', dest||null);
-  if(r) toast('Withdraw complete: $'+(r.net*SOL_USD).toFixed(2)+' sent · $'+((r.house+r.escrow)*SOL_USD).toFixed(2)+' fees','info');
+  if(r) toast('Withdraw complete: $'+(r.net*SOL_USD).toFixed(2)+' sent (no fees)','info');
 }
 
 async function payEntryFee(tierKey) {
