@@ -4854,8 +4854,7 @@ function draw(){
 
 function drawS(s){
   if(s.segs.length<2) return;
-  // Render at most 50 segments — tail beyond that is off-screen and beziers are expensive
-  var n = Math.min(s.segs.length, 50);
+  var n = Math.min(s.segs.length, 80);
   var hs   = Math.max(13, Math.min(24, 13 + s.length * 0.10));
   var baseW = hs * 2;
   ctx.lineCap='round'; ctx.lineJoin='round';
