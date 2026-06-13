@@ -3041,9 +3041,57 @@ function _ablyConnect(tier) {
     } catch(e) { console.warn('[ably] msg error:', e); }
   });
 
+  // Presence: when any member enters/leaves, immediately update _ablyVerifiedPeers.
+  // This is the guaranteed path — Ably presence notifies ALL existing members when
+  // someone new enters, and new joiners get the full member list instantly via
+  // presence.get(). Eliminates the join/reply race condition entirely.
+  try {
+    _ablyChannel.presence.subscribe('enter', function(member) {
+      try {
+        var cid = member.clientId, d = member.data || {};
+        if (!cid || cid === _myClientId) return;
+        _ablyVerifiedPeers[cid] = true;
+        if (!_lobbyPeers[cid]) {
+          _wsHandleMsg({ type: 'join', clientId: cid, data: { n: d.n, color: d.color, reply: true } }, true);
+        }
+      } catch(e) {}
+    });
+    _ablyChannel.presence.subscribe('leave', function(member) {
+      try {
+        var cid = member.clientId;
+        if (!cid || cid === _myClientId) return;
+        delete _ablyVerifiedPeers[cid];
+      } catch(e) {}
+    });
+  } catch(e) { console.warn('[ably] presence subscribe failed:', e); }
+
   _ablyClient.connection.on('connected', function() {
     console.log('[ably] connected to', _chan);
     _wsStatus('🟢', 'Live', 'var(--green)', 'rgba(20,241,149,.3)');
+    // Enter Ably presence — existing members are immediately notified,
+    // and we get all existing members below. No manual ping/reply needed.
+    try {
+      _ablyChannel.presence.enter({ n: _currentName, color: _currentColor });
+    } catch(e) { console.warn('[ably] presence.enter failed:', e); }
+    // Fetch all currently-present members and verify them immediately.
+    // This is the key fix: new joiners see existing players instantly
+    // without waiting for the 6s ping timer.
+    try {
+      _ablyChannel.presence.get(function(err, members) {
+        if (err || !members) return;
+        members.forEach(function(member) {
+          try {
+            var cid = member.clientId, d = member.data || {};
+            if (!cid || cid === _myClientId) return;
+            _ablyVerifiedPeers[cid] = true;
+            if (!_lobbyPeers[cid]) {
+              _wsHandleMsg({ type: 'join', clientId: cid, data: { n: d.n, color: d.color, reply: true } }, true);
+            }
+          } catch(e) {}
+        });
+      });
+    } catch(e) { console.warn('[ably] presence.get failed:', e); }
+    // Also keep the join publish as a secondary path for clients not yet on presence
     _ablyChannel.publish('join', { n: _currentName, color: _currentColor });
   });
 
