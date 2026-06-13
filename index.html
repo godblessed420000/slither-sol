@@ -4520,7 +4520,7 @@ function update(){
   if(boosting && player.segs.length < 55) boosting = false;
   var spd = BASE_SPEED;
   if(boosting && boostE>0){
-    spd *= BOOST_MULT;
+    spd *= _isTouchDev ? BOOST_MULT * 1.4 : BOOST_MULT; // mobile: ~2.1× vs desktop: 1.5×
     var prevBoostE = boostE;
     boostE = Math.max(0, boostE - 0.30); // ~5.5s full boost at 60fps
     // Eject 1 pebble per burst every 2.5 boostE (~7 bursts/s) and shrink 1 length unit (4 segs).
