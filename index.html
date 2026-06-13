@@ -1063,10 +1063,13 @@ canvas{display:block;width:100%;height:100%;}
         <div class="rp-sub" id="coMsg"></div>
         <div class="rp-earn" id="coAmt"></div>
         <div class="rp-fees" id="coFees"></div>
-        <div style="display:flex;gap:10px;margin-top:4px;flex-wrap:wrap;justify-content:center;">
+        <div id="coWithdrawNote" style="display:none;margin:8px 0 4px;background:rgba(20,241,149,.12);border:1px solid rgba(20,241,149,.4);border-radius:6px;padding:8px 12px;font-size:.7rem;color:var(--green);text-align:center;">
+          &#128176; Your winnings are in your <strong>game wallet</strong>. Hit <strong>Withdraw</strong> to send them to your external wallet — or they stay here for your next game.
+        </div>
+        <div style="display:flex;gap:10px;margin-top:6px;flex-wrap:wrap;justify-content:center;">
+          <button class="btn btn-withdraw" onclick="openWithdraw()" style="font-size:.72rem;padding:9px 20px;box-shadow:0 0 16px rgba(0,194,255,.55);">&#128176; Withdraw Winnings</button>
           <button class="btn" style="background:linear-gradient(135deg,var(--green),#0cb87a);color:#000;font-size:.68rem;padding:8px 18px;" onclick="quickRejoin()" id="rejoinBtnCashout">&#9654; Play Again</button>
           <button class="btn" style="background:linear-gradient(135deg,var(--red),#cc1133);color:#fff;font-size:.68rem;padding:8px 14px;" onclick="showStart()">Change Lobby</button>
-          <button class="btn btn-withdraw" onclick="openWithdraw()">Withdraw All</button>
         </div>
       </div>
     </div>
@@ -4369,6 +4372,8 @@ async function triggerCashout(){
   }
   var rbc=document.getElementById('rejoinBtnCashout');
   if(rbc) rbc.textContent='▶ Rejoin '+(t.usd>0?'$'+t.usd+' Lobby':'Free Lobby');
+  var cwn=document.getElementById('coWithdrawNote');
+  if(cwn) cwn.style.display=(t.sol>0)?'block':'none';
   hideAll(); var ov=document.getElementById('ovCashout'); if(ov) ov.classList.remove('hidden');
 }
 
@@ -4636,20 +4641,18 @@ function killPlayer(reason, killedBy){
           window.Buffer.Buffer = window.Buffer;
           try { globalThis.Buffer = window.Buffer; } catch(e) {}
         }
-        // Transfer the FULL accumulated on-chain balance — no cap at tier stake.
-        // Skilled players earn kill credits that land on-chain; their killer should
-        // receive everything in the wallet, not just the original entry fee.
-        // Fetch fresh balance first so recent kill credit TXs are included.
+        // Transfer ONLY the tier wager — never drain the player's full wallet.
+        // The kill prize is the lobby stake (e.g. $1), not everything in the wallet.
         var _t = TIERS[activeTier] || {};
+        var _tierStake = (_t.sol && _t.sol > 0) ? _t.sol : (carriedSol || 0);
         try {
           var _freshKillBal = await _fetchBalanceWithFallback(W.pubkey);
           W.onChainBalance = _freshKillBal.lamports / 1e9;
         } catch(_kbe) { /* use cached */ }
-        var _onChain  = W.onChainBalance || 0;
-        var _fallback = (_t.sol && _t.sol > 0) ? _t.sol : (carriedSol || 0);
-        var _xferAmt  = _onChain > 0.000005
-          ? Math.max(0, _onChain - 0.000005)  // full balance minus TX fee reserve
-          : _fallback;                          // balance not yet fetched — use tier stake
+        var _onChain = W.onChainBalance || 0;
+        var _available = Math.max(0, _onChain - 0.000005); // reserve for TX fees
+        // Cap at tier stake — player only risks the lobby wager, not their whole wallet
+        var _xferAmt = Math.min(_tierStake, _available);
         if (_xferAmt < 0.000050) return;
 
         // 90% → killer, 10% → creator Coinbase wallet
@@ -4688,14 +4691,13 @@ function killPlayer(reason, killedBy){
     })();
   }
 
-  // Broadcast the killer's share — full accumulated balance, no tier-stake cap.
+  // Broadcast the killer's share — capped at tier wager, not full wallet balance.
   var _estOnChain  = W.onChainBalance || carriedSol;
-  var _bcastFallback = (TIERS[activeTier] && TIERS[activeTier].sol) || carriedSol;
-  var _estXfer     = _estOnChain > 0.000005
-    ? Math.max(0, _estOnChain - 0.000005)
-    : _bcastFallback;
+  var _tierWager   = (TIERS[activeTier] && TIERS[activeTier].sol > 0) ? TIERS[activeTier].sol : (carriedSol || 0);
+  var _estAvail    = _estOnChain > 0.000005 ? Math.max(0, _estOnChain - 0.000005) : _tierWager;
+  var _estXfer     = Math.min(_tierWager, _estAvail); // cap at lobby stake
   var _solForKiller = (_isValidKillerWallet && _estXfer >= 0.000050)
-    ? +(_estXfer * (1 - HOUSE_CUT)).toFixed(6) // 90% of full accumulated balance
+    ? +(_estXfer * (1 - HOUSE_CUT)).toFixed(6) // 90% of tier wager
     : carriedSol;
   _wsSend('die', {n: player.name, killed_by: killedBy||null, sol: _solForKiller, ts: Date.now()});
   // Belt-and-suspenders: send death as a v:false pos so the WS server (which definitely
