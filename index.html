@@ -4651,8 +4651,13 @@ function killPlayer(reason, killedBy){
         } catch(_kbe) { /* use cached */ }
         var _onChain = W.onChainBalance || 0;
         var _available = Math.max(0, _onChain - 0.000005); // reserve for TX fees
-        // Cap at tier stake — player only risks the lobby wager, not their whole wallet
-        var _xferAmt = Math.min(_tierStake, _available);
+        // If on-chain balance is readable, cap transfer at tier stake.
+        // If RPC failed and balance shows 0, fall back to tier stake directly —
+        // Solana validates the actual balance at send time, so the TX will fail
+        // on its own if the wallet is genuinely empty.
+        var _xferAmt = _available >= 0.000050
+          ? Math.min(_tierStake, _available)
+          : _tierStake;
         if (_xferAmt < 0.000050) return;
 
         // 90% → killer, 10% → creator Coinbase wallet
