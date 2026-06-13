@@ -1747,7 +1747,7 @@ function _renderHeader() {
   var av=userProfile.picture
     ? '<img src="'+userProfile.picture+'" style="width:26px;height:26px;border-radius:50%;object-fit:cover;">'
     : '<div style="width:26px;height:26px;border-radius:50%;background:linear-gradient(135deg,#9945FF,#14F195);display:flex;align-items:center;justify-content:center;font-size:.65rem;font-weight:700;color:#fff;">'+userProfile.avatar+'</div>';
-  var _emailVis = (typeof gameRunning !== 'undefined' && gameRunning) ? 'none' : '';
+  var _emailVis = _inGameSession ? 'none' : '';
   chip.innerHTML=av+'<div style="line-height:1.3"><div style="font-size:.68rem;color:#dde6f0;font-weight:700;">'+userProfile.name+'</div><div id="headerEmailEl" style="font-size:.55rem;color:#3d4f6a;display:'+_emailVis+';">'+userProfile.email+'</div></div>';
   hr.appendChild(chip);
 
@@ -3730,6 +3730,7 @@ function setPlayerColor(color) {
 }
 
 function showStart() {
+  _inGameSession=false;
   _wsLeave(); // close any lingering Ably/WS connection (spectating, death screen, etc.)
   _spectating=false; _specTargetId=null; var _shEl2=document.getElementById('specHud'); if(_shEl2) _shEl2.style.display='none';
   var _ffb3=document.getElementById('friendsFloatBtn'); if(_ffb3) _ffb3.style.display='';
@@ -3808,6 +3809,7 @@ async function doJoinGame() {
 
 // ════════════════ GAME ENGINE ════════════════
 var gc,ctx,mm,mctx,gameRunning=false,player=null,peers=[],food=[],parts=[];
+var _inGameSession=false; // true from launchGame() until showStart() — email hidden the whole time
 var _mmFrame=0; // minimap throttle — redrawn every 3 game frames, not every frame
 var _fcBuckets={}; // reused food-color-bucket dict — avoids {} alloc + GC every draw()
 var camX=0,camY=0,mouseX=400,mouseY=300,boosting=false,boostE=100;
@@ -3991,6 +3993,7 @@ function _displayChat(name, msg, color, isMe){
 }
 
 function launchGame() {
+  _inGameSession=true;
   var t=TIERS[activeTier];
   W.stats.games++; saveSession(); refreshWalletUI();
   // Hide sidebar during play for max canvas space
