@@ -2988,17 +2988,28 @@ function _wsConnect(onReady) {
 }
 
 // ── Send helper ──────────────────────────────────────────────────────────────
-// pos / ping → fly.io WebSocket only (latency-sensitive, not security-relevant)
-// die / chat → Ably channel ONLY — no fly.io echo.
-//   Echoing die/chat to fly.io would let attackers inject fake die events
-//   directly into fly.io WS and would cause double-processing on receivers.
+// pos / ping → fly.io WebSocket only (latency-sensitive)
+// die → fly.io WS (primary, guaranteed relay) + Ably (secondary, for verified clients)
+// chat → Ably only (cosmetic, no WS fallback needed)
+var _processedDies = {}; // cid → true; prevents double-credit if both WS + Ably deliver
 function _wsSend(type, data) {
   if (type === 'pos' || type === 'ping') {
     if (!_ws || _ws.readyState !== WebSocket.OPEN) return;
     try { _ws.send(JSON.stringify({ type: type, clientId: _wsClientId, data: data || {} })); } catch(e) {}
     return;
   }
-  // All control events go through Ably only — cryptographically gated.
+  if (type === 'die') {
+    // Send via fly.io WS first — server broadcasts to all room members, no Ably required.
+    if (_ws && _ws.readyState === WebSocket.OPEN) {
+      try { _ws.send(JSON.stringify({ type: 'die', clientId: _wsClientId, data: data || {} })); } catch(e) {}
+    }
+    // Also send via Ably for verified clients (belt-and-suspenders).
+    if (_ablyChannel) {
+      try { _ablyChannel.publish('die', data || {}); } catch(e) {}
+    }
+    return;
+  }
+  // All other control events (chat) through Ably only.
   if (_ablyChannel) {
     try { _ablyChannel.publish(type, data || {}); } catch(e) { console.warn('[ably] publish error:', e); }
   }
@@ -3111,9 +3122,9 @@ function _ablyConnect(tier) {
 function _wsHandleMsg(msg, fromAbly) {
   var type = msg.type, cid = msg.clientId, d = msg.data || {};
 
-  // Security gate: die and chat must come from Ably (payment-verified).
-  // Silently drop these if they arrived via the unauthenticated fly.io WS.
-  if ((type === 'die' || type === 'chat') && !fromAbly) return;
+  // chat must come from Ably (prevents WS chat spam from non-paying players).
+  // die no longer requires Ably — it goes via WS+Ably with dedup in the die handler.
+  if (type === 'chat' && !fromAbly) return;
 
   // Round-trip ping response — update ping display
   if (type === 'ping') {
@@ -3218,6 +3229,9 @@ function _wsHandleMsg(msg, fromAbly) {
 
   // ── Death notification ──────────────────────────────────────────────────
   if (type === 'die') {
+    // Dedup: die arrives via both fly.io WS and Ably — only process once per player death.
+    if (_processedDies[cid]) return;
+    _processedDies[cid] = true;
     var rp = _remoteMap[cid];
     if (rp) {
       rp.alive = false;
@@ -3255,8 +3269,9 @@ function _wsHandleMsg(msg, fromAbly) {
 function _wsJoin(tier) {
   // Clear any stale lobby state from a previous game / lobby session
   clearInterval(_lobbyPingTimer); _lobbyPingTimer = null;
-  _lobbyPeers  = {};
-  _remoteMap   = {};
+  _lobbyPeers     = {};
+  _remoteMap      = {};
+  _processedDies  = {};
   peers = peers.filter(function(p){ return !p.isRemote; });
 
   _wsClientId   = PRIVY.walletAddress || ('guest_' + Date.now());
