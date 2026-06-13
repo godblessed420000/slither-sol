@@ -4456,6 +4456,22 @@ function update(){
         _updateSpecHud();
       }
     }
+    // Evict stale peers even while spectating — prevents ghost snakes building up
+    if(++_staleFrame >= 60){
+      _staleFrame = 0;
+      var _staleNow = performance.now();
+      var _staleChanged = false;
+      for(var _si=peers.length-1; _si>=0; _si--){
+        var _sp=peers[_si];
+        if(_sp.isRemote && _sp.alive && _sp.lastT && _staleNow - _sp.lastT > 2000){
+          _sp.alive=false; _sp.segs=[];
+          if(_sp.remoteId) delete _remoteMap[_sp.remoteId];
+          peers.splice(_si,1);
+          _staleChanged=true;
+        }
+      }
+      if(_staleChanged && gameRunning) _updateArenaSize();
+    }
     return;
   }
 
@@ -4528,24 +4544,6 @@ function update(){
       if(p.segs.length>maxS) p.segs.length=maxS; // O(1) truncation — replaces O(n) while+pop
     }
     // No AI bots — only real remote players exist in peers[]
-  }
-
-  // Evict peers silent for 3+ seconds — their die/leave was probably lost in transit.
-  // Runs every 60 frames (~1/s) to avoid per-frame array allocation overhead.
-  if(++_staleFrame >= 60){
-    _staleFrame = 0;
-    var _staleNow = performance.now();
-    var _staleChanged = false;
-    for(var _si=peers.length-1; _si>=0; _si--){
-      var _sp=peers[_si];
-      if(_sp.isRemote && _sp.alive && _sp.lastT && _staleNow - _sp.lastT > 2000){
-        _sp.alive=false; _sp.segs=[];
-        if(_sp.remoteId) delete _remoteMap[_sp.remoteId];
-        peers.splice(_si,1);
-        _staleChanged=true;
-      }
-    }
-    if(_staleChanged && gameRunning) _updateArenaSize();
   }
 
   eatFood(); killCheck();
@@ -4652,8 +4650,10 @@ function killCheck(){
     }
 
     if(iHitTheirBody && theyHitMyBody){
-      // Mutual body collision — only the smaller snake dies; larger snake wins
-      var iLoseMutual = player.segs.length <= p.segs.length;
+      // Mutual body collision — smaller dies; equal length uses clientId tiebreaker so
+      // exactly one client calls killPlayer (mirrors head-on logic above).
+      var iLoseMutual = player.segs.length < p.segs.length ||
+                        (player.segs.length === p.segs.length && myId > (p.remoteId||''));
       if(iLoseMutual){ killPlayer('Eliminated by '+p.name, p.remoteId); return; }
       // I'm larger — notify them they lost
       var _kNowM=Date.now();
@@ -5036,8 +5036,15 @@ function updateLB(){
 function updatePing(){ /* real RTT shown by _wsPingLoop → _wsHandleMsg; this stub kept for cleanupL clearInterval ref */ }
 function cleanupL(keepAbly){
   gc.removeEventListener('mousemove',onMouse);
+  gc.removeEventListener('touchmove',onTouch);
   window.removeEventListener('keydown',onKD);
   window.removeEventListener('keyup',onKU);
+  gc.removeEventListener('mousedown', _boostOn);
+  window.removeEventListener('mouseup',    _boostOff);
+  window.removeEventListener('blur',       _boostOff);
+  gc.removeEventListener('touchstart', _boostOn);
+  gc.removeEventListener('touchend',   _boostOff);
+  gc.removeEventListener('touchcancel',_boostOff);
   clearInterval(pingInt); clearInterval(lbInt);
   _closeChat();
   _showMobileControls(false);
