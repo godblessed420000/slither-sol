@@ -1217,7 +1217,7 @@ var BASE_SPEED = 3.2;      // base snake speed
 var BOOST_MULT = 1.5;      // slither.io-accurate boost multiplier (~1.5× base)
 var TURN_RATE  = 0.082;    // max radians per frame — matches slither.io responsiveness
 var SEG_MULT   = 4;        // segments per length unit — lower = shorter tail
-var MAX_FOOD   = 120;      // hard cap on food pellets
+var MAX_FOOD   = 150;      // hard cap on food pellets
 var CASHOUT_FEE= 0.10;
 var HOUSE_CUT  = 0.10;  // 10% creator fee → 2QnrdhxX… (Coinbase wallet)
 var ESCROW_CUT = 0.00;  // escrow is a holding wallet only — no automatic fee cut
@@ -4027,6 +4027,9 @@ function launchGame() {
   spawnPlayer();
   // No AI bots — remote players come entirely via Ably
   peers = peers.filter(function(p){ return p.isRemote&&p.alive; });
+  // Seed 35 orbs near the map center, then fill the rest randomly
+  var _cx=WORLD/2, _cy=WORLD/2;
+  for(var _cf=0;_cf<35;_cf++) addFood(_cx+(Math.random()-.5)*WORLD*0.22, _cy+(Math.random()-.5)*WORLD*0.22);
   spawnFood(MAX_FOOD); gameRunning=true; _cashoutInProgress=false;
   _spectating=false; _specTargetId=null; var _shEl=document.getElementById('specHud'); if(_shEl) _shEl.style.display='none';
   _hideMobileBar(); // hide wallet bar during gameplay — HUD shows score/balance
