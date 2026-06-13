@@ -4523,7 +4523,7 @@ function update(){
   if(boosting && boostE>0){
     spd *= _isTouchDev ? BOOST_MULT * 0.9 : BOOST_MULT * 0.8; // mobile: ~1.7× desktop: ~1.2× (slower than before)
     var prevBoostE = boostE;
-    boostE = Math.max(0, boostE - 0.22); // ~7.5s full boost
+    boostE = Math.max(0, boostE - 0.12); // ~14s full boost
     if(boostE <= 0) _boostExhaustedUntil = performance.now() + 3000; // trigger 3s penalty
     var _minLen = Math.round(55 / SEG_MULT);
     if(player.segs.length > 55 && Math.floor(prevBoostE / 2.5) > Math.floor(boostE / 2.5)){
