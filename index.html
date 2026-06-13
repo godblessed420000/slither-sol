@@ -3822,7 +3822,7 @@ var _autoCircle=false; // Y key — snake spins in a tight circle at max turn ra
 var _elHudScore=null,_elHudSub=null,_elCashoutEarnVal=null,_elBoostBar=null;
 var _elCashoutQhint=null,_elPingEl=null,_elSidebar=null;
 var _hudScoreV='',_hudSubV='',_hudEarnV='',_hudBoostV='';
-var _LERP=0.42; // remote snake interpolation — constant, declared outside update loop
+var _LERP=0.7; // remote snake interpolation — higher = faster tracking, less visual lag on join
 function _cacheHudEls(){
   _elHudScore       = document.getElementById('hudScore');
   _elHudSub         = document.getElementById('hudSub');
