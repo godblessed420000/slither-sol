@@ -4535,6 +4535,7 @@ function update(){
     }
   } else {
     boostE = Math.min(100, boostE + 0.20);
+    if(boostE <= 0) spd *= 0.7; // exhausted — 30% slower until boost recharges
   }
   moveS(player, player.angle, spd);
   // Enforce exact segment count — moveS only pops once per frame, but we may need to pop
