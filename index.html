@@ -2283,15 +2283,14 @@ function openWithdraw() {
   closeAll();
   var wb=document.getElementById('withBal');
   var _wBest=Math.max(W.balance||0, W.onChainBalance||0);
-  if(wb) wb.textContent=_wBest.toFixed(4)+' SOL';
+  if(wb) wb.textContent='$'+(_wBest*SOL_USD).toFixed(2)+' ('+_wBest.toFixed(4)+' SOL)';
   document.getElementById('modalWith').classList.remove('hidden');
-  // Fetch live balance so the displayed amount and the withdrawal check are always fresh.
   if(W.pubkey){
     _fetchBalanceWithFallback(W.pubkey).then(function(r){
       W.onChainBalance = r.lamports / 1e9;
       if(!gameRunning){ W.balance = W.onChainBalance; W.lamports = Math.floor(W.onChainBalance*1e9); saveSession(); }
       var _best2=Math.max(W.balance||0, W.onChainBalance||0);
-      if(wb) wb.textContent=_best2.toFixed(4)+' SOL';
+      if(wb) wb.textContent='$'+(_best2*SOL_USD).toFixed(2)+' ('+_best2.toFixed(4)+' SOL)';
     }).catch(function(){});
   }
 }
@@ -2583,9 +2582,9 @@ async function execCashout(gross, label, destAddr) {
     saveSession(); updateWalletDisplays();
 
     if (isExternal) {
-      toast('✓ Withdraw sent: ' + net.toFixed(4) + ' SOL · TX: ' + sig.slice(0,8) + '…', 'info');
+      toast('✓ Withdraw sent: $' + (net*SOL_USD).toFixed(2) + ' · TX: ' + sig.slice(0,8) + '…', 'info');
     } else {
-      toast('✓ Cashed out! ' + net.toFixed(4) + ' SOL in wallet (10% fee sent) · TX: ' + sig.slice(0,8) + '…', 'info');
+      toast('✓ Cashed out! $' + (net*SOL_USD).toFixed(2) + ' in wallet (10% fee sent) · TX: ' + sig.slice(0,8) + '…', 'info');
     }
     setTimeout(function() { if (W.pubkey) refreshBalance(null); }, 4000);
     try { localStorage.removeItem(_coLsKey); } catch(_) {}
@@ -2622,7 +2621,7 @@ async function doWithdraw() {
   // Close modal first so user can see the toast progress
   closeModal('modalWith');
   var r = await execCashout(amt, 'Withdraw', dest||null);
-  if(r) toast('Withdraw complete: '+r.net.toFixed(4)+' SOL sent, '+((r.house+r.escrow).toFixed(4))+' SOL fees paid on-chain','info');
+  if(r) toast('Withdraw complete: $'+(r.net*SOL_USD).toFixed(2)+' sent · $'+((r.house+r.escrow)*SOL_USD).toFixed(2)+' fees','info');
 }
 
 async function payEntryFee(tierKey) {
@@ -3260,7 +3259,7 @@ function _wsHandleMsg(msg, fromAbly) {
             var _pSol = +(d.sol || 0);
             if (_pSol > 0) {
               killSOL += _pSol; W.balance += _pSol; saveSession(); refreshWalletUI();
-              kFeed('🗡 KILL +' + _pSol.toFixed(4) + ' SOL — ' + (d.n || 'a player') + ' eliminated', 'kill');
+              kFeed('🗡 KILL +$' + (_pSol*SOL_USD).toFixed(2) + ' — ' + (d.n || 'a player') + ' eliminated', 'kill');
               setTimeout(function() { if (W.pubkey) refreshBalance(null); }, 1500);
             } else {
               kFeed('🗡 YOU eliminated ' + (d.n || 'a player') + ' [Free Play]', 'kill');
@@ -3308,7 +3307,7 @@ function _wsHandleMsg(msg, fromAbly) {
       if (earnedSol > 0) {
         killSOL += earnedSol;
         W.balance += earnedSol; saveSession(); refreshWalletUI();
-        kFeed('🗡 KILL +' + earnedSol.toFixed(4) + ' SOL — ' + _dieName + ' eliminated', 'kill');
+        kFeed('🗡 KILL +$' + (earnedSol*SOL_USD).toFixed(2) + ' — ' + _dieName + ' eliminated', 'kill');
         // Refresh quickly to pick up the incoming on-chain kill transfer
         setTimeout(function() { if (W.pubkey) refreshBalance(null); }, 1500);
       } else {
@@ -3648,7 +3647,7 @@ function updateJoinSummary() {
     if(isFree){
       meta.innerHTML='Entry: <span style="color:#FF6B35;font-family:Orbitron,monospace;font-weight:700;">FREE</span> &middot; Ping: <span style="color:#14F195;">'+pingMap[selectedServer]+'</span> &middot; <span style="color:#FF6B35;">No SOL required</span>';
     } else {
-      meta.innerHTML='Entry: <span style="color:#14F195;font-family:Orbitron,monospace;">'+(t?t.sol.toFixed(4):'?')+' SOL</span> &middot; Ping: <span style="color:#14F195;">'+pingMap[selectedServer]+'</span> &middot; Balance: <span style="color:'+(canAfford?'#14F195':'#FF4560')+';">'+W.balance.toFixed(4)+' SOL</span>';
+      meta.innerHTML='Entry: <span style="color:#14F195;font-family:Orbitron,monospace;">$'+(t?t.usd.toFixed(2):'?')+'</span> &middot; Ping: <span style="color:#14F195;">'+pingMap[selectedServer]+'</span> &middot; Balance: <span style="color:'+(canAfford?'#14F195':'#FF4560')+';"> $'+(W.balance*SOL_USD).toFixed(2)+'</span>';
     }
     row.appendChild(meta);
     if(!isFree&&!canAfford){
@@ -3676,10 +3675,10 @@ function refreshCards() {
     var btn=document.getElementById('btn'+t);
     if(!btn) return;
     if(!W.connected){ btn.disabled=true; btn.textContent='Connect Wallet'; }
-    else if(W.balance<ti.sol){ btn.disabled=true; btn.textContent='Need '+ti.sol.toFixed(4)+' SOL'; }
+    else if(W.balance<ti.sol){ btn.disabled=true; btn.textContent='Need $'+ti.usd.toFixed(2); }
     else{ btn.disabled=false; btn.textContent='Enter $'+t+' Lobby'; }
     var ss=document.getElementById('solSub'+t);
-    if(ss) ss.textContent='~'+ti.sol.toFixed(4)+' SOL';
+    if(ss) ss.textContent='≈ '+ti.sol.toFixed(4)+' SOL';
   });
 }
 
@@ -3754,7 +3753,7 @@ async function doJoinGame() {
   // If both are 0 (not synced yet) let payEntryFee attempt the TX — the network validates.
   var _dbest = Math.max(W.balance||0, W.onChainBalance||0);
   if(!isFree && _dbest > 0 && _dbest < t.sol) {
-    toast('Balance too low (' + _dbest.toFixed(4) + ' SOL) — need ' + t.sol.toFixed(4) + ' SOL · Sync your wallet first','error');
+    toast('Balance too low ($' + (_dbest*SOL_USD).toFixed(2) + ') — need $' + t.usd.toFixed(2) + ' · Sync your wallet first','error');
     openAdd(); return;
   }
   var srvNames={us:'US East',eu:'EU West',as:'Asia'};
@@ -3769,8 +3768,8 @@ async function doJoinGame() {
   }
   el=document.getElementById('privyLobby');   if(el) el.textContent='$'+selectedLobbyTier+' '+({1:'Starter',5:'Pro',10:'Whale'}[selectedLobbyTier]||'');
   el=document.getElementById('privyServer');  if(el) el.textContent=srvNames[selectedServer]||selectedServer;
-  el=document.getElementById('privyFee');     if(el) el.textContent=t.sol.toFixed(4)+' SOL';
-  el=document.getElementById('privyBal');     if(el) el.textContent=W.balance.toFixed(4)+' SOL';
+  el=document.getElementById('privyFee');     if(el) el.textContent='$'+t.usd.toFixed(2)+' ('+t.sol.toFixed(4)+' SOL)';
+  el=document.getElementById('privyBal');     if(el) el.textContent='$'+(W.balance*SOL_USD).toFixed(2)+' ('+W.balance.toFixed(4)+' SOL)';
   document.getElementById('privyOverlay').classList.remove('hidden');
   var bar=document.getElementById('privyBar');
   var status=document.getElementById('privyStatus');
@@ -3893,7 +3892,7 @@ async function quickRejoin() {
   if (!isFree) {
     var _ibest = Math.max(W.balance||0, W.onChainBalance||0);
     if (_ibest > 0 && _ibest < t.sol) {
-      toast('Need '+t.sol.toFixed(4)+' SOL to rejoin — add funds first','error');
+      toast('Need $'+t.usd.toFixed(2)+' to rejoin — add funds first','error');
       openAdd(); return;
     }
   }
@@ -4348,22 +4347,23 @@ async function triggerCashout(){
   var coMsg=document.getElementById('coMsg'); if(coMsg) coMsg.textContent=t.name+' · Kills:'+myKills+' · Score:'+score+' · Length:'+player.segs.length;
   var coAmt=document.getElementById('coAmt');
   var _entrySOL = t.sol || 0;
-  var _killEarn = killSOL || 0; // 90% net per kill — 10% sent to creator at kill time
+  var _killEarn = killSOL || 0;
   var _totalKept = +(r.net + _killEarn).toFixed(4);
+  var _totalUsd = (_totalKept*SOL_USD).toFixed(2);
   if(myKills>0)
-    coAmt.textContent='+'+_totalKept+' SOL in wallet ('+_entrySOL.toFixed(4)+' entry + '+_killEarn.toFixed(4)+' kills − 10% fees)';
+    coAmt.textContent='+$'+_totalUsd+' in wallet ($'+(_entrySOL*SOL_USD).toFixed(2)+' entry + $'+(_killEarn*SOL_USD).toFixed(2)+' kills − 10% fees)';
   else
-    coAmt.textContent='+'+r.net.toFixed(4)+' SOL in wallet ('+r.gross.toFixed(4)+' entry − 10% fee)';
+    coAmt.textContent='+$'+(r.net*SOL_USD).toFixed(2)+' in wallet ($'+(r.gross*SOL_USD).toFixed(2)+' entry − 10% fee)';
   var coFees=document.getElementById('coFees');
   if(coFees){
     var _rows='';
-    _rows+='<div class="pf-row"><span class="pf-lbl">Entry wager</span><span>'+_entrySOL.toFixed(4)+' SOL ($'+(_entrySOL*SOL_USD).toFixed(2)+')</span></div>';
+    _rows+='<div class="pf-row"><span class="pf-lbl">Entry wager</span><span>$'+(_entrySOL*SOL_USD).toFixed(2)+' ('+_entrySOL.toFixed(4)+' SOL)</span></div>';
     if(myKills>0){
-      _rows+='<div class="pf-row"><span class="pf-lbl">Kill earnings ('+myKills+' kill'+(myKills>1?'s':'')+', 90% net)</span><span style="color:var(--green)">+'+_killEarn.toFixed(4)+' SOL ($'+(_killEarn*SOL_USD).toFixed(2)+')</span></div>';
-      _rows+='<div class="pf-row"><span class="pf-lbl">Creator fee on kills (10%)</span><span class="pf-house">−'+(_killEarn*HOUSE_CUT/(1-HOUSE_CUT)).toFixed(4)+' SOL</span></div>';
+      _rows+='<div class="pf-row"><span class="pf-lbl">Kill earnings ('+myKills+' kill'+(myKills>1?'s':'')+', 90% net)</span><span style="color:var(--green)">+$'+(_killEarn*SOL_USD).toFixed(2)+'</span></div>';
+      _rows+='<div class="pf-row"><span class="pf-lbl">Creator fee on kills (10%)</span><span class="pf-house">−$'+(_killEarn*HOUSE_CUT/(1-HOUSE_CUT)*SOL_USD).toFixed(2)+'</span></div>';
     }
-    _rows+='<div class="pf-row"><span class="pf-lbl">Creator fee on entry (10%)</span><span class="pf-house">−'+r.house.toFixed(4)+' SOL ($'+(r.house*SOL_USD).toFixed(2)+')</span></div>';
-    _rows+='<div class="pf-row" style="border-top:1px solid rgba(255,255,255,.07);padding-top:3px;margin-top:2px"><span class="pf-lbl">You keep (90%)</span><span class="pf-you">+'+_totalKept+' SOL ($'+(_totalKept*SOL_USD).toFixed(2)+')</span></div>';
+    _rows+='<div class="pf-row"><span class="pf-lbl">Creator fee on entry (10%)</span><span class="pf-house">−$'+(r.house*SOL_USD).toFixed(2)+'</span></div>';
+    _rows+='<div class="pf-row" style="border-top:1px solid rgba(255,255,255,.07);padding-top:3px;margin-top:2px"><span class="pf-lbl">You keep (90%)</span><span class="pf-you">+$'+_totalUsd+'</span></div>';
     coFees.innerHTML=_rows;
   }
   var rbc=document.getElementById('rejoinBtnCashout');
@@ -4516,14 +4516,14 @@ function update(){
     if(isFreeGame){
       _hsu='Length: '+len+' · Free Play · Hold [Q] 1s to exit';
     } else {
-      var hudCarry=(W.balance>0)?'Carrying: '+(W.balance||0).toFixed(4)+' SOL · ':'';
+      var hudCarry=(W.balance>0)?'Carrying: $'+((W.balance||0)*SOL_USD).toFixed(2)+' · ':'';
       var hudCircle=_autoCircle?'AUTO-CIRCLE · ':'';
       _hsu='Length: '+len+' · '+hudCarry+hudCircle+'Hold [Q] 1s to cashout';
     }
     if(_hsu!==_hudSubV){ _elHudSub.textContent=_hsu; _hudSubV=_hsu; }
   }
   if(_elCashoutEarnVal){
-    var _he=isFreeGame?'Free Play':((W.balance||0).toFixed(4)+' SOL carrying');
+    var _he=isFreeGame?'Free Play':('$'+((W.balance||0)*SOL_USD).toFixed(2)+' carrying');
     if(_he!==_hudEarnV){ _elCashoutEarnVal.textContent=_he; _hudEarnV=_he; }
   }
   var _hb=Math.round(boostE)+'%';
@@ -4720,9 +4720,9 @@ function killPlayer(reason, killedBy){
   el=document.getElementById('dKiller'); if(el) el.textContent=reason;
   if(myKills>0){
     el=document.getElementById('dEarn');
-    if(el) el.textContent=(t.sol>0?'You earned +'+killSOL.toFixed(4)+' SOL from '+myKills+' kill'+(myKills>1?'s':'')+' this round':''+myKills+' kill'+(myKills>1?'s':'')+' (Free Play)');
+    if(el) el.textContent=(t.sol>0?'You earned +$'+(killSOL*SOL_USD).toFixed(2)+' from '+myKills+' kill'+(myKills>1?'s':'')+' this round':''+myKills+' kill'+(myKills>1?'s':'')+' (Free Play)');
   } else {
-    el=document.getElementById('dEarn'); if(el) el.textContent='No kills this round'+(t.sol>0?' — your '+carriedSol.toFixed(4)+' SOL goes to your killer':'');
+    el=document.getElementById('dEarn'); if(el) el.textContent='No kills this round'+(t.sol>0?' — your $'+(carriedSol*SOL_USD).toFixed(2)+' goes to your killer':'');
   }
   el=document.getElementById('dStats');  if(el) el.textContent=t.name+' · Score:'+score+' · Length:'+player.segs.length;
   // Update rejoin button label with tier name
@@ -5266,7 +5266,7 @@ async function acceptInvite(){
   if(!isFree){
     if(!userProfile){ toast('Sign in first','error'); return; }
     var _ibest = Math.max(W.balance||0, W.onChainBalance||0);
-    if(_ibest > 0 && _ibest < t.sol){ toast('Need '+t.sol.toFixed(4)+' SOL to join — sync wallet first','error'); openAdd(); return; }
+    if(_ibest > 0 && _ibest < t.sol){ toast('Need $'+t.usd.toFixed(2)+' to join — sync wallet first','error'); openAdd(); return; }
   }
   toast('Joining '+name+"'s $"+tier+' lobby...','info');
   var _invSig = await payEntryFee(tier);
