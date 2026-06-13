@@ -3168,22 +3168,10 @@ function _wsHandleMsg(msg, fromAbly) {
 
   // ── Position updates ────────────────────────────────────────────────────
   if (type === 'pos') {
-    if ((!gameRunning && !_spectating && !_ablyChannel) || !cid) return;
-    // Security gate: only render players who sent a verified `join` through the
-    // Ably channel. Attackers who bypass payment and connect to fly.io directly
-    // will send pos updates, but they'll never appear in _ablyVerifiedPeers,
-    // so they stay invisible and cannot trigger kill credits.
-    if (!_ablyVerifiedPeers[cid]) {
-      // Race window: WS pos can arrive before the Ably join/reply handshake completes.
-      // Re-announce ourselves via Ably (throttled per cid) to trigger their reply,
-      // which will set _ablyVerifiedPeers[cid] and unblock future pos frames.
-      var _pvNow = Date.now();
-      if (_ablyChannel && (!_pendingVerifyTs[cid] || _pvNow - _pendingVerifyTs[cid] > 4000)) {
-        _pendingVerifyTs[cid] = _pvNow;
-        try { _ablyChannel.publish('join', { n: _currentName, color: _currentColor, reply: true }); } catch(_) {}
-      }
-      return;
-    }
+    if ((!gameRunning && !_spectating) || !cid) return;
+    // Kill-credit security is handled separately: die/chat events require fromAbly=true.
+    // Rendering is open to all pos senders — blocking here caused players to be
+    // permanently invisible whenever the Ably verification handshake had any issue.
     var rp = _remoteMap[cid];
     if (!rp) {
       var lobby = _lobbyPeers[cid] || {};
