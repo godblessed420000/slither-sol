@@ -3158,6 +3158,17 @@ function _wsHandleMsg(msg, fromAbly) {
   // ── Lobby presence / in-game join notifications ──────────────────────────
   if (type === 'join') {
     if (!cid) return;
+    // If this player has an old alive peer object (e.g. they died and rejoined before
+    // their die message arrived), clear it immediately so the old body doesn't morph
+    // into the new spawn or keep blocking collisions.
+    var _oldRp = _remoteMap[cid];
+    if (_oldRp) {
+      _oldRp.alive = false; _oldRp.segs = [];
+      delete _remoteMap[cid];
+      peers = peers.filter(function(p){ return p !== _oldRp; });
+      if (gameRunning) _updateArenaSize();
+    }
+    delete _processedDies[cid]; // fresh session — allow their new death to be tracked
     var isNew = !_lobbyPeers[cid];
     _lobbyPeers[cid] = { n: d.n || ('P_'+cid.slice(0,4)), color: d.color || PC[1] };
     if (!gameRunning) renderSlots();
@@ -4428,6 +4439,24 @@ function calcVal(){ return Math.max(0, +((W.balance||0).toFixed(6))); }
 function loop(){ if(!gameRunning&&!_spectating) return; update(); draw(); requestAnimationFrame(loop); }
 
 function update(){
+  // Evict stale peers every ~1s regardless of player state (alive, dead, or spectating).
+  // Cleans up ghosts whose die/leave was lost in transit.
+  if(++_staleFrame >= 60){
+    _staleFrame = 0;
+    var _staleNow = performance.now();
+    var _staleChanged = false;
+    for(var _si=peers.length-1; _si>=0; _si--){
+      var _sp=peers[_si];
+      if(_sp.isRemote && _sp.alive && _sp.lastT && _staleNow - _sp.lastT > 2000){
+        _sp.alive=false; _sp.segs=[];
+        if(_sp.remoteId) delete _remoteMap[_sp.remoteId];
+        peers.splice(_si,1);
+        _staleChanged=true;
+      }
+    }
+    if(_staleChanged && gameRunning) _updateArenaSize();
+  }
+
   if(!player||!player.alive){
     if(_spectating){
       // Lock to maximum zoom-out while spectating; scroll wheel can zoom in from there
@@ -4455,22 +4484,6 @@ function update(){
         else _specTargetId=null; // no one alive — keep camera still, wait for joiners
         _updateSpecHud();
       }
-    }
-    // Evict stale peers even while spectating — prevents ghost snakes building up
-    if(++_staleFrame >= 60){
-      _staleFrame = 0;
-      var _staleNow = performance.now();
-      var _staleChanged = false;
-      for(var _si=peers.length-1; _si>=0; _si--){
-        var _sp=peers[_si];
-        if(_sp.isRemote && _sp.alive && _sp.lastT && _staleNow - _sp.lastT > 2000){
-          _sp.alive=false; _sp.segs=[];
-          if(_sp.remoteId) delete _remoteMap[_sp.remoteId];
-          peers.splice(_si,1);
-          _staleChanged=true;
-        }
-      }
-      if(_staleChanged && gameRunning) _updateArenaSize();
     }
     return;
   }
