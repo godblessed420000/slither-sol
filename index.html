@@ -5880,28 +5880,72 @@ function inviteFromSearch(pid) {
   toast('Invite sent to '+p.name+'! Code: '+code);
 }
 
-// ════════════════ LEADERBOARD ════════════════
+// ════════════════ LEADERBOARD (LIVE) ════════════════
 var lbTab='earned';
-var LB_DATA=MOCK_PLAYERS.concat([
-  {id:'P009',name:'SolSniper',gameId:'SOL-1192',addr:'SoLs...nPr7',status:'online',color:'#14F195',wins:287,kills:3540,earned:103.20,games:580},
-  {id:'P010',name:'ChainReaper',gameId:'SOL-8834',addr:'cHaN...rPr9',status:'offline',color:'#FFD700',wins:265,kills:3280,earned:96.50,games:544}
-]);
-function openLeaderboard(){ var el=document.getElementById('lbModal'); if(el) el.classList.remove('hidden'); renderLB(); }
-function closeLeaderboard(){ var el=document.getElementById('lbModal'); if(el) el.classList.add('hidden'); }
-function switchLBTab(tab){ lbTab=tab; document.querySelectorAll('.lbm-tab').forEach(function(t){t.classList.remove('active');}); var el=document.getElementById('lbt'+tab.charAt(0).toUpperCase()+tab.slice(1)); if(el) el.classList.add('active'); renderLB(); }
+var _lbRefreshTimer=null;
+
+function openLeaderboard(){
+  var el=document.getElementById('lbModal'); if(el) el.classList.remove('hidden');
+  // Ping all peers so they re-send fresh stats
+  if(_wpWs&&_wpWs.readyState===WebSocket.OPEN&&_wpMyId){
+    _wpWs.send(JSON.stringify({type:'join',clientId:_wpMyId,tier:'presence',
+      data:{n:_wpMyName(),color:_playerColor,reply:false,
+        games:(W.stats&&W.stats.games)||0,kills:myKills||0,
+        earned:(W.stats&&W.stats.earned)||0,wins:(W.stats&&W.stats.wins)||0}}));
+  }
+  renderLB();
+  clearInterval(_lbRefreshTimer);
+  _lbRefreshTimer=setInterval(renderLB,3000);
+}
+
+function closeLeaderboard(){
+  var el=document.getElementById('lbModal'); if(el) el.classList.add('hidden');
+  clearInterval(_lbRefreshTimer); _lbRefreshTimer=null;
+}
+
+function switchLBTab(tab){
+  lbTab=tab;
+  document.querySelectorAll('.lbm-tab').forEach(function(t){t.classList.remove('active');});
+  var el=document.getElementById('lbt'+tab.charAt(0).toUpperCase()+tab.slice(1)); if(el) el.classList.add('active');
+  renderLB();
+}
+
 function renderLB(){
   var body=document.getElementById('lbmBody'); if(!body) return;
-  var sorted=LB_DATA.slice().sort(function(a,b){return lbTab==='earned'?b.earned-a.earned:lbTab==='wins'?b.wins-a.wins:lbTab==='kills'?b.kills-a.kills:b.games-a.games;});
-  var valFmt=lbTab==='earned'?function(v){return v.toFixed(2)+' SOL';}:function(v){return v.toLocaleString();};
-  var valClass=lbTab==='earned'?'earn':lbTab==='kills'?'kills':'wins';
-  var ri=['r1','r2','r3'], icons=['#1','#2','#3'];
-  var html=sorted.slice(0,20).map(function(p,i){
+  // Build from real live peers + self
+  var entries=[];
+  if(W.connected&&userProfile){
+    entries.push({name:_wpMyName()||userProfile.name,color:_playerColor||'#14F195',
+      games:(W.stats&&W.stats.games)||0,kills:myKills||0,
+      earned:(W.stats&&W.stats.earned)||0,isMe:true});
+  }
+  Object.keys(_wpPeers).forEach(function(cid){
+    var p=_wpPeers[cid];
+    if(!p||cid.indexOf('guest_')===0) return;
+    entries.push({name:p.n||('P_'+cid.slice(0,4)),color:p.color||'#9945FF',
+      games:p.games||0,kills:p.kills||0,earned:p.earned||0,isMe:false});
+  });
+  if(lbTab==='earned')      entries.sort(function(a,b){return b.earned-a.earned;});
+  else if(lbTab==='kills')  entries.sort(function(a,b){return b.kills-a.kills;});
+  else                       entries.sort(function(a,b){return b.games-a.games;});
+  var ri=['r1','r2','r3'];
+  var colLabel=lbTab==='earned'?'Earned':lbTab==='kills'?'Kills':'Games Played';
+  var hdr='<div class="lbm-row header"><span>#</span><span>Player</span><span style="text-align:right">'+colLabel+'</span><span style="text-align:right">Games</span></div>';
+  if(entries.length===0){
+    body.innerHTML='<div style="text-align:center;padding:36px 16px;color:var(--dim);font-size:.75rem;line-height:1.8;">No players online right now.<br>Be the first to join a lobby!</div>';
+    return;
+  }
+  var rows=entries.slice(0,20).map(function(p,i){
     var rank=i+1; var rc=rank<=3?ri[rank-1]:'rank-other';
-    var val=lbTab==='earned'?p.earned:lbTab==='wins'?p.wins:lbTab==='kills'?p.kills:p.games;
-    var wl=p.games>0?(p.wins/p.games*100).toFixed(0)+'%':'--';
-    return '<div class="lbm-row"><div class="lbm-rank-num '+rc+'">'+rank+'</div><div class="lbm-player"><div class="lbm-av" style="background:'+p.color+'22;color:'+p.color+';border:1px solid '+p.color+'44">'+p.name[0]+'</div><div><div class="lbm-pname">'+p.name+'</div><div class="lbm-psub">'+p.gameId+'</div></div></div><div class="lbm-val '+valClass+'">'+valFmt(val)+'</div><div class="lbm-val">'+p.games+'</div><div class="lbm-val">'+wl+'</div></div>';
+    var val=lbTab==='earned'?'$'+p.earned.toFixed(2):lbTab==='kills'?p.kills.toLocaleString():p.games.toLocaleString();
+    var vc=lbTab==='earned'?'earn':lbTab==='kills'?'kills':'';
+    var nc=p.isMe?'color:var(--green)':'';
+    return '<div class="lbm-row"><div class="lbm-rank-num '+rc+'">'+rank+'</div><div class="lbm-player"><div class="lbm-av" style="background:'+p.color+'22;color:'+p.color+';border:1px solid '+p.color+'44">'+(p.name[0]||'?')+'</div><div><div class="lbm-pname" style="'+nc+'">'+p.name+(p.isMe?' (you)':'')+'</div></div></div><div class="lbm-val '+vc+'">'+val+'</div><div class="lbm-val">'+p.games+'</div></div>';
   }).join('');
-  body.innerHTML='<div class="lbm-row header"><span>#</span><span>Player</span><span style="text-align:right">'+(lbTab==='earned'?'Earned':lbTab==='kills'?'Kills':lbTab==='wins'?'Wins':'Games')+'</span><span style="text-align:right">Games</span><span style="text-align:right">W/L</span></div>'+html;
+  body.innerHTML=hdr+rows;
+  // Update footer with live count
+  var ft=document.getElementById('lbFooter');
+  if(ft) ft.textContent='🟢 Live · '+entries.length+' player'+(entries.length!==1?'s':'')+' online · Refreshes every 3s';
 }
 
 // ════════════════ PING SIMULATION ════════════════
@@ -6114,12 +6158,11 @@ window.addEventListener('load', function() {
     </div>
     <div class="lbm-tabs">
       <button class="lbm-tab active" id="lbtEarned"  onclick="switchLBTab('earned')">💰 Earnings</button>
-      <button class="lbm-tab" id="lbtWins"   onclick="switchLBTab('wins')">🏅 Wins</button>
       <button class="lbm-tab" id="lbtKills"  onclick="switchLBTab('kills')">⚔️ Kills</button>
       <button class="lbm-tab" id="lbtGames"  onclick="switchLBTab('games')">🎮 Games</button>
     </div>
     <div class="lbm-body" id="lbmBody"></div>
-    <div class="lbm-footer">Updates every 60 seconds · Showing top 100 players · All-time stats</div>
+    <div class="lbm-footer" id="lbFooter">🟢 Live · Open to load players</div>
   </div>
 </div>
 
