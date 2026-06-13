@@ -2992,6 +2992,7 @@ function _wsConnect(onReady) {
 // die → fly.io WS (primary, guaranteed relay) + Ably (secondary, for verified clients)
 // chat → Ably only (cosmetic, no WS fallback needed)
 var _processedDies = {}; // cid → true; prevents double-credit if both WS + Ably deliver
+var _killNotifyTs  = {}; // cid → timestamp; throttle victim-side kill_target sends (1s/target)
 function _wsSend(type, data) {
   if (type === 'pos' || type === 'ping') {
     if (!_ws || _ws.readyState !== WebSocket.OPEN) return;
@@ -3179,6 +3180,21 @@ function _wsHandleMsg(msg, fromAbly) {
   // ── Position updates ────────────────────────────────────────────────────
   if (type === 'pos') {
     if ((!gameRunning && !_spectating) || !cid) return;
+
+    // kill_target: the body-owner detected our head in their body and is notifying us to die.
+    // This fires when our own Check 1 missed the collision (lag/interpolation).
+    // We call killPlayer() here so the SOL transfer + die broadcast come from OUR client.
+    if (d.kill_target) {
+      if (d.kill_target === _wsClientId && player && player.alive) {
+        var _ktNow = Date.now();
+        if (!_killNotifyTs['__self__'] || _ktNow - _killNotifyTs['__self__'] > 2000) {
+          _killNotifyTs['__self__'] = _ktNow;
+          killPlayer('Eliminated', d.killer || cid || null);
+        }
+      }
+      return; // not a normal position update
+    }
+
     // Kill-credit security is handled separately: die/chat events require fromAbly=true.
     // Rendering is open to all pos senders — blocking here caused players to be
     // permanently invisible whenever the Ably verification handshake had any issue.
@@ -3213,7 +3229,35 @@ function _wsHandleMsg(msg, fromAbly) {
       rp.lastT = now2;
       rp.targetX = d.x; rp.targetY = d.y; rp.targetAngle = d.a||0;
       rp.score = d.s||0;
-      if (d.v === false) { rp.alive = false; }
+      if (d.v === false) {
+        // Full death via pos — guaranteed WS relay backup for the die event.
+        // Dedup with _processedDies so we don't double-process if die also arrives.
+        if (!_processedDies[cid]) {
+          _processedDies[cid] = true;
+          rp.alive = false;
+          kFeed(rp.name + ' was eliminated!');
+          if (gameRunning) {
+            for (var _ps=0; _ps<Math.min(rp.segs.length,80); _ps++)
+              addFood(rp.segs[_ps].x+(Math.random()-.5)*14, rp.segs[_ps].y+(Math.random()-.5)*14);
+          }
+          rp.segs = [];
+          delete _remoteMap[cid];
+          peers = peers.filter(function(pp){ return pp !== rp; });
+          if (gameRunning) _updateArenaSize();
+          if (d.killed_by && _wsClientId && d.killed_by === _wsClientId && player && player.alive) {
+            myKills++;
+            var _pSol = +(d.sol || 0);
+            if (_pSol > 0) {
+              killSOL += _pSol; W.balance += _pSol; saveSession(); refreshWalletUI();
+              kFeed('🗡 KILL +' + _pSol.toFixed(4) + ' SOL — ' + (d.n || 'a player') + ' eliminated', 'kill');
+              setTimeout(function() { if (W.pubkey) refreshBalance(null); }, 5000);
+            } else {
+              kFeed('🗡 YOU eliminated ' + (d.n || 'a player') + ' [Free Play]', 'kill');
+            }
+          }
+        }
+        return;
+      }
       if (d.l) { rp.length = d.l; rp.headR = Math.max(13, Math.min(24, 13 + rp.length * 0.1)); }
     }
     return;
@@ -3272,6 +3316,7 @@ function _wsJoin(tier) {
   _lobbyPeers     = {};
   _remoteMap      = {};
   _processedDies  = {};
+  _killNotifyTs   = {};
   peers = peers.filter(function(p){ return !p.isRemote; });
 
   _wsClientId   = PRIVY.walletAddress || ('guest_' + Date.now());
@@ -4525,14 +4570,33 @@ function killCheck(){
       if(iLose){ killPlayer('Head-on with '+p.name, p.remoteId); return; }
       // Kill credit arrives via die msg
     }
-    // — Check 3: their head hit MY body → they detect this themselves (self-authority)
-    //   Do NOT call killPeer here — it causes the double-kill desync bug.
+    // — Check 3: THEIR head hit MY body (victim-side backup detection)
+    // The attacker's Check 1 can miss due to network lag — our body position is authoritative
+    // for OUR segments. We send a kill_target pos (WS-guaranteed relay) so their client
+    // calls killPlayer() with the real SOL transfer. Throttled to 1s/target to prevent spam.
+    var myLimit=Math.min(player.segs.length,80);
+    var px3=(p.targetX!=null)?p.targetX:p.x, py3=(p.targetY!=null)?p.targetY:p.y;
+    for(var k3=10;k3<myLimit;k3++){
+      if(dst(px3,py3,player.segs[k3].x,player.segs[k3].y)<p.headR+player.headR){
+        var _kNow3=Date.now();
+        if(!_killNotifyTs[p.remoteId]||_kNow3-_killNotifyTs[p.remoteId]>1000){
+          _killNotifyTs[p.remoteId]=_kNow3;
+          if(_ws&&_ws.readyState===WebSocket.OPEN){
+            try{_ws.send(JSON.stringify({type:'pos',clientId:_wsClientId,data:{
+              kill_target:p.remoteId,killer:_wsClientId
+            }}));}catch(_){}
+          }
+        }
+        break;
+      }
+    }
   }
   var pdx=player.x-WORLD/2, pdy=player.y-WORLD/2;
   if(Math.sqrt(pdx*pdx+pdy*pdy) > WORLD_R-10) killPlayer('Hit the boundary', null);
 }
 
 function killPlayer(reason, killedBy){
+  if(!player||!player.alive) return; // prevent double-execution (Check 1 + kill_target race)
   player.alive=false; gameRunning=false; _autoCircle=false;
   _showMobileControls(false); // hide joystick so death overlay is fully visible
   // Tell everyone we died, who gets the kill credit, and how much SOL we were carrying.
@@ -4614,6 +4678,15 @@ function killPlayer(reason, killedBy){
     ? +(_estXfer * (1 - HOUSE_CUT)).toFixed(6) // 90% of full accumulated balance
     : carriedSol;
   _wsSend('die', {n: player.name, killed_by: killedBy||null, sol: _solForKiller});
+  // Belt-and-suspenders: send death as a v:false pos so the WS server (which definitely
+  // relays pos) delivers kill credit even if the die WS path isn't relayed or Ably is down.
+  if(_ws&&_ws.readyState===WebSocket.OPEN){
+    try{_ws.send(JSON.stringify({type:'pos',clientId:_wsClientId,data:{
+      x:+(player.x.toFixed(1)),y:+(player.y.toFixed(1)),a:+(player.angle.toFixed(3)),
+      l:player.length,s:score,n:player.name,color:_currentColor||'#888',
+      v:false,killed_by:killedBy||null,sol:_solForKiller
+    }}));}catch(_kpe){}
+  }
   // Zero out carried balance — it transfers to the killer
   W.balance = 0; W.lamports = 0; saveSession();
   // Re-sync from chain after kill TX propagates (~15s) to show the true post-death balance.
