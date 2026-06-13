@@ -1747,7 +1747,7 @@ function _renderHeader() {
   var av=userProfile.picture
     ? '<img src="'+userProfile.picture+'" style="width:26px;height:26px;border-radius:50%;object-fit:cover;">'
     : '<div style="width:26px;height:26px;border-radius:50%;background:linear-gradient(135deg,#9945FF,#14F195);display:flex;align-items:center;justify-content:center;font-size:.65rem;font-weight:700;color:#fff;">'+userProfile.avatar+'</div>';
-  chip.innerHTML=av+'<div style="line-height:1.3"><div style="font-size:.68rem;color:#dde6f0;font-weight:700;">'+userProfile.name+'</div><div style="font-size:.55rem;color:#3d4f6a;">'+userProfile.email+'</div></div>';
+  chip.innerHTML=av+'<div style="line-height:1.3"><div style="font-size:.68rem;color:#dde6f0;font-weight:700;">'+userProfile.name+'</div><div id="headerEmailEl" style="font-size:.55rem;color:#3d4f6a;">'+userProfile.email+'</div></div>';
   hr.appendChild(chip);
 
   var bA=document.createElement('button'); bA.className='btn btn-add';
@@ -3729,6 +3729,7 @@ function showStart() {
   var _ffb3=document.getElementById('friendsFloatBtn'); if(_ffb3) _ffb3.style.display='';
   hideAll();
   _showMobileBar(); // restore wallet bar when returning to lobby
+  var _hee2=document.getElementById('headerEmailEl'); if(_hee2) _hee2.style.display='';
   if(!userProfile){ var ov=document.getElementById('ovLogin'); if(ov) ov.classList.remove('hidden'); }
   else {
     var ov2=document.getElementById('ovStart'); if(ov2) ov2.classList.remove('hidden');
@@ -4033,6 +4034,7 @@ function launchGame() {
   spawnFood(MAX_FOOD); gameRunning=true; _cashoutInProgress=false;
   _spectating=false; _specTargetId=null; var _shEl=document.getElementById('specHud'); if(_shEl) _shEl.style.display='none';
   _hideMobileBar(); // hide wallet bar during gameplay — HUD shows score/balance
+  var _hee=document.getElementById('headerEmailEl'); if(_hee) _hee.style.display='none';
   var cw=document.getElementById('canvasWrap'); if(cw) cw.classList.add('game-active');
   // Hide friends button + close panel during active gameplay
   var _ffb=document.getElementById('friendsFloatBtn'); if(_ffb) _ffb.style.display='none';
