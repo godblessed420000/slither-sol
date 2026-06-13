@@ -1214,7 +1214,7 @@ var BASE_SPEED = 2.5;      // slither.io-accurate base speed
 var BOOST_MULT = 1.5;      // slither.io-accurate boost multiplier (~1.5× base)
 var TURN_RATE  = 0.082;    // max radians per frame — matches slither.io responsiveness
 var SEG_MULT   = 4;        // segments per length unit — lower = shorter tail
-var MAX_FOOD   = 180;      // hard cap on food pellets — more dots on the map
+var MAX_FOOD   = 120;      // hard cap on food pellets
 var CASHOUT_FEE= 0.10;
 var HOUSE_CUT  = 0.10;  // 10% creator fee → 2QnrdhxX… (Coinbase wallet)
 var ESCROW_CUT = 0.00;  // escrow is a holding wallet only — no automatic fee cut
@@ -3795,6 +3795,8 @@ async function doJoinGame() {
 
 // ════════════════ GAME ENGINE ════════════════
 var gc,ctx,mm,mctx,gameRunning=false,player=null,peers=[],food=[],parts=[];
+var _mmFrame=0; // minimap throttle — redrawn every 3 game frames, not every frame
+var _fcBuckets={}; // reused food-color-bucket dict — avoids {} alloc + GC every draw()
 var camX=0,camY=0,mouseX=400,mouseY=300,boosting=false,boostE=100;
 var _spectating=false,_specTargetId=null;
 // Named boost handlers — defined once so removeEventListener actually works
@@ -4481,8 +4483,8 @@ function update(){
   }
 
   eatFood(); killCheck();
-  // Replenish food up to cap — addFood() itself enforces the MAX_FOOD hard limit
-  while(food.length < MAX_FOOD) addFood();
+  // Replenish food — cap at 5 spawns/frame to avoid a spike when many items are eaten at once
+  var _fAdd=0; while(food.length<MAX_FOOD&&_fAdd<5){ addFood(); _fAdd++; }
   // Enforce dynamic max-length cap (based on SOL balance) — trims if balance dropped
   if(player && player.alive){
     var _maxS = getMaxSegs();
@@ -4803,19 +4805,19 @@ function draw(){
   ctx.beginPath(); ctx.arc(cx,cy,WORLD_R-30,0,Math.PI*2);
   ctx.strokeStyle='rgba(255,69,96,.25)'; ctx.lineWidth=28; ctx.stroke();
 
-  // Batch food by color — plain filled circles, no shadowBlur (shadow is a major GPU cost)
-  var _fc={};
+  // Batch food by color — reuse _fcBuckets to avoid per-frame {} alloc + GC
+  var _fk=Object.keys(_fcBuckets);
+  for(var ci=0;ci<_fk.length;ci++) _fcBuckets[_fk[ci]].length=0; // clear arrays, keep allocs
   for(var i=0;i<food.length;i++){
     var f=food[i];
-    if(f.x<vx1||f.x>vx2||f.y<vy1||f.y>vy2) continue; // off-screen, skip
-    if(!_fc[f.color]) _fc[f.color]=[];
-    _fc[f.color].push(f);
+    if(f.x<vx1||f.x>vx2||f.y<vy1||f.y>vy2) continue;
+    if(!_fcBuckets[f.color]) _fcBuckets[f.color]=[];
+    _fcBuckets[f.color].push(f);
   }
-  var _fk=Object.keys(_fc);
+  var _fk=Object.keys(_fcBuckets);
   for(var ci=0;ci<_fk.length;ci++){
-    var col=_fk[ci]; ctx.fillStyle=col;
-    ctx.beginPath();
-    var _fl=_fc[col];
+    var col=_fk[ci]; var _fl=_fcBuckets[col]; if(!_fl.length) continue;
+    ctx.fillStyle=col; ctx.beginPath();
     for(var fi=0;fi<_fl.length;fi++){ var f=_fl[fi]; ctx.moveTo(f.x+f.r,f.y); ctx.arc(f.x,f.y,f.r,0,Math.PI*2); }
     ctx.fill();
   }
@@ -4828,7 +4830,7 @@ function draw(){
     drawS(s);
   }
   if(player&&player.alive) drawS(player);
-  ctx.restore(); drawMM();
+  ctx.restore(); if(++_mmFrame%3===0) drawMM(); // minimap at ~20fps — saves ~2/3 of its cost
 
   // ── Crosshair cursor (canvas-space, no world transform) ──
   if(gameRunning && player && player.alive){
@@ -4852,14 +4854,13 @@ function draw(){
 
 function drawS(s){
   if(s.segs.length<2) return;
-  // Cap rendered segments — long tails go off-screen anyway and beziers are expensive
-  var n = Math.min(s.segs.length, 80);
-  // Head radius — body width derived from it so body diameter === head diameter
+  // Render at most 50 segments — tail beyond that is off-screen and beziers are expensive
+  var n = Math.min(s.segs.length, 50);
   var hs   = Math.max(13, Math.min(24, 13 + s.length * 0.10));
-  var baseW = hs * 2; // body stroke width = head diameter → uniform thickness
+  var baseW = hs * 2;
   ctx.lineCap='round'; ctx.lineJoin='round';
 
-  // ── Outer glow — wider semi-transparent pass (no shadowBlur — too expensive) ──
+  // Outer glow — one cheap semi-transparent wide pass for local player only
   if(s.isMe){
     ctx.beginPath(); ctx.moveTo(s.segs[0].x,s.segs[0].y);
     for(var i=1;i<n;i++) ctx.lineTo(s.segs[i].x,s.segs[i].y);
@@ -4867,66 +4868,47 @@ function drawS(s){
     ctx.globalAlpha=0.09; ctx.stroke(); ctx.globalAlpha=1;
   }
 
-  // ── Smooth body using quadratic bezier midpoints ──
-  // Local player: 2 bands. Remote snakes: 1 band — fast single-pass draw.
-  var bands=s.isMe?[
-    {wMult:1.0, alpha:1.0},
-    {wMult:0.55,alpha:0.45}
-  ]:[
-    {wMult:1.0, alpha:1.0}
-  ];
-  for(var b=0;b<bands.length;b++){
-    ctx.beginPath();
-    ctx.moveTo(s.segs[0].x, s.segs[0].y);
-    for(var i=1;i<n-1;i++){
-      var mx=(s.segs[i].x+s.segs[i+1].x)/2;
-      var my=(s.segs[i].y+s.segs[i+1].y)/2;
-      ctx.quadraticCurveTo(s.segs[i].x,s.segs[i].y,mx,my);
-    }
-    ctx.lineTo(s.segs[n-1].x,s.segs[n-1].y);
-    ctx.strokeStyle = b===1 ? 'rgba(255,255,255,0.10)' : s.color;
-    ctx.lineWidth=baseW*bands[b].wMult;
-    ctx.globalAlpha=bands[b].alpha;
-    ctx.stroke();
+  // Body — single bezier pass for all snakes (removed second highlight band)
+  ctx.beginPath();
+  ctx.moveTo(s.segs[0].x, s.segs[0].y);
+  for(var i=1;i<n-1;i++){
+    var mx=(s.segs[i].x+s.segs[i+1].x)/2;
+    var my=(s.segs[i].y+s.segs[i+1].y)/2;
+    ctx.quadraticCurveTo(s.segs[i].x,s.segs[i].y,mx,my);
   }
-  ctx.globalAlpha=1;
+  ctx.lineTo(s.segs[n-1].x,s.segs[n-1].y);
+  ctx.strokeStyle=s.color; ctx.lineWidth=baseW; ctx.stroke();
 
-  // ── Dark spine ──
+  // Spine — only 15 segments (purely cosmetic, short length is indistinguishable)
   ctx.beginPath(); ctx.moveTo(s.segs[0].x,s.segs[0].y);
-  for(var i=1;i<Math.min(n,40);i++) ctx.lineTo(s.segs[i].x,s.segs[i].y);
+  for(var i=1;i<Math.min(n,15);i++) ctx.lineTo(s.segs[i].x,s.segs[i].y);
   ctx.strokeStyle='rgba(0,0,0,.28)'; ctx.lineWidth=baseW*.22; ctx.stroke();
-  // HEAD — hs already computed at top of drawS (body and head share same size formula)
-  // head fill — solid color (radial gradient rebuilt every frame was a GC/GPU cost)
+
+  // Head
   ctx.beginPath(); ctx.arc(s.x,s.y,hs,0,Math.PI*2);
   ctx.fillStyle=s.color; ctx.fill();
-  // head outline
   ctx.strokeStyle='rgba(255,255,255,.2)'; ctx.lineWidth=1.5; ctx.stroke();
-  // EYES - realistic slither.io style
-  var ea=s.angle; var eyeOff=hs*.6;
+
+  // Eyes — sclera + iris + pupil (shine removed — saves 2 arcs/snake/frame)
+  var ea=s.angle, eyeOff=hs*.6;
   var ex1=s.x+Math.cos(ea+.55)*eyeOff, ey1=s.y+Math.sin(ea+.55)*eyeOff;
   var ex2=s.x+Math.cos(ea-.55)*eyeOff, ey2=s.y+Math.sin(ea-.55)*eyeOff;
   var eyr=hs*.38;
-  // white sclera
   ctx.fillStyle='#fff';
   ctx.beginPath(); ctx.arc(ex1,ey1,eyr,0,Math.PI*2); ctx.fill();
   ctx.beginPath(); ctx.arc(ex2,ey2,eyr,0,Math.PI*2); ctx.fill();
-  // coloured iris
   ctx.fillStyle=s.isMe?'#14F195':'#222';
   ctx.beginPath(); ctx.arc(ex1+Math.cos(ea)*.5,ey1+Math.sin(ea)*.5,eyr*.55,0,Math.PI*2); ctx.fill();
   ctx.beginPath(); ctx.arc(ex2+Math.cos(ea)*.5,ey2+Math.sin(ea)*.5,eyr*.55,0,Math.PI*2); ctx.fill();
-  // black pupil
   ctx.fillStyle='#000';
   ctx.beginPath(); ctx.arc(ex1+Math.cos(ea)*.7,ey1+Math.sin(ea)*.7,eyr*.28,0,Math.PI*2); ctx.fill();
   ctx.beginPath(); ctx.arc(ex2+Math.cos(ea)*.7,ey2+Math.sin(ea)*.7,eyr*.28,0,Math.PI*2); ctx.fill();
-  // eye shine
-  ctx.fillStyle='rgba(255,255,255,.85)';
-  ctx.beginPath(); ctx.arc(ex1-eyr*.2,ey1-eyr*.2,eyr*.18,0,Math.PI*2); ctx.fill();
-  ctx.beginPath(); ctx.arc(ex2-eyr*.2,ey2-eyr*.2,eyr*.18,0,Math.PI*2); ctx.fill();
-  // Name tag with background pill
-  var nameFont=(s.isMe?'bold 13px':'bold 11px')+' Share Tech Mono';
-  ctx.font=nameFont;
-  var tw=ctx.measureText(s.name).width;
-  var np=5, nh=14, ny=s.y-hs-10;
+
+  // Name tag — cache measureText so it runs once per snake, not once per frame
+  var nf=(s.isMe?'bold 13px':'bold 11px')+' Share Tech Mono';
+  if(s._nameCache!==s.name){ s._nameCache=s.name; ctx.font=nf; s._tw=ctx.measureText(s.name).width; }
+  else { ctx.font=nf; }
+  var tw=s._tw, np=5, nh=14, ny=s.y-hs-10;
   ctx.fillStyle=s.isMe?'rgba(20,241,149,0.18)':'rgba(0,0,0,0.72)';
   ctx.beginPath();
   var rx=s.x-tw/2-np, ry=ny-nh+2, rw=tw+np*2, rr=5;
