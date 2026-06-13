@@ -3094,11 +3094,14 @@ function _wsHandleMsg(msg, fromAbly) {
     _lobbyPeers[cid] = { n: d.n || ('P_'+cid.slice(0,4)), color: d.color || PC[1] };
     if (!gameRunning) renderSlots();
     if (isNew && !d.reply) toast((d.n || 'A player') + ' entered the arena!', 'info');
-    // Reply so the joining player knows we exist.
-    // Must reply via Ably — the new player listens on the Ably channel, not fly.io WS.
-    // When in-game, reply to ALL WS joins (not just isNew) — existing players may have
-    // shared lobby state but the new joiner still needs our Ably join to verify us.
-    if (_currentTier && _ablyChannel && (isNew || (gameRunning && !fromAbly))) {
+    // Reply so the joining player knows we exist via Ably (sets _ablyVerifiedPeers on their side).
+    // Reply when:
+    //   - isNew: first time seeing this peer (any source)
+    //   - gameRunning && !d.reply: in-game and this is a fresh announce (not a reply-to-reply)
+    //     This covers the race where the new joiner's Ably connects AFTER we already replied
+    //     to their WS join — by then isNew=false, but they still need our Ably join.
+    //     !d.reply prevents infinite cascades (replies never trigger further replies).
+    if (_currentTier && _ablyChannel && (isNew || (gameRunning && !d.reply))) {
       var myName2 = userProfile ? userProfile.name.split(' ')[0].slice(0,14) : 'Player';
       try { _ablyChannel.publish('join', { n: myName2, color: _playerColor, reply: true }); } catch(_) {}
     }
