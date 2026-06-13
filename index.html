@@ -2282,7 +2282,8 @@ function openWithdraw() {
   if(!W.connected){ toast('Sign in first','error'); return; }
   closeAll();
   var wb=document.getElementById('withBal');
-  if(wb) wb.textContent=W.balance.toFixed(4)+' SOL';
+  var _wBest=Math.max(W.balance||0, W.onChainBalance||0);
+  if(wb) wb.textContent=_wBest.toFixed(4)+' SOL';
   document.getElementById('modalWith').classList.remove('hidden');
 }
 function closeModal(id){ var el=document.getElementById(id); if(el) el.classList.add('hidden'); }
@@ -2606,7 +2607,8 @@ async function doWithdraw() {
   var addrEl = document.getElementById('withAddr');
   var dest   = addrEl ? addrEl.value.trim() : '';
   if(!amt||amt<0.01){ toast('Min 0.01 SOL','error'); return; }
-  if(amt>W.balance){ toast('Insufficient balance!','error'); return; }
+  var _avail = Math.max(W.balance||0, W.onChainBalance||0);
+  if(amt>_avail){ toast('Insufficient balance!','error'); return; }
   if(dest && dest.length < 32){ toast('Invalid Solana wallet address','error'); return; }
   // Close modal first so user can see the toast progress
   closeModal('modalWith');
@@ -3625,7 +3627,7 @@ function updateJoinSummary() {
   if(selectedServer&&selectedLobbyTier!=null){
     var t=TIERS[selectedLobbyTier];
     var isFree=(selectedLobbyTier==='free');
-    var canAfford=isFree||W.balance>=(t?t.sol:999);
+    var canAfford=isFree||Math.max(W.balance||0,W.onChainBalance||0)>=(t?t.sol:999);
     summary.innerHTML='';
     var row=document.createElement('div'); row.style.cssText='display:flex;flex-direction:column;gap:3px;';
     var title=document.createElement('div'); title.style.cssText='color:#dde6f0;font-weight:700;font-size:.68rem;';
@@ -4687,7 +4689,7 @@ function killPlayer(reason, killedBy){
   W.balance = 0; W.lamports = 0; saveSession();
   // Re-sync from chain after kill TX propagates (~15s) to show the true post-death balance.
   // The immediate zero is correct intent; this catches any edge cases where TX timing differs.
-  setTimeout(function(){ if(W.pubkey) _fetchPrivyWalletBalance(W.pubkey); }, 15000);
+  setTimeout(function(){ if(W.pubkey) _fetchPrivyWalletBalance(W.pubkey); }, 5000);
   if(_elSidebar) _elSidebar.style.display=''; setTimeout(resizeC,30);
   for(var i=0;i<Math.min(player.segs.length,70);i++) addFood(player.segs[i].x+(Math.random()-.5)*18,player.segs[i].y+(Math.random()-.5)*18);
   player.segs = []; // wipe body immediately — prevents ghost rendering on any trailing draw call
