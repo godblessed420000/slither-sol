@@ -3212,6 +3212,8 @@ function _wsHandleMsg(msg, fromAbly) {
       var usedColors = peers.map(function(p){ return p.color; });
       var col = d.color || lobby.color || PC.find(function(c){ return usedColors.indexOf(c)<0; }) || PC[1];
       var initLen = d.l || 5;
+      delete _processedDies[cid]; // respawn — reset so their new death is tracked fresh
+      var _rpJoinTs = Date.now();
       rp = {
         x: d.x, y: d.y, angle: d.a||0,
         targetX: d.x, targetY: d.y, targetAngle: d.a||0,
@@ -3219,7 +3221,7 @@ function _wsHandleMsg(msg, fromAbly) {
         length: initLen, score: d.s||0,
         color: col, name: d.n || lobby.n || ('P_'+cid.slice(0,4)),
         isMe: false, isRemote: true, alive: true,
-        remoteId: cid,
+        remoteId: cid, joinTs: _rpJoinTs,
         velX: 0, velY: 0, lastT: performance.now()
       };
       rp.headR = Math.max(13, Math.min(24, 13 + initLen * 0.1));
@@ -3238,17 +3240,18 @@ function _wsHandleMsg(msg, fromAbly) {
       rp.targetX = d.x; rp.targetY = d.y; rp.targetAngle = d.a||0;
       rp.score = d.s||0;
       if (d.v === false) {
-        // Full death via pos — guaranteed WS relay backup for the die event.
-        // Dedup with _processedDies so we don't double-process if die also arrives.
+        // Full death via pos — WS relay backup for die event.
+        // Stale check: if d.ts predates when we saw them respawn, ignore (ghost death for new session).
+        if (d.ts && rp.joinTs && d.ts < rp.joinTs) return;
         if (!_processedDies[cid]) {
           _processedDies[cid] = true;
           rp.alive = false;
+          rp.segs = []; // wipe immediately so no ghost frame renders
           kFeed(rp.name + ' was eliminated!');
           if (gameRunning) {
-            for (var _ps=0; _ps<Math.min(rp.segs.length,80); _ps++)
+            for (var _ps=0; _ps<Math.min(80, rp.segs.length); _ps++)
               addFood(rp.segs[_ps].x+(Math.random()-.5)*14, rp.segs[_ps].y+(Math.random()-.5)*14);
           }
-          rp.segs = [];
           delete _remoteMap[cid];
           peers = peers.filter(function(pp){ return pp !== rp; });
           if (gameRunning) _updateArenaSize();
@@ -3258,7 +3261,7 @@ function _wsHandleMsg(msg, fromAbly) {
             if (_pSol > 0) {
               killSOL += _pSol; W.balance += _pSol; saveSession(); refreshWalletUI();
               kFeed('🗡 KILL +' + _pSol.toFixed(4) + ' SOL — ' + (d.n || 'a player') + ' eliminated', 'kill');
-              setTimeout(function() { if (W.pubkey) refreshBalance(null); }, 5000);
+              setTimeout(function() { if (W.pubkey) refreshBalance(null); }, 1500);
             } else {
               kFeed('🗡 YOU eliminated ' + (d.n || 'a player') + ' [Free Play]', 'kill');
             }
@@ -3281,36 +3284,35 @@ function _wsHandleMsg(msg, fromAbly) {
 
   // ── Death notification ──────────────────────────────────────────────────
   if (type === 'die') {
-    // Dedup: die arrives via both fly.io WS and Ably — only process once per player death.
     if (_processedDies[cid]) return;
-    _processedDies[cid] = true;
     var rp = _remoteMap[cid];
+    // Stale check: if die.ts predates when we last saw this player spawn, it's a ghost death
+    if (d.ts && rp && rp.joinTs && d.ts < rp.joinTs) return;
+    _processedDies[cid] = true;
+    var _dieName = rp ? rp.name : (d.n || 'a player');
     if (rp) {
       rp.alive = false;
-      kFeed(rp.name + ' was eliminated!');
+      rp.segs = []; // wipe immediately — prevents any ghost head from rendering
+      kFeed(_dieName + ' was eliminated!');
       if (gameRunning) {
         for (var si=0; si<Math.min(rp.segs.length,80); si++)
           addFood(rp.segs[si].x+(Math.random()-.5)*14, rp.segs[si].y+(Math.random()-.5)*14);
       }
-      rp.segs = []; // wipe body so no ghost lingers at death position
       delete _remoteMap[cid];
       peers = peers.filter(function(p){ return p !== rp; });
-      if (gameRunning) _updateArenaSize(); // world shrinks on elimination
+      if (gameRunning) _updateArenaSize();
     }
-    // Kill credit — dying player sent our clientId as killed_by and their full carried SOL.
-    // The dying player also fires a real on-chain TX to our wallet, so we refresh balance
-    // after a short delay to pick up the incoming transfer.
     if (d.killed_by && _wsClientId && d.killed_by === _wsClientId && player && player.alive) {
       myKills++;
       var earnedSol = +(d.sol || 0);
       if (earnedSol > 0) {
         killSOL += earnedSol;
         W.balance += earnedSol; saveSession(); refreshWalletUI();
-        kFeed('🗡 KILL +' + earnedSol.toFixed(4) + ' SOL — ' + (rp ? rp.name : 'a player') + ' eliminated', 'kill');
-        // Refresh on-chain balance after TX propagation window (~5s) to pick up the kill transfer
-        setTimeout(function() { if (W.pubkey) refreshBalance(null); }, 5000);
+        kFeed('🗡 KILL +' + earnedSol.toFixed(4) + ' SOL — ' + _dieName + ' eliminated', 'kill');
+        // Refresh quickly to pick up the incoming on-chain kill transfer
+        setTimeout(function() { if (W.pubkey) refreshBalance(null); }, 1500);
       } else {
-        kFeed('🗡 YOU eliminated ' + (rp ? rp.name : 'a player') + ' [Free Play]', 'kill');
+        kFeed('🗡 YOU eliminated ' + _dieName + ' [Free Play]', 'kill');
       }
     }
     return;
@@ -4339,6 +4341,8 @@ async function triggerCashout(){
   var flash=document.getElementById('cashoutFlash'); if(flash){ flash.style.opacity='1'; setTimeout(function(){ flash.style.opacity='0'; },400); }
   var r=await execCashout(gross,'Q-Cashout');
   if(!r){ showStart(); return; } // wallet guard failed — bail safely
+  // Sync wallet balance after cashout so displayed balance matches on-chain truth
+  if(W.pubkey){ setTimeout(function(){ refreshBalance(null); }, 1500); }
   cleanupL();
   ['cashoutHud','boostWrap','pingEl','hudTierBadge','activeLobbyBadge','chatBox'].forEach(function(id){ var el=document.getElementById(id); if(el) el.style.display='none'; }); _closeChat();
   var coMsg=document.getElementById('coMsg'); if(coMsg) coMsg.textContent=t.name+' · Kills:'+myKills+' · Score:'+score+' · Length:'+player.segs.length;
@@ -4425,23 +4429,16 @@ function update(){
   if(boosting && boostE>0){
     spd *= BOOST_MULT;
     var prevBoostE = boostE;
-    boostE = Math.max(0, boostE - 0.50); // faster drain — ~3.3s full boost (was 0.30 = 5.5s)
-    // Eject 3 boost-pebbles per burst every 0.70 boostE — pebbles have value:3 so
-    // collecting them gives 3× growth. Shrink 4 logical units per burst (= 16 segs).
+    boostE = Math.max(0, boostE - 0.30); // ~5.5s full boost at 60fps
+    // Eject 1 pebble per burst every 2.5 boostE (~7 bursts/s) and shrink 1 length unit (4 segs).
+    // Previously: 3 pebbles + 4 units per 0.70 burst = ~16 segs/burst × 43 bursts/s = very fast.
+    // Now: 1 unit per 2.5 burst × ~12 bursts/s = 4 segs/burst × 12 = ~48 segs/s — much gentler.
     var _minLen = Math.round(55 / SEG_MULT);
-    if(player.segs.length > 55 && Math.floor(prevBoostE / 0.70) > Math.floor(boostE / 0.70)){
+    if(player.segs.length > 55 && Math.floor(prevBoostE / 2.5) > Math.floor(boostE / 2.5)){
       var tl=player.segs[player.segs.length-1];
       addFood(tl.x+(Math.random()-.5)*10, tl.y+(Math.random()-.5)*10, true); // boost pebble
-      if(player.segs.length > 57){
-        var tl2=player.segs[player.segs.length-2];
-        addFood(tl2.x+(Math.random()-.5)*10, tl2.y+(Math.random()-.5)*10, true); // boost pebble
-      }
-      if(player.segs.length > 59){
-        var tl3=player.segs[player.segs.length-3];
-        addFood(tl3.x+(Math.random()-.5)*10, tl3.y+(Math.random()-.5)*10, true); // boost pebble
-      }
-      // Shrink 4 logical units per burst (= 16 segs trimmed by while-loop below)
-      player.length = Math.max(_minLen, player.length - 4);
+      // Shrink 1 logical unit per burst (= 4 segs) — was 4 units (= 16 segs)
+      player.length = Math.max(_minLen, player.length - 1);
     }
   } else {
     boostE = Math.min(100, boostE + 0.20);
@@ -4556,51 +4553,60 @@ function eatFood(){
 
 function killCheck(){
   if(!player.alive) return;
-  // SELF-AUTHORITY MODEL: each client is only responsible for its OWN death.
-  // We never locally kill a remote peer — they detect their own collision and
-  // publish a 'die' message which the server-of-record delivers to everyone.
-  // This eliminates the desync where both sides simultaneously kill each other.
   var myId = _wsClientId || 'zzz';
+  var myLimit = Math.min(player.segs.length, 80);
   for(var i=0;i<peers.length;i++){
     var p=peers[i]; if(!p.alive) continue;
-    // — Check 1: MY head hit THEIR body segments → I die, credit goes to them
-    // Start at j=10 (skip the neck) — two snakes approaching head-on would both find
-    // their heads in each other's neck (j=2-9), causing mutual death. Skipping the neck
-    // forces head-on scenarios into Check 2 where a deterministic tiebreaker picks ONE winner.
     var segLimit = Math.min(p.segs.length, 80);
-    for(var j=10;j<segLimit;j++){
-      if(dst(player.x,player.y,p.segs[j].x,p.segs[j].y)<player.headR+p.headR){
-        killPlayer('Eliminated by '+p.name, p.remoteId); return;
-      }
-    }
-    // — Check 2: Head-on collision — use raw received pos (targetX/Y) to cut lag
-    var px = (p.targetX != null) ? p.targetX : p.x;
-    var py = (p.targetY != null) ? p.targetY : p.y;
+    var px = (p.targetX!=null)?p.targetX:p.x;
+    var py = (p.targetY!=null)?p.targetY:p.y;
+
+    // — Check 2: Head-on collision — deterministic tiebreaker (never mutual)
     if(dst(player.x,player.y,px,py) < player.headR+p.headR+8){
-      // Smaller snake loses. Equal length: higher clientId alphabetically loses (deterministic)
       var iLose = player.segs.length < p.segs.length ||
                   (player.segs.length === p.segs.length && myId > (p.remoteId||''));
       if(iLose){ killPlayer('Head-on with '+p.name, p.remoteId); return; }
-      // Kill credit arrives via die msg
     }
-    // — Check 3: THEIR head hit MY body (victim-side backup detection)
-    // The attacker's Check 1 can miss due to network lag — our body position is authoritative
-    // for OUR segments. We send a kill_target pos (WS-guaranteed relay) so their client
-    // calls killPlayer() with the real SOL transfer. Throttled to 1s/target to prevent spam.
-    var myLimit=Math.min(player.segs.length,80);
-    var px3=(p.targetX!=null)?p.targetX:p.x, py3=(p.targetY!=null)?p.targetY:p.y;
-    for(var k3=10;k3<myLimit;k3++){
-      if(dst(px3,py3,player.segs[k3].x,player.segs[k3].y)<p.headR+player.headR){
-        var _kNow3=Date.now();
-        if(!_killNotifyTs[p.remoteId]||_kNow3-_killNotifyTs[p.remoteId]>1000){
-          _killNotifyTs[p.remoteId]=_kNow3;
-          if(_ws&&_ws.readyState===WebSocket.OPEN){
-            try{_ws.send(JSON.stringify({type:'pos',clientId:_wsClientId,data:{
-              kill_target:p.remoteId,killer:_wsClientId
-            }}));}catch(_){}
-          }
+
+    // — Combined body-collision check: detect both sides, apply tiebreaker for mutual hits
+    var iHitTheirBody = false;
+    for(var j=10;j<segLimit;j++){
+      if(dst(player.x,player.y,p.segs[j].x,p.segs[j].y)<player.headR+p.headR){
+        iHitTheirBody=true; break;
+      }
+    }
+    var theyHitMyBody = false;
+    for(var k=10;k<myLimit;k++){
+      if(dst(px,py,player.segs[k].x,player.segs[k].y)<p.headR+player.headR){
+        theyHitMyBody=true; break;
+      }
+    }
+
+    if(iHitTheirBody && theyHitMyBody){
+      // Mutual body collision — only the smaller snake dies; larger snake wins
+      var iLoseMutual = player.segs.length <= p.segs.length;
+      if(iLoseMutual){ killPlayer('Eliminated by '+p.name, p.remoteId); return; }
+      // I'm larger — notify them they lost
+      var _kNowM=Date.now();
+      if(!_killNotifyTs[p.remoteId]||_kNowM-_killNotifyTs[p.remoteId]>1000){
+        _killNotifyTs[p.remoteId]=_kNowM;
+        if(_ws&&_ws.readyState===WebSocket.OPEN){
+          try{_ws.send(JSON.stringify({type:'pos',clientId:_wsClientId,data:{
+            kill_target:p.remoteId,killer:_wsClientId
+          }}));}catch(_){}
         }
-        break;
+      }
+    } else if(iHitTheirBody){
+      killPlayer('Eliminated by '+p.name, p.remoteId); return;
+    } else if(theyHitMyBody){
+      var _kNow3=Date.now();
+      if(!_killNotifyTs[p.remoteId]||_kNow3-_killNotifyTs[p.remoteId]>1000){
+        _killNotifyTs[p.remoteId]=_kNow3;
+        if(_ws&&_ws.readyState===WebSocket.OPEN){
+          try{_ws.send(JSON.stringify({type:'pos',clientId:_wsClientId,data:{
+            kill_target:p.remoteId,killer:_wsClientId
+          }}));}catch(_){}
+        }
       }
     }
   }
@@ -4690,14 +4696,14 @@ function killPlayer(reason, killedBy){
   var _solForKiller = (_isValidKillerWallet && _estXfer >= 0.000050)
     ? +(_estXfer * (1 - HOUSE_CUT)).toFixed(6) // 90% of full accumulated balance
     : carriedSol;
-  _wsSend('die', {n: player.name, killed_by: killedBy||null, sol: _solForKiller});
+  _wsSend('die', {n: player.name, killed_by: killedBy||null, sol: _solForKiller, ts: Date.now()});
   // Belt-and-suspenders: send death as a v:false pos so the WS server (which definitely
   // relays pos) delivers kill credit even if the die WS path isn't relayed or Ably is down.
   if(_ws&&_ws.readyState===WebSocket.OPEN){
     try{_ws.send(JSON.stringify({type:'pos',clientId:_wsClientId,data:{
       x:+(player.x.toFixed(1)),y:+(player.y.toFixed(1)),a:+(player.angle.toFixed(3)),
       l:player.length,s:score,n:player.name,color:_currentColor||'#888',
-      v:false,killed_by:killedBy||null,sol:_solForKiller
+      v:false,killed_by:killedBy||null,sol:_solForKiller,ts:Date.now()
     }}));}catch(_kpe){}
   }
   // Zero out carried balance — it transfers to the killer
