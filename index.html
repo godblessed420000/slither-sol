@@ -4518,7 +4518,7 @@ function update(){
   // ── Speed + boost ──
   // Boost requires 100+ segments — too small = no boost
   if(boosting && player.segs.length < 55) boosting = false;
-  var spd = BASE_SPEED;
+  var spd = _isTouchDev ? BASE_SPEED * 1.25 : BASE_SPEED; // mobile gets 25% faster base
   if(boosting && boostE>0){
     spd *= _isTouchDev ? BOOST_MULT * 1.4 : BOOST_MULT; // mobile: ~2.1× vs desktop: 1.5×
     var prevBoostE = boostE;
