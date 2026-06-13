@@ -3240,6 +3240,21 @@ function _wsHandleMsg(msg, fromAbly) {
       kFeed(rp.name + ' is in the game!');
     } else {
       var now2 = performance.now();
+      // Teleport / rejoin detection: if position jumped >400px since last known pos,
+      // the player respawned. Clear old segs immediately so the stale body doesn't
+      // stretch from the death site to the new spawn and can't kill other players.
+      var _tdx = d.x - rp.targetX, _tdy = d.y - rp.targetY;
+      if (_tdx*_tdx + _tdy*_tdy > 160000) { // 400^2
+        rp.segs = [];
+        rp.velX = 0; rp.velY = 0;
+        rp.alive = true; // reset in case we locally marked them dead before the die arrived
+        rp.joinTs = now2;
+        delete _processedDies[cid]; // new session — allow the next die to register
+        var _rja = d.a || 0;
+        var _rjn = Math.min((d.l || Math.round(55/SEG_MULT)) * SEG_MULT, 120);
+        for (var _rji=0; _rji<_rjn; _rji++)
+          rp.segs.push({x: d.x - Math.cos(_rja)*_rji*2, y: d.y - Math.sin(_rja)*_rji*2});
+      }
       var dt2  = Math.max(16, now2 - (rp.lastT || now2 - 20));
       rp.velX  = (d.x - rp.targetX) / dt2;
       rp.velY  = (d.y - rp.targetY) / dt2;
@@ -3248,16 +3263,17 @@ function _wsHandleMsg(msg, fromAbly) {
       rp.score = d.s||0;
       if (d.v === false) {
         // Full death via pos — WS relay backup for die event.
-        // Stale check: if d.ts predates when we saw them respawn, ignore (ghost death for new session).
-        if (d.ts && rp.joinTs && d.ts < rp.joinTs) return;
+        // Stale check: 5s tolerance for clock skew between clients.
+        if (d.ts && rp.joinTs && d.ts < rp.joinTs - 5000) return;
         if (!_processedDies[cid]) {
           _processedDies[cid] = true;
+          var _dvSegs = rp.segs.slice(0, 80); // save before wipe
           rp.alive = false;
-          rp.segs = []; // wipe immediately so no ghost frame renders
+          rp.segs = [];
           kFeed(rp.name + ' was eliminated!');
           if (gameRunning) {
-            for (var _ps=0; _ps<Math.min(80, rp.segs.length); _ps++)
-              addFood(rp.segs[_ps].x+(Math.random()-.5)*14, rp.segs[_ps].y+(Math.random()-.5)*14);
+            for (var _ps=0; _ps<_dvSegs.length; _ps++)
+              addFood(_dvSegs[_ps].x+(Math.random()-.5)*14, _dvSegs[_ps].y+(Math.random()-.5)*14);
           }
           delete _remoteMap[cid];
           peers = peers.filter(function(pp){ return pp !== rp; });
@@ -3293,17 +3309,18 @@ function _wsHandleMsg(msg, fromAbly) {
   if (type === 'die') {
     if (_processedDies[cid]) return;
     var rp = _remoteMap[cid];
-    // Stale check: if die.ts predates when we last saw this player spawn, it's a ghost death
-    if (d.ts && rp && rp.joinTs && d.ts < rp.joinTs) return;
+    // Stale check: allow 5s of clock skew between clients before rejecting as ghost death
+    if (d.ts && rp && rp.joinTs && d.ts < rp.joinTs - 5000) return;
     _processedDies[cid] = true;
     var _dieName = rp ? rp.name : (d.n || 'a player');
     if (rp) {
+      var _dSegs = rp.segs.slice(0, 80); // save before wipe so food actually scatters
       rp.alive = false;
-      rp.segs = []; // wipe immediately — prevents any ghost head from rendering
+      rp.segs = [];
       kFeed(_dieName + ' was eliminated!');
       if (gameRunning) {
-        for (var si=0; si<Math.min(rp.segs.length,80); si++)
-          addFood(rp.segs[si].x+(Math.random()-.5)*14, rp.segs[si].y+(Math.random()-.5)*14);
+        for (var si=0; si<_dSegs.length; si++)
+          addFood(_dSegs[si].x+(Math.random()-.5)*14, _dSegs[si].y+(Math.random()-.5)*14);
       }
       delete _remoteMap[cid];
       peers = peers.filter(function(p){ return p !== rp; });
@@ -3810,6 +3827,7 @@ async function doJoinGame() {
 // ════════════════ GAME ENGINE ════════════════
 var gc,ctx,mm,mctx,gameRunning=false,player=null,peers=[],food=[],parts=[];
 var _inGameSession=false; // true from launchGame() until showStart() — email hidden the whole time
+var _staleFrame=0; // frame counter for stale-peer eviction (runs every 60 frames)
 var _mmFrame=0; // minimap throttle — redrawn every 3 game frames, not every frame
 var _fcBuckets={}; // reused food-color-bucket dict — avoids {} alloc + GC every draw()
 var camX=0,camY=0,mouseX=400,mouseY=300,boosting=false,boostE=100;
@@ -4506,6 +4524,24 @@ function update(){
       if(p.segs.length>maxS) p.segs.length=maxS; // O(1) truncation — replaces O(n) while+pop
     }
     // No AI bots — only real remote players exist in peers[]
+  }
+
+  // Evict peers silent for 3+ seconds — their die/leave was probably lost in transit.
+  // Runs every 60 frames (~1/s) to avoid per-frame array allocation overhead.
+  if(++_staleFrame >= 60){
+    _staleFrame = 0;
+    var _staleNow = performance.now();
+    var _staleChanged = false;
+    for(var _si=peers.length-1; _si>=0; _si--){
+      var _sp=peers[_si];
+      if(_sp.isRemote && _sp.alive && _sp.lastT && _staleNow - _sp.lastT > 3000){
+        _sp.alive=false; _sp.segs=[];
+        if(_sp.remoteId) delete _remoteMap[_sp.remoteId];
+        peers.splice(_si,1);
+        _staleChanged=true;
+      }
+    }
+    if(_staleChanged && gameRunning) _updateArenaSize();
   }
 
   eatFood(); killCheck();
