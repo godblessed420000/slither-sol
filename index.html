@@ -3852,6 +3852,7 @@ var gc,ctx,mm,mctx,gameRunning=false,player=null,peers=[],food=[],parts=[];
 var _inGameSession=false; // true from launchGame() until showStart() — email hidden the whole time
 var _staleFrame=0; // frame counter for stale-peer eviction (runs every 60 frames)
 var _preRejoinAvgSegs=0; // snapshot of peer avg segs taken just before _wsJoin() clears peers[]
+var _boostExhaustedUntil=0; // performance.now() timestamp when the 3s exhaustion penalty expires
 var _mmFrame=0; // minimap throttle — redrawn every 3 game frames, not every frame
 var _fcBuckets={}; // reused food-color-bucket dict — avoids {} alloc + GC every draw()
 var camX=0,camY=0,mouseX=400,mouseY=300,boosting=false,boostE=100;
@@ -4520,22 +4521,19 @@ function update(){
   if(boosting && player.segs.length < 55) boosting = false;
   var spd = _isTouchDev ? BASE_SPEED * 1.25 : BASE_SPEED; // mobile gets 25% faster base
   if(boosting && boostE>0){
-    spd *= _isTouchDev ? BOOST_MULT * 1.4 : BOOST_MULT; // mobile: ~2.1× vs desktop: 1.5×
+    spd *= _isTouchDev ? BOOST_MULT * 0.9 : BOOST_MULT * 0.8; // mobile: ~1.7× desktop: ~1.2× (slower than before)
     var prevBoostE = boostE;
-    boostE = Math.max(0, boostE - 0.30); // ~5.5s full boost at 60fps
-    // Eject 1 pebble per burst every 2.5 boostE (~7 bursts/s) and shrink 1 length unit (4 segs).
-    // Previously: 3 pebbles + 4 units per 0.70 burst = ~16 segs/burst × 43 bursts/s = very fast.
-    // Now: 1 unit per 2.5 burst × ~12 bursts/s = 4 segs/burst × 12 = ~48 segs/s — much gentler.
+    boostE = Math.max(0, boostE - 0.50); // drains faster (~3.3s full boost)
+    if(boostE <= 0) _boostExhaustedUntil = performance.now() + 3000; // trigger 3s penalty
     var _minLen = Math.round(55 / SEG_MULT);
     if(player.segs.length > 55 && Math.floor(prevBoostE / 2.5) > Math.floor(boostE / 2.5)){
       var tl=player.segs[player.segs.length-1];
-      addFood(tl.x+(Math.random()-.5)*10, tl.y+(Math.random()-.5)*10, true); // boost pebble
-      // Shrink 1 logical unit per burst (= 4 segs) — was 4 units (= 16 segs)
+      addFood(tl.x+(Math.random()-.5)*10, tl.y+(Math.random()-.5)*10, true);
       player.length = Math.max(_minLen, player.length - 1);
     }
   } else {
     boostE = Math.min(100, boostE + 0.20);
-    if(boostE <= 0) spd *= 0.7; // exhausted — 30% slower until boost recharges
+    if(performance.now() < _boostExhaustedUntil) spd *= 0.7; // 3s exhaustion penalty
   }
   moveS(player, player.angle, spd);
   // Enforce exact segment count — moveS only pops once per frame, but we may need to pop
