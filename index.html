@@ -1582,8 +1582,9 @@ function _fetchPrivyWalletBalance(addr) {
   if (!addr || typeof solanaWeb3 === 'undefined') return;
   _fetchBalanceWithFallback(addr).then(function(res) {
     W.onChainBalance = res.lamports / 1e9;
-    // Sync game balance when on-chain is higher (handles new accounts + external deposits)
-    if (!gameRunning && W.onChainBalance > W.balance) {
+    // Always sync to on-chain when not in-game — on-chain is the ground truth.
+    // (During gameplay we preserve optimistic kill credits in W.balance.)
+    if (!gameRunning) {
       W.balance  = W.onChainBalance;
       W.lamports = Math.floor(W.balance * 1e9);
       saveSession();
@@ -2029,10 +2030,9 @@ async function refreshBalance(btn) {
     _lastRpcEndpoint = res.endpoint;
     _rpcStatus[res.endpoint] = { ok:true, latency:ms, tested:true };
     W.onChainBalance = res.lamports / 1e9;
-    // Sync game balance with on-chain wallet balance (outside of active game).
-    // If on-chain is higher (new account, received SOL, etc.) bump up W.balance.
-    // Never lower W.balance during a game (would wipe in-game kill credits).
-    if (!gameRunning && W.onChainBalance > W.balance) {
+    // Always sync to on-chain when not in-game — on-chain is ground truth.
+    // During gameplay, W.balance carries optimistic kill credits not yet on-chain.
+    if (!gameRunning) {
       W.balance  = W.onChainBalance;
       W.lamports = Math.floor(W.balance * 1e9);
     }
@@ -2122,7 +2122,7 @@ async function mobileRefreshBalance() {
 
     _lastRpcEndpoint = res.endpoint;
     W.onChainBalance = res.lamports / 1e9;
-    if (!gameRunning && W.onChainBalance > W.balance) {
+    if (!gameRunning) {
       W.balance  = W.onChainBalance;
       W.lamports = Math.floor(W.balance * 1e9);
     }
@@ -4550,6 +4550,9 @@ function killPlayer(reason, killedBy){
   _wsSend('die', {n: player.name, killed_by: killedBy||null, sol: _solForKiller});
   // Zero out carried balance — it transfers to the killer
   W.balance = 0; W.lamports = 0; saveSession();
+  // Re-sync from chain after kill TX propagates (~15s) to show the true post-death balance.
+  // The immediate zero is correct intent; this catches any edge cases where TX timing differs.
+  setTimeout(function(){ if(W.pubkey) _fetchPrivyWalletBalance(W.pubkey); }, 15000);
   if(_elSidebar) _elSidebar.style.display=''; setTimeout(resizeC,30);
   for(var i=0;i<Math.min(player.segs.length,70);i++) addFood(player.segs[i].x+(Math.random()-.5)*18,player.segs[i].y+(Math.random()-.5)*18);
   player.segs = []; // wipe body immediately — prevents ghost rendering on any trailing draw call
