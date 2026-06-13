@@ -4310,8 +4310,8 @@ function update(){
     spd *= BOOST_MULT;
     var prevBoostE = boostE;
     boostE = Math.max(0, boostE - 0.50); // faster drain — ~3.3s full boost (was 0.30 = 5.5s)
-    // Eject 2 boost-pebbles per burst every 0.70 boostE — pebbles have value:3 so
-    // collecting them gives 3× growth. Shrink 2 logical units per burst (was 1).
+    // Eject 3 boost-pebbles per burst every 0.70 boostE — pebbles have value:3 so
+    // collecting them gives 3× growth. Shrink 4 logical units per burst (= 16 segs).
     var _minLen = Math.round(100 / SEG_MULT);
     if(player.segs.length > 100 && Math.floor(prevBoostE / 0.70) > Math.floor(boostE / 0.70)){
       var tl=player.segs[player.segs.length-1];
@@ -4320,8 +4320,12 @@ function update(){
         var tl2=player.segs[player.segs.length-2];
         addFood(tl2.x+(Math.random()-.5)*10, tl2.y+(Math.random()-.5)*10, true); // boost pebble
       }
-      // Shrink 2 logical units per burst (= 8 segs trimmed by while-loop below)
-      player.length = Math.max(_minLen, player.length - 2);
+      if(player.segs.length > 104){
+        var tl3=player.segs[player.segs.length-3];
+        addFood(tl3.x+(Math.random()-.5)*10, tl3.y+(Math.random()-.5)*10, true); // boost pebble
+      }
+      // Shrink 4 logical units per burst (= 16 segs trimmed by while-loop below)
+      player.length = Math.max(_minLen, player.length - 4);
     }
   } else {
     boostE = Math.min(100, boostE + 0.20);
