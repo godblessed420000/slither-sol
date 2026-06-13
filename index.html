@@ -3096,7 +3096,9 @@ function _wsHandleMsg(msg, fromAbly) {
     if (isNew && !d.reply) toast((d.n || 'A player') + ' entered the arena!', 'info');
     // Reply so the joining player knows we exist.
     // Must reply via Ably — the new player listens on the Ably channel, not fly.io WS.
-    if (isNew && _currentTier && _ablyChannel) {
+    // When in-game, reply to ALL WS joins (not just isNew) — existing players may have
+    // shared lobby state but the new joiner still needs our Ably join to verify us.
+    if (_currentTier && _ablyChannel && (isNew || (gameRunning && !fromAbly))) {
       var myName2 = userProfile ? userProfile.name.split(' ')[0].slice(0,14) : 'Player';
       try { _ablyChannel.publish('join', { n: myName2, color: _playerColor, reply: true }); } catch(_) {}
     }
@@ -3233,9 +3235,13 @@ function _wsJoin(tier) {
     // tier MUST be top-level — server reads { type, clientId, tier, data } from message root
     // Send join to fly.io WS so the server routes pos messages to the right tier room
     _ws.send(JSON.stringify({ type:'join', clientId:_wsClientId, tier:_currentTier, data:{ n:_currentName, color:_currentColor } }));
-    // Re-announce every 4s so late-joiners discover us.
-    // Announcement goes through Ably — that's where other players listen for peers.
-    // fly.io WS gets it too so the server keeps the room mapping current.
+    // Announce immediately via Ably so existing players set _ablyVerifiedPeers for us right away.
+    // Without this, joiners who shared lobby state (isNew=false on existing players) would be
+    // invisible for up to 6s until the ping timer fires.
+    if (_ablyChannel) {
+      try { _ablyChannel.publish('join', { n: _currentName, color: _currentColor, reply: false }); } catch(_) {}
+    }
+    // Re-announce every 6s so late-joiners discover us.
     clearInterval(_lobbyPingTimer);
     _lobbyPingTimer = setInterval(function() {
       // Always re-announce so mid-game joiners can discover us via _ablyVerifiedPeers.
