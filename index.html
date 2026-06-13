@@ -102,7 +102,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:5px
 .canvas-wrap.game-active{cursor:none;}
 .overlay{cursor:default!important;}
 canvas{display:block;width:100%;height:100%;}
-#minimap{position:absolute;bottom:12px;right:12px;width:108px;height:108px;border:1px solid var(--purple);border-radius:4px;box-shadow:0 0 10px rgba(153,69,255,.3);}
+#minimap{position:absolute;top:12px;right:12px;width:108px;height:108px;border:2px solid var(--purple);border-radius:50%;box-shadow:0 0 14px rgba(153,69,255,.5);}
 .hud-top{position:absolute;top:10px;left:50%;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:2px;pointer-events:none;}
 .hud-score{font-family:'Orbitron',monospace;font-size:1.05rem;font-weight:700;color:var(--green);text-shadow:0 0 10px rgba(20,241,149,.55);}
 .hud-sub{font-size:.63rem;color:var(--dim);}
@@ -4748,8 +4748,6 @@ function startSpectating(){
   var ov=document.getElementById('ovDeath'); if(ov) ov.classList.add('hidden');
   // Full-screen canvas: hide sidebar and resize (mirrors launchGame behaviour)
   if(_elSidebar) _elSidebar.style.display='none'; setTimeout(resizeC,30);
-  // Lift minimap above the specHud bar so the full 108px is visible
-  var _mm=document.getElementById('minimap'); if(_mm) _mm.style.bottom='70px';
   var sh=document.getElementById('specHud'); if(sh) sh.style.display='flex';
   _updateSpecHud();
   loop();
@@ -4767,7 +4765,6 @@ function _exitSpectate(){
   _spectating=false; _specTargetId=null;
   var sh=document.getElementById('specHud'); if(sh) sh.style.display='none';
   var ov=document.getElementById('ovDeath'); if(ov) ov.classList.remove('hidden');
-  var _mm=document.getElementById('minimap'); if(_mm) _mm.style.bottom='';
   if(_elSidebar) _elSidebar.style.display=''; setTimeout(resizeC,30);
 }
 function draw(){
@@ -4940,16 +4937,20 @@ function drawS(s){
 }
 
 function drawMM(){
-  var s=108/WORLD; mctx.clearRect(0,0,108,108); mctx.fillStyle='rgba(2,8,16,.85)'; mctx.fillRect(0,0,108,108);
+  var s=108/WORLD;
+  mctx.clearRect(0,0,108,108);
+  mctx.save();
+  // Clip everything to a circle
+  mctx.beginPath(); mctx.arc(54,54,54,0,Math.PI*2); mctx.clip();
+  mctx.fillStyle='rgba(2,8,16,.85)'; mctx.fillRect(0,0,108,108);
   mctx.fillStyle='rgba(255,255,255,.11)'; for(var i=0;i<food.length;i++) mctx.fillRect(food[i].x*s,food[i].y*s,1,1);
   for(var i=0;i<peers.length;i++){ if(!peers[i].alive) continue; mctx.fillStyle=peers[i].color; mctx.fillRect(peers[i].x*s-2,peers[i].y*s-2,4,4); }
   if(player&&player.alive){ mctx.fillStyle='#14F195'; mctx.shadowBlur=5; mctx.shadowColor='#14F195'; mctx.fillRect(player.x*s-3,player.y*s-3,6,6); mctx.shadowBlur=0; }
-  // While spectating, mark the followed player with a white dot so they stand out on the map
   if(_spectating&&_specTargetId){ var _smp=peers.find(function(p){return p.remoteId===_specTargetId&&p.alive;}); if(_smp){ mctx.fillStyle='#fff'; mctx.shadowBlur=5; mctx.shadowColor='#fff'; mctx.fillRect(_smp.x*s-3,_smp.y*s-3,6,6); mctx.shadowBlur=0; } }
-  // Viewport box follows camX/camY so it tracks the spectated player, not the dead local player
   var vpW=(gc.width/CAM_ZOOM)*s, vpH=(gc.height/CAM_ZOOM)*s;
   var vpX=(camX-gc.width/2/CAM_ZOOM)*s, vpY=(camY-gc.height/2/CAM_ZOOM)*s;
   mctx.strokeStyle='rgba(153,69,255,.4)'; mctx.lineWidth=1; mctx.strokeRect(vpX,vpY,vpW,vpH);
+  mctx.restore();
 }
 
 function spawnPt(x,y,color){ for(var i=0;i<6;i++) parts.push({x:x,y:y,vx:(Math.random()-.5)*5,vy:(Math.random()-.5)*5,r:2+Math.random()*2,color:color,life:22+Math.random()*12,max:34}); }
