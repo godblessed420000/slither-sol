@@ -4032,6 +4032,7 @@ function launchGame() {
     saveSession();
   }
   spawnPlayer();
+  if(player) _smoothLen=player.segs.length; // zoom starts at actual snake size — no mismatch
   // No AI bots — remote players come entirely via Ably
   peers = peers.filter(function(p){ return p.isRemote&&p.alive; });
   // Seed 35 orbs near the map center, then fill the rest randomly
@@ -4070,9 +4071,9 @@ function launchGame() {
   updateLB(); loop();
 }
 
-function mkSnake(x,y,color,name,isMe){
-  var initSegs = 55;                             // start size = 55 segments
-  var initLen  = Math.round(initSegs/SEG_MULT);  // base length unit (~11)
+function mkSnake(x,y,color,name,isMe,startSegs){
+  var initSegs = startSegs || 55;               // default 55; mid-match spawn passes peer average
+  var initLen  = Math.round(initSegs/SEG_MULT);
   var segs=[]; for(var i=0;i<initSegs;i++) segs.push({x:x-i*2,y:y});
   return{x:x,y:y,segs:segs,angle:0,color:color,name:name,isMe:isMe,speed:BASE_SPEED,
          headR:Math.max(8,Math.min(20,8+initLen*0.1)),length:initLen,score:0,alive:true};
@@ -4111,7 +4112,14 @@ function spawnPlayer(){
   var sx=best?best.x:cx+(Math.random()-.5)*400;
   var sy=best?best.y:cy+(Math.random()-.5)*400;
   var pn=userProfile?userProfile.name.split(' ')[0].slice(0,14):'YOU';
-  player=mkSnake(sx,sy,_playerColor,pn,true);
+  // Mid-match size: start at the average live peer length so new joiners aren't tiny
+  var _livePeers=peers.filter(function(p){ return p.alive&&p.isRemote; });
+  var _startSegs=55;
+  if(_livePeers.length>0){
+    var _avgSegs=Math.round(_livePeers.reduce(function(s,p){ return s+p.length*SEG_MULT; },0)/_livePeers.length);
+    _startSegs=Math.max(55,Math.min(_avgSegs,150));
+  }
+  player=mkSnake(sx,sy,_playerColor,pn,true,_startSegs);
 }
 function spawnPeers(){ /* no-op — real players only, all peers come from Ably */ }
 function spawnFood(n){ for(var i=0;i<n;i++) addFood(); }
