@@ -127,6 +127,8 @@ canvas{display:block;width:100%;height:100%;}
 #chatInputEl{width:100%;background:transparent;border:none;outline:none;color:var(--text);font-family:'Share Tech Mono',monospace;font-size:.77rem;caret-color:var(--green);}
 .kill-feed{position:absolute;top:8px;right:130px;display:flex;flex-direction:column;gap:3px;pointer-events:none;max-width:210px;}
 .kill-item{background:rgba(0,0,0,.6);border-left:2px solid var(--red);padding:3px 8px;font-size:.6rem;color:var(--text);border-radius:0 3px 3px 0;animation:sli .25s ease,fad .4s 2.6s forwards;}
+.kill-item.headshot{border-left:3px solid var(--gold);color:var(--gold);font-weight:700;font-size:.65rem;background:rgba(255,215,0,.08);}
+.kill-item.kill{border-left:2px solid var(--green);color:var(--green);}
 @keyframes sli{from{opacity:0;transform:translateX(14px)}to{opacity:1;transform:translateX(0)}}
 @keyframes fad{to{opacity:0}}
 .overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(2,8,16,.92);backdrop-filter:blur(5px);z-index:20;gap:14px;padding:16px;overflow-y:auto;}
@@ -1336,11 +1338,11 @@ function _toastFallbackCopy(text, btn) {
   }
 }
 
-function kFeed(msg){
+function kFeed(msg, type){
   var el=document.createElement('div');
-  el.className='kill-item'; el.textContent=msg;
+  el.className='kill-item'+(type?' '+type:''); el.textContent=msg;
   var feed=document.getElementById('killFeed');
-  if(feed){ feed.prepend(el); setTimeout(function(){ el.remove(); },3000); }
+  if(feed){ feed.prepend(el); setTimeout(function(){ el.remove(); },3500); }
 }
 
 function hideAll(){
@@ -3202,11 +3204,11 @@ function _wsHandleMsg(msg, fromAbly) {
       if (earnedSol > 0) {
         killSOL += earnedSol;
         W.balance += earnedSol; saveSession(); refreshWalletUI();
-        kFeed('🗡 YOU eliminated ' + (rp ? rp.name : 'a player') + ' (+' + earnedSol.toFixed(4) + ' SOL)');
+        kFeed('🗡 KILL +' + earnedSol.toFixed(4) + ' SOL — ' + (rp ? rp.name : 'a player') + ' eliminated', 'kill');
         // Refresh on-chain balance after TX propagation window (~5s) to pick up the kill transfer
         setTimeout(function() { if (W.pubkey) refreshBalance(null); }, 5000);
       } else {
-        kFeed('🗡 YOU eliminated ' + (rp ? rp.name : 'a player') + ' [Free Play]');
+        kFeed('🗡 YOU eliminated ' + (rp ? rp.name : 'a player') + ' [Free Play]', 'kill');
       }
     }
     return;
@@ -4466,7 +4468,8 @@ function killCheck(){
       var iLose = player.segs.length < p.segs.length ||
                   (player.segs.length === p.segs.length && myId > (p.remoteId||''));
       if(iLose){ killPlayer('Head-on with '+p.name, p.remoteId); return; }
-      // If I win: do nothing — the other client detects iLose on their side and calls killPlayer
+      // I won the head-on — show headshot notification immediately (kill credit arrives via die msg)
+      kFeed('💥 HEADSHOT! You outgunned '+p.name+' head-on!', 'headshot');
     }
     // — Check 3: their head hit MY body → they detect this themselves (self-authority)
     //   Do NOT call killPeer here — it causes the double-kill desync bug.
