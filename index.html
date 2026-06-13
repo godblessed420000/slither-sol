@@ -3216,7 +3216,7 @@ function _wsHandleMsg(msg, fromAbly) {
       var lobby = _lobbyPeers[cid] || {};
       var usedColors = peers.map(function(p){ return p.color; });
       var col = d.color || lobby.color || PC.find(function(c){ return usedColors.indexOf(c)<0; }) || PC[1];
-      var initLen = d.l || 5;
+      var initLen = d.l || Math.round(55 / SEG_MULT); // match real starting size
       delete _processedDies[cid]; // respawn — reset so their new death is tracked fresh
       var _rpJoinTs = Date.now();
       rp = {
@@ -3231,7 +3231,9 @@ function _wsHandleMsg(msg, fromAbly) {
       };
       rp.headR = Math.max(13, Math.min(24, 13 + initLen * 0.1));
       var initSegs = Math.min(initLen * SEG_MULT, 120);
-      for (var i=0; i<initSegs; i++) rp.segs.push({x:d.x,y:d.y});
+      // Spread segments backward along the peer's angle so the snake looks full-size immediately
+      var _ia = d.a || 0;
+      for (var i=0; i<initSegs; i++) rp.segs.push({x: d.x - Math.cos(_ia)*i*2, y: d.y - Math.sin(_ia)*i*2});
       _remoteMap[cid] = rp;
       peers.push(rp);
       _updateArenaSize(); // world grows when a new player enters
