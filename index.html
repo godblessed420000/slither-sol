@@ -3198,7 +3198,7 @@ function _wsHandleMsg(msg, fromAbly) {
         remoteId: cid,
         velX: 0, velY: 0, lastT: performance.now()
       };
-      rp.headR = Math.max(8, Math.min(20, 8 + initLen * 0.1));
+      rp.headR = Math.max(13, Math.min(24, 13 + initLen * 0.1));
       var initSegs = Math.min(initLen * SEG_MULT, 120);
       for (var i=0; i<initSegs; i++) rp.segs.push({x:d.x,y:d.y});
       _remoteMap[cid] = rp;
@@ -3214,7 +3214,7 @@ function _wsHandleMsg(msg, fromAbly) {
       rp.targetX = d.x; rp.targetY = d.y; rp.targetAngle = d.a||0;
       rp.score = d.s||0;
       if (d.v === false) { rp.alive = false; }
-      if (d.l) { rp.length = d.l; rp.headR = Math.max(8, Math.min(20, 8 + rp.length * 0.1)); }
+      if (d.l) { rp.length = d.l; rp.headR = Math.max(13, Math.min(24, 13 + rp.length * 0.1)); }
     }
     return;
   }
@@ -4395,7 +4395,7 @@ function update(){
   while(player.segs.length > _tgt) player.segs.pop();
 
   // ── Update local player headR so collision radius stays accurate as they grow ──
-  player.headR = Math.max(8, Math.min(20, 8 + player.length * 0.1));
+  player.headR = Math.max(13, Math.min(24, 13 + player.length * 0.1)); // match visual hs formula
 
   // ── Remote players: dead reckoning + LERP toward predicted position ──
   var rNow = performance.now(); // one call per frame — shared across all remote peers
@@ -4511,7 +4511,7 @@ function killCheck(){
     // forces head-on scenarios into Check 2 where a deterministic tiebreaker picks ONE winner.
     var segLimit = Math.min(p.segs.length, 80);
     for(var j=10;j<segLimit;j++){
-      if(dst(player.x,player.y,p.segs[j].x,p.segs[j].y)<player.headR+10){
+      if(dst(player.x,player.y,p.segs[j].x,p.segs[j].y)<player.headR+p.headR){
         killPlayer('Eliminated by '+p.name, p.remoteId); return;
       }
     }
