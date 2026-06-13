@@ -3452,6 +3452,7 @@ function _wpConnect() {
 
   _wpWs.onopen = function() {
     clearTimeout(_wpConnTimer);
+    _startLbTimer(); // keep leaderboard live from this point on
     // Announce our presence — include stats so other players see our leaderboard data
     function _wpAnnounce(isReply) {
       if (!_wpWs || _wpWs.readyState !== WebSocket.OPEN) return;
@@ -3527,12 +3528,14 @@ function _wpHandleMsg(msg) {
       }
     });
     if (panelOpen && currentTab === 'find') renderFriendsPanel();
+    renderLB();
     return;
   }
 
   if (type === 'leave') {
     delete _wpPeers[cid];
     if (panelOpen && currentTab === 'find') renderFriendsPanel();
+    renderLB();
     return;
   }
 
@@ -5886,21 +5889,17 @@ var _lbRefreshTimer=null;
 
 function openLeaderboard(){
   var el=document.getElementById('lbModal'); if(el) el.classList.remove('hidden');
-  // Ping all peers so they re-send fresh stats
-  if(_wpWs&&_wpWs.readyState===WebSocket.OPEN&&_wpMyId){
-    _wpWs.send(JSON.stringify({type:'join',clientId:_wpMyId,tier:'presence',
-      data:{n:_wpMyName(),color:_playerColor,reply:false,
-        games:(W.stats&&W.stats.games)||0,kills:myKills||0,
-        earned:(W.stats&&W.stats.earned)||0,wins:(W.stats&&W.stats.wins)||0}}));
-  }
   renderLB();
-  clearInterval(_lbRefreshTimer);
-  _lbRefreshTimer=setInterval(renderLB,3000);
 }
 
 function closeLeaderboard(){
   var el=document.getElementById('lbModal'); if(el) el.classList.add('hidden');
-  clearInterval(_lbRefreshTimer); _lbRefreshTimer=null;
+}
+
+// Start persistent leaderboard refresh — runs forever after login
+function _startLbTimer(){
+  if(_lbRefreshTimer) return; // already running
+  _lbRefreshTimer=setInterval(renderLB,3000);
 }
 
 function switchLBTab(tab){
@@ -5911,6 +5910,8 @@ function switchLBTab(tab){
 }
 
 function renderLB(){
+  var modal=document.getElementById('lbModal');
+  if(!modal||modal.classList.contains('hidden')) return; // skip DOM work while closed
   var body=document.getElementById('lbmBody'); if(!body) return;
   // Build from real live peers + self
   var entries=[];
