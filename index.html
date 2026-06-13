@@ -4809,6 +4809,17 @@ function killPlayer(reason, killedBy){
   setTimeout(function(){ if(W.pubkey) _fetchPrivyWalletBalance(W.pubkey); }, 5000);
   if(_elSidebar) _elSidebar.style.display=''; setTimeout(resizeC,30);
   for(var i=0;i<Math.min(player.segs.length,70);i++) addFood(player.segs[i].x+(Math.random()-.5)*18,player.segs[i].y+(Math.random()-.5)*18);
+  // Border death: scatter gold coins at the exact death spot to show where the money dropped
+  if(reason==='Hit the boundary'){
+    var _gdx=player.x, _gdy=player.y;
+    var _goldCount=Math.max(20, Math.min(Math.round(carriedSol*SOL_USD*4+20), 50));
+    for(var _gi=0;_gi<_goldCount;_gi++){
+      if(food.length<MAX_FOOD) food.push({
+        x:_gdx+(Math.random()-.5)*120, y:_gdy+(Math.random()-.5)*120,
+        r:5+Math.random()*3, color:'#FFD700', value:4
+      });
+    }
+  }
   player.segs = []; // wipe body immediately — prevents ghost rendering on any trailing draw call
   cleanupL(true); cancelCharge(); // keepAbly=true so spectating can still receive pos updates
   var t=TIERS[activeTier];
