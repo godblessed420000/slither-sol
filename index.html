@@ -3695,6 +3695,7 @@ var _autoCircle=false; // Y key — snake spins in a tight circle at max turn ra
 // ── Cached HUD element refs — set once at game start, avoids getElementById every frame ──
 var _elHudScore=null,_elHudSub=null,_elCashoutEarnVal=null,_elBoostBar=null;
 var _elCashoutQhint=null,_elPingEl=null,_elSidebar=null;
+var _hudScoreV='',_hudSubV='',_hudEarnV='',_hudBoostV='';
 var _LERP=0.42; // remote snake interpolation — constant, declared outside update loop
 function _cacheHudEls(){
   _elHudScore       = document.getElementById('hudScore');
@@ -3878,7 +3879,7 @@ function launchGame() {
   if(tb){ tb.style.display='inline-flex'; tb.className='lobby-badge '+t.badgeCls; tb.textContent=t.name; }
   var alb=document.getElementById('activeLobbyBadge');
   if(alb){ alb.style.display='flex'; alb.innerHTML='<div class="lobby-badge '+t.badgeCls+'">● '+t.name+' Active</div>'; }
-  score=0; myKills=0; killSOL=0; boostE=100; boosting=false; cashingOut=false; qDown=false; _zoomOffset=0; CAM_ZOOM=1.0; _smoothLen=100; _autoCircle=false;
+  score=0; myKills=0; killSOL=0; boostE=100; boosting=false; cashingOut=false; qDown=false; _zoomOffset=0; CAM_ZOOM=1.0; _smoothLen=100; _autoCircle=false; _hudScoreV=''; _hudSubV=''; _hudEarnV=''; _hudBoostV='';
   _updateArenaSize(); // set WORLD/WORLD_R based on how many remote players are already in the room
   // Restore W.balance from on-chain if it was zeroed by a previous death or is stale.
   // refreshBalance() won't sync during gameplay (gameRunning guard), so we must do it here.
@@ -4395,22 +4396,26 @@ function update(){
 
   camX=player.x; camY=player.y;
   var isFreeGame=(activeTier==='free');
-  // Use cached element refs — no more getElementById every 60fps
-  if(_elHudScore) _elHudScore.textContent='SCORE: '+score+(myKills>0?' · KILLS: '+myKills:'');
+  // Only write DOM when value actually changes — avoids layout triggers at 60fps
+  var _hs='SCORE: '+score+(myKills>0?' · KILLS: '+myKills:'');
+  if(_elHudScore&&_hs!==_hudScoreV){ _elHudScore.textContent=_hs; _hudScoreV=_hs; }
   if(_elHudSub){
+    var _hsu;
     if(isFreeGame){
-      _elHudSub.textContent='Length: '+len+' · Free Play · Hold [Q] 1s to exit';
+      _hsu='Length: '+len+' · Free Play · Hold [Q] 1s to exit';
     } else {
       var hudCarry=(W.balance>0)?'Carrying: '+(W.balance||0).toFixed(4)+' SOL · ':'';
-      var hudCircle=_autoCircle?'🔄 AUTO-CIRCLE [Y] · ':'';
-      _elHudSub.textContent='Length: '+len+' · '+hudCarry+hudCircle+'Hold [Q] 1s to cashout';
+      var hudCircle=_autoCircle?'AUTO-CIRCLE · ':'';
+      _hsu='Length: '+len+' · '+hudCarry+hudCircle+'Hold [Q] 1s to cashout';
     }
+    if(_hsu!==_hudSubV){ _elHudSub.textContent=_hsu; _hudSubV=_hsu; }
   }
   if(_elCashoutEarnVal){
-    if(isFreeGame) _elCashoutEarnVal.textContent='Free Play';
-    else _elCashoutEarnVal.textContent=(W.balance||0).toFixed(4)+' SOL carrying';
+    var _he=isFreeGame?'Free Play':((W.balance||0).toFixed(4)+' SOL carrying');
+    if(_he!==_hudEarnV){ _elCashoutEarnVal.textContent=_he; _hudEarnV=_he; }
   }
-  if(_elBoostBar) _elBoostBar.style.width=boostE+'%';
+  var _hb=Math.round(boostE)+'%';
+  if(_elBoostBar&&_hb!==_hudBoostV){ _elBoostBar.style.width=_hb; _hudBoostV=_hb; }
 }
 
 function moveS(s,angle,spd){
@@ -4639,27 +4644,26 @@ function draw(){
   ctx.translate(-camX, -camY);
   var t=TIERS[activeTier]||TIERS[1];
   var cx=WORLD/2, cy=WORLD/2;
-  // Dark area outside arena
-  ctx.fillStyle='rgba(0,0,0,.6)';
-  ctx.fillRect(0,0,WORLD,WORLD);
-  ctx.save();
-  ctx.beginPath(); ctx.arc(cx,cy,WORLD_R-2,0,Math.PI*2);
-  ctx.clip();
-  ctx.clearRect(0,0,WORLD,WORLD);
-  ctx.restore();
-  // Circular arena border
-  ctx.beginPath(); ctx.arc(cx,cy,WORLD_R-2,0,Math.PI*2);
-  ctx.strokeStyle=t.color; ctx.lineWidth=6;
-  ctx.shadowBlur=18; ctx.shadowColor=t.color; ctx.stroke(); ctx.shadowBlur=0;
-  // Inner danger ring
-  ctx.beginPath(); ctx.arc(cx,cy,WORLD_R-30,0,Math.PI*2);
-  ctx.strokeStyle='rgba(255,69,96,.25)'; ctx.lineWidth=28; ctx.stroke();
-  // ── Viewport bounds for culling (world-space, with buffer) ──
+  // ── Viewport bounds computed first — used for culling AND background fill ──
   var vBuf=180;
   var vx1=camX - gc.width/(2*CAM_ZOOM) - vBuf;
   var vx2=camX + gc.width/(2*CAM_ZOOM) + vBuf;
   var vy1=camY - gc.height/(2*CAM_ZOOM) - vBuf;
   var vy2=camY + gc.height/(2*CAM_ZOOM) + vBuf;
+  // Dark area outside arena — fill only the visible viewport minus the arena circle.
+  // Old approach: fillRect(0,0,WORLD,WORLD) painted 6.7M px/frame then cleared most of it.
+  // Even-odd: viewport rect is wound CW, circle arc is wound CCW → fills only the gap.
+  ctx.fillStyle='rgba(0,0,0,.72)';
+  ctx.beginPath();
+  ctx.rect(vx1,vy1,vx2-vx1,vy2-vy1);
+  ctx.arc(cx,cy,WORLD_R-2,0,Math.PI*2,true);
+  ctx.fill('evenodd');
+  // Circular arena border
+  ctx.beginPath(); ctx.arc(cx,cy,WORLD_R-2,0,Math.PI*2);
+  ctx.strokeStyle=t.color; ctx.lineWidth=6; ctx.stroke();
+  // Inner danger ring
+  ctx.beginPath(); ctx.arc(cx,cy,WORLD_R-30,0,Math.PI*2);
+  ctx.strokeStyle='rgba(255,69,96,.25)'; ctx.lineWidth=28; ctx.stroke();
 
   // Batch food by color — plain filled circles, no shadowBlur (shadow is a major GPU cost)
   var _fc={};
@@ -4677,7 +4681,7 @@ function draw(){
     for(var fi=0;fi<_fl.length;fi++){ var f=_fl[fi]; ctx.moveTo(f.x+f.r,f.y); ctx.arc(f.x,f.y,f.r,0,Math.PI*2); }
     ctx.fill();
   }
-  for(var i=parts.length-1;i>=0;i--){ var p=parts[i]; p.x+=p.vx; p.y+=p.vy; p.life--; ctx.globalAlpha=p.life/p.max; ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fillStyle=p.color; ctx.fill(); if(p.life<=0) parts.splice(i,1); }
+  for(var i=parts.length-1;i>=0;i--){ var p=parts[i]; p.x+=p.vx; p.y+=p.vy; p.life--; if(p.life<=0){ parts[i]=parts[parts.length-1]; parts.length--; continue; } ctx.globalAlpha=p.life/p.max; ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fillStyle=p.color; ctx.fill(); }
   ctx.globalAlpha=1;
   // Draw snakes — viewport-cull remote snakes (head off-screen + no long tail visible)
   for(var i=0;i<peers.length;i++){
@@ -4695,39 +4699,34 @@ function draw(){
     ctx.globalAlpha=0.75;
     ctx.strokeStyle='rgba(255,255,255,0.9)';
     ctx.lineWidth=1.5;
-    ctx.shadowBlur=6; ctx.shadowColor='rgba(255,255,255,0.6)';
     ctx.beginPath();
     ctx.moveTo(cx2-cs,cy2); ctx.lineTo(cx2+cs,cy2);
     ctx.moveTo(cx2,cy2-cs); ctx.lineTo(cx2,cy2+cs);
     ctx.stroke();
     ctx.beginPath(); ctx.arc(cx2,cy2,3,0,Math.PI*2);
     ctx.fillStyle='rgba(255,255,255,0.95)'; ctx.fill();
-    ctx.shadowBlur=0; ctx.globalAlpha=1;
+    ctx.globalAlpha=1;
     ctx.restore();
   }
 
-  if(_elCashoutQhint) _elCashoutQhint.textContent=qDown&&cashingOut?'Cashing out... '+Math.round(Math.min((performance.now()-qStart)/CASHOUT_MS*100,100))+'%':'Hold Q to cashout';
+  if(_elCashoutQhint){ var _qh=qDown&&cashingOut?'Cashing out... '+Math.round(Math.min((performance.now()-qStart)/CASHOUT_MS*100,100))+'%':'Hold Q to cashout'; if(_qh!==_elCashoutQhint._last){ _elCashoutQhint.textContent=_qh; _elCashoutQhint._last=_qh; } }
 }
 
 function drawS(s){
   if(s.segs.length<2) return;
   // Cap rendered segments — long tails go off-screen anyway and beziers are expensive
-  var n = Math.min(s.segs.length, 120);
+  var n = Math.min(s.segs.length, 80);
   // Head radius — body width derived from it so body diameter === head diameter
   var hs   = Math.max(10, Math.min(18, 10 + s.length * 0.08));
   var baseW = hs * 2; // body stroke width = head diameter → uniform thickness
   ctx.lineCap='round'; ctx.lineJoin='round';
 
-  // ── Outer glow — only for local player (shadow blur is expensive, skip on remote) ──
+  // ── Outer glow — wider semi-transparent pass (no shadowBlur — too expensive) ──
   if(s.isMe){
-    ctx.save();
     ctx.beginPath(); ctx.moveTo(s.segs[0].x,s.segs[0].y);
     for(var i=1;i<n;i++) ctx.lineTo(s.segs[i].x,s.segs[i].y);
-    ctx.strokeStyle=s.color; ctx.lineWidth=baseW+6;
-    ctx.shadowBlur=18; ctx.shadowColor=s.color;
-    ctx.globalAlpha=0.15; ctx.stroke();
-    ctx.shadowBlur=0; ctx.globalAlpha=1;
-    ctx.restore();
+    ctx.strokeStyle=s.color; ctx.lineWidth=baseW+10;
+    ctx.globalAlpha=0.09; ctx.stroke(); ctx.globalAlpha=1;
   }
 
   // ── Smooth body using quadratic bezier midpoints ──
@@ -4759,17 +4758,9 @@ function drawS(s){
   for(var i=1;i<Math.min(n,40);i++) ctx.lineTo(s.segs[i].x,s.segs[i].y);
   ctx.strokeStyle='rgba(0,0,0,.28)'; ctx.lineWidth=baseW*.22; ctx.stroke();
   // HEAD — hs already computed at top of drawS (body and head share same size formula)
-  // head shadow (only for player)
-  if(s.isMe){
-    ctx.beginPath(); ctx.arc(s.x,s.y,hs+3,0,Math.PI*2);
-    ctx.fillStyle=s.color; ctx.shadowBlur=18; ctx.shadowColor=s.color; ctx.globalAlpha=.3; ctx.fill();
-    ctx.shadowBlur=0; ctx.globalAlpha=1;
-  }
-  // head fill
+  // head fill — solid color (radial gradient rebuilt every frame was a GC/GPU cost)
   ctx.beginPath(); ctx.arc(s.x,s.y,hs,0,Math.PI*2);
-  var hg=ctx.createRadialGradient(s.x-hs*.3,s.y-hs*.3,hs*.1,s.x,s.y,hs);
-  hg.addColorStop(0,'rgba(255,255,255,.35)'); hg.addColorStop(1,s.color);
-  ctx.fillStyle=hg; ctx.fill();
+  ctx.fillStyle=s.color; ctx.fill();
   // head outline
   ctx.strokeStyle='rgba(255,255,255,.2)'; ctx.lineWidth=1.5; ctx.stroke();
   // EYES - realistic slither.io style
