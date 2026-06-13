@@ -2031,12 +2031,9 @@ async function refreshBalance(btn) {
     _lastRpcEndpoint = res.endpoint;
     _rpcStatus[res.endpoint] = { ok:true, latency:ms, tested:true };
     W.onChainBalance = res.lamports / 1e9;
-    // Always sync to on-chain when not in-game — on-chain is ground truth.
-    // During gameplay, W.balance carries optimistic kill credits not yet on-chain.
-    if (!gameRunning) {
-      W.balance  = W.onChainBalance;
-      W.lamports = Math.floor(W.balance * 1e9);
-    }
+    // Always sync to on-chain — on-chain is ground truth.
+    W.balance  = W.onChainBalance;
+    W.lamports = Math.floor(W.balance * 1e9);
     saveSession();
     updateWalletDisplays(); // also calls updateMobileWalletBar()
     _wbStartRefreshCounter();
@@ -3988,22 +3985,21 @@ function launchGame() {
   // Kick off a live fetch now; if it resolves fast, use it — otherwise fall back to cache.
   if(W.pubkey){
     _fetchBalanceWithFallback(W.pubkey).then(function(r){
+      // Always sync to on-chain at game start — on-chain is ground truth.
+      // localStorage W.balance can be inflated by failed kill TXs; reset it now.
       W.onChainBalance = r.lamports / 1e9;
-      // If W.balance is near-zero but wallet has funds, restore it so cashout has a value
-      if((W.balance||0) < 0.0001 && W.onChainBalance > 0.0001){
-        W.balance  = W.onChainBalance;
-        W.lamports = Math.floor(W.onChainBalance * 1e9);
-        saveSession();
-      }
+      W.balance  = W.onChainBalance;
+      W.lamports = Math.floor(W.onChainBalance * 1e9);
+      saveSession(); refreshWalletUI();
     }).catch(function(){
-      // Fallback: use cached on-chain if balance is zero
-      if((W.balance||0) < 0.0001 && (W.onChainBalance||0) > 0.0001){
+      // RPC failed — fall back to cached on-chain value
+      if((W.onChainBalance||0) > 0){
         W.balance  = W.onChainBalance;
         W.lamports = Math.floor(W.onChainBalance * 1e9);
         saveSession();
       }
     });
-  } else if((W.balance||0) < 0.0001 && (W.onChainBalance||0) > 0.0001){
+  } else if((W.onChainBalance||0) > 0){
     W.balance  = W.onChainBalance;
     W.lamports = Math.floor(W.onChainBalance * 1e9);
     saveSession();
