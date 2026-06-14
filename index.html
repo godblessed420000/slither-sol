@@ -4534,9 +4534,9 @@ function update(){
   // ── Speed + boost ──
   // Boost requires 100+ segments — too small = no boost
   if(boosting && player.segs.length < 55) boosting = false;
-  var spd = _isTouchDev ? BASE_SPEED * 1.25 : BASE_SPEED; // mobile gets 25% faster base
+  var spd = BASE_SPEED; // all players same base speed — no device advantage
   if(boosting && boostE>0){
-    spd *= _isTouchDev ? BOOST_MULT * 0.9 : BOOST_MULT * 0.8; // mobile: ~1.7× desktop: ~1.2× (slower than before)
+    spd *= BOOST_MULT; // same boost multiplier for everyone
     var prevBoostE = boostE;
     boostE = Math.max(0, boostE - 0.12); // ~14s full boost
     if(boostE <= 0) _boostExhaustedUntil = performance.now() + 3000; // trigger 3s penalty
@@ -4688,13 +4688,13 @@ function killCheck(){
     // — Body collision — same radius on both sides for fair/symmetric hitboxes.
     // iHitTheirBody has a 2-frame debounce (below) to filter LERP false positives.
     var iHitTheirBody = false;
-    for(var j=10;j<segLimit;j++){
+    for(var j=5;j<segLimit;j++){
       if(dst(player.x,player.y,p.segs[j].x,p.segs[j].y) < player.headR+p.headR){
         iHitTheirBody=true; break;
       }
     }
     var theyHitMyBody = false;
-    for(var k=10;k<myLimit;k++){
+    for(var k=5;k<myLimit;k++){
       if(dst(px,py,player.segs[k].x,player.segs[k].y) < p.headR+player.headR){
         theyHitMyBody=true; break;
       }
