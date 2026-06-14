@@ -18,7 +18,7 @@ jobs:
       - name: Stamp build version
         run: |
           # Use the Actions run number — increments with every deploy, no git history needed.
-          BUILD="V${{ github.run_number }}"
+          BUILD="V$((${{ github.run_number }} - 112))"
           # Update the JS config variable (drives all version displays at runtime)
           sed -i "s/var GAME_BUILD = .*/var GAME_BUILD = '${BUILD}';/" index.html
           # Update static HTML placeholders (visible before JS loads)
