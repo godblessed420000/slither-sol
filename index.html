@@ -4670,10 +4670,10 @@ function eatFood(){
 function killCheck(){
   if(!player.alive) return;
   var myId = _wsClientId || 'zzz';
-  var myLimit = Math.min(player.segs.length, 130);
+  var myLimit = player.segs.length;
   for(var i=0;i<peers.length;i++){
     var p=peers[i]; if(!p.alive) continue;
-    var segLimit = Math.min(p.segs.length, 130);
+    var segLimit = p.segs.length;
     var px = (p.targetX!=null)?p.targetX:p.x;
     var py = (p.targetY!=null)?p.targetY:p.y;
 
@@ -5010,7 +5010,7 @@ function draw(){
 
 function drawS(s){
   if(s.segs.length<2) return;
-  var n = Math.min(s.segs.length, 130);
+  var n = s.segs.length;
   var hs   = Math.max(13, Math.min(22, 13 + s.length * 0.08));
   var baseW = hs * 2;
   ctx.lineCap='round'; ctx.lineJoin='round';
