@@ -3242,7 +3242,7 @@ function _wsHandleMsg(msg, fromAbly) {
       var lobby = _lobbyPeers[cid] || {};
       var usedColors = peers.map(function(p){ return p.color; });
       var col = d.color || lobby.color || PC.find(function(c){ return usedColors.indexOf(c)<0; }) || PC[1];
-      var initLen = d.l || 56; // match real starting size
+      var initLen = d.l || 73; // match real starting size
       delete _processedDies[cid]; // respawn — reset so their new death is tracked fresh
       var _rpJoinTs = Date.now();
       rp = {
@@ -4134,7 +4134,7 @@ function launchGame() {
 }
 
 function mkSnake(x,y,color,name,isMe,startSegs){
-  var initSegs = startSegs || 224;              // default length=56 (56*SEG_MULT); mid-match spawn passes peer average
+  var initSegs = startSegs || 292;              // default length=73 (73*SEG_MULT); mid-match spawn passes peer average
   var initLen  = Math.round(initSegs/SEG_MULT);
   var segs=[]; for(var i=0;i<initSegs;i++) segs.push({x:x-i*2,y:y});
   return{x:x,y:y,segs:segs,angle:0,color:color,name:name,isMe:isMe,speed:BASE_SPEED,
@@ -4176,11 +4176,11 @@ function spawnPlayer(){
   var pn=userProfile?userProfile.name.split(' ')[0].slice(0,14):'YOU';
   // Mid-match size: start at the average live peer length so new joiners aren't tiny
   var _livePeers=peers.filter(function(p){ return p.alive&&p.isRemote; });
-  var _startSegs=224;
+  var _startSegs=292;
   if(_livePeers.length>0){
     var _avgSegs=Math.round(_livePeers.reduce(function(s,p){ return s+p.length*SEG_MULT; },0)/_livePeers.length);
-    _startSegs=Math.max(224,Math.min(_avgSegs,600));
-  } else if(_preRejoinAvgSegs>224){
+    _startSegs=Math.max(292,Math.min(_avgSegs,600));
+  } else if(_preRejoinAvgSegs>292){
     // peers[] is empty on rejoin (cleared by _wsJoin) — use snapshot taken before the clear
     _startSegs=_preRejoinAvgSegs;
   }
