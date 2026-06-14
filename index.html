@@ -3170,17 +3170,19 @@ function _wsHandleMsg(msg, fromAbly) {
   // ── Lobby presence / in-game join notifications ──────────────────────────
   if (type === 'join') {
     if (!cid) return;
-    // If this player has an old alive peer object (e.g. they died and rejoined before
-    // their die message arrived), clear it immediately so the old body doesn't morph
-    // into the new spawn or keep blocking collisions.
-    var _oldRp = _remoteMap[cid];
-    if (_oldRp) {
-      _oldRp.alive = false; _oldRp.segs = [];
-      delete _remoteMap[cid];
-      peers = peers.filter(function(p){ return p !== _oldRp; });
-      if (gameRunning) _updateArenaSize();
+    // Only clear the old peer on a *fresh* join, not on re-announce pings (d.reply=true).
+    // Re-announce pings fire every 4s and are tagged reply:true — clearing the peer
+    // on those caused snakes to flicker/disappear every 4 seconds.
+    if (!d.reply) {
+      var _oldRp = _remoteMap[cid];
+      if (_oldRp) {
+        _oldRp.alive = false; _oldRp.segs = [];
+        delete _remoteMap[cid];
+        peers = peers.filter(function(p){ return p !== _oldRp; });
+        if (gameRunning) _updateArenaSize();
+      }
+      delete _processedDies[cid]; // fresh session — allow their new death to be tracked
     }
-    delete _processedDies[cid]; // fresh session — allow their new death to be tracked
     var isNew = !_lobbyPeers[cid];
     _lobbyPeers[cid] = { n: d.n || ('P_'+cid.slice(0,4)), color: d.color || PC[1] };
     if (!gameRunning) renderSlots();
@@ -3222,6 +3224,11 @@ function _wsHandleMsg(msg, fromAbly) {
     // We call killPlayer() here so the SOL transfer + die broadcast come from OUR client.
     if (d.kill_target) {
       if (d.kill_target === _wsClientId && player && player.alive) {
+        // Tiebreaker: if my clientId is *smaller* I win this fight — ignore the kill_target.
+        // This prevents mutual death when both clients simultaneously send kill_target to
+        // each other (e.g. both falsely detect iHitTheirBody due to LERP lag).
+        // Must match the tiebreaker in killCheck() so exactly one player dies per fight.
+        if (_wsClientId < (cid || '')) return;
         var _ktNow = Date.now();
         if (!_killNotifyTs['__self__'] || _ktNow - _killNotifyTs['__self__'] > 2000) {
           _killNotifyTs['__self__'] = _ktNow;
@@ -4715,7 +4722,21 @@ function killCheck(){
         }
       }
     } else if(iHitTheirBody){
-      killPlayer('Eliminated by '+p.name, p.remoteId); return;
+      // Apply same clientId tiebreaker used for head-on and kill_target to prevent mutual
+      // death when both clients falsely detect iHitTheirBody simultaneously due to LERP lag.
+      if(myId > (p.remoteId||'')){
+        killPlayer('Eliminated by '+p.name, p.remoteId); return;
+      }
+      // I win the tiebreaker — notify them to die instead
+      var _kNowB=Date.now();
+      if(!_killNotifyTs[p.remoteId]||_kNowB-_killNotifyTs[p.remoteId]>1000){
+        _killNotifyTs[p.remoteId]=_kNowB;
+        if(_ws&&_ws.readyState===WebSocket.OPEN){
+          try{_ws.send(JSON.stringify({type:'pos',clientId:_wsClientId,data:{
+            kill_target:p.remoteId,killer:_wsClientId
+          }}));}catch(_){}
+        }
+      }
     } else if(theyHitMyBody){
       var _kNow3=Date.now();
       if(!_killNotifyTs[p.remoteId]||_kNow3-_killNotifyTs[p.remoteId]>1000){
