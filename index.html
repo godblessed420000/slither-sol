@@ -2970,6 +2970,14 @@ function _wsConnect(onReady) {
   _ws.onerror = function() { if (_ws) _ws.close(); };
 }
 
+// Send leave immediately when the tab is closed or navigated away — other players
+// see the snake vanish at once rather than waiting for the server heartbeat.
+window.addEventListener('pagehide', function() {
+  if (_ws && _ws.readyState === WebSocket.OPEN && _wsClientId) {
+    try { _ws.send(JSON.stringify({ type: 'leave', clientId: _wsClientId, data: {} })); } catch(e) {}
+  }
+});
+
 // Re-announce presence when the player switches back to the tab.
 // Browsers heavily throttle JS in background tabs, causing pos updates to slow
 // to ~1/s. When they return, immediately re-send join so other clients reset
@@ -4679,6 +4687,7 @@ function killCheck(){
       var _kNowH=Date.now();
       if(!_killNotifyTs[p.remoteId]||_kNowH-_killNotifyTs[p.remoteId]>1000){
         _killNotifyTs[p.remoteId]=_kNowH;
+        var _kRpH=_remoteMap[p.remoteId]; if(_kRpH&&_kRpH.alive){var _kShH=_kRpH.segs.slice(0,80);_kRpH.alive=false;_kRpH.segs=[];if(gameRunning)for(var _kiH=0;_kiH<_kShH.length;_kiH++)addFood(_kShH[_kiH].x+(Math.random()-.5)*14,_kShH[_kiH].y+(Math.random()-.5)*14);}
         if(_ws&&_ws.readyState===WebSocket.OPEN){
           try{_ws.send(JSON.stringify({type:'pos',clientId:_wsClientId,data:{
             kill_target:p.remoteId,killer:_wsClientId
@@ -4713,6 +4722,7 @@ function killCheck(){
       var _kNowM=Date.now();
       if(!_killNotifyTs[p.remoteId]||_kNowM-_killNotifyTs[p.remoteId]>1000){
         _killNotifyTs[p.remoteId]=_kNowM;
+        var _kRpM=_remoteMap[p.remoteId]; if(_kRpM&&_kRpM.alive){var _kShM=_kRpM.segs.slice(0,80);_kRpM.alive=false;_kRpM.segs=[];if(gameRunning)for(var _kiM=0;_kiM<_kShM.length;_kiM++)addFood(_kShM[_kiM].x+(Math.random()-.5)*14,_kShM[_kiM].y+(Math.random()-.5)*14);}
         if(_ws&&_ws.readyState===WebSocket.OPEN){
           try{_ws.send(JSON.stringify({type:'pos',clientId:_wsClientId,data:{
             kill_target:p.remoteId,killer:_wsClientId
@@ -4733,6 +4743,7 @@ function killCheck(){
         var _kNow3=Date.now();
         if(!_killNotifyTs[p.remoteId]||_kNow3-_killNotifyTs[p.remoteId]>1000){
           _killNotifyTs[p.remoteId]=_kNow3;
+          var _kRp3=_remoteMap[p.remoteId]; if(_kRp3&&_kRp3.alive){var _kSh3=_kRp3.segs.slice(0,80);_kRp3.alive=false;_kRp3.segs=[];if(gameRunning)for(var _ki3=0;_ki3<_kSh3.length;_ki3++)addFood(_kSh3[_ki3].x+(Math.random()-.5)*14,_kSh3[_ki3].y+(Math.random()-.5)*14);}
           if(_ws&&_ws.readyState===WebSocket.OPEN){
             try{_ws.send(JSON.stringify({type:'pos',clientId:_wsClientId,data:{
               kill_target:p.remoteId,killer:_wsClientId
