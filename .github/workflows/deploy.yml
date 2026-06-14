@@ -22,10 +22,12 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Stamp build version
         run: |
-          BUILD="V3"
+          BUILD="V$(git rev-list --count HEAD)"
           sed -i "s/var GAME_BUILD = .*/var GAME_BUILD = '${BUILD}';/" index.html
           echo "Stamped: ${BUILD}"
 
