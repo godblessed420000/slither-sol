@@ -6105,22 +6105,25 @@ setInterval(function(){
 },7000);
 
 // ════════════════ INIT ════════════════
-// ── Live SOL/USD price — fetched via server-side proxy every 30 s ───────────
-// Direct calls to Binance/CoinGecko are blocked by CORS or geo-restricted (451).
-// /api/sol-price races Jupiter, Kraken, and CoinGecko server-side and returns
-// the first valid price with no CORS issues.
+// ── Live SOL/USD price — fetched client-side every 30 s ─────────────────────
+// Tries Jupiter first (Solana-native, CORS-friendly), falls back to Coinbase.
 async function _fetchSolPrice() {
+  var p = 0;
   try {
-    var resp = await fetch('/api/sol-price');
-    if (!resp.ok) return;
-    var data = await resp.json();
-    var p = data && data.price ? parseFloat(data.price) : 0;
-    if (p > 10 && p < 5000) {
-      SOL_USD = +p.toFixed(2);
-      _refreshTierPrices();
-      console.log('[SOL price] $' + SOL_USD + ' (via /api/sol-price)');
-    }
-  } catch(_) { /* keep current price */ }
+    var r1 = await fetch('https://price.jup.ag/v6/price?ids=SOL', {cache:'no-store'});
+    if (r1.ok) { var d1 = await r1.json(); p = parseFloat((d1.data&&d1.data.SOL&&d1.data.SOL.price)||0); }
+  } catch(_) {}
+  if (!(p > 10 && p < 5000)) {
+    try {
+      var r2 = await fetch('https://api.coinbase.com/v2/prices/SOL-USD/spot', {cache:'no-store'});
+      if (r2.ok) { var d2 = await r2.json(); p = parseFloat((d2.data&&d2.data.amount)||0); }
+    } catch(_) {}
+  }
+  if (p > 10 && p < 5000) {
+    SOL_USD = +p.toFixed(2);
+    _refreshTierPrices();
+    console.log('[SOL price] $' + SOL_USD);
+  }
 }
 setInterval(_fetchSolPrice, 30000); // refresh every 30 s
 
