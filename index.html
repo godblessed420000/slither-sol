@@ -3795,7 +3795,7 @@ function showStart() {
   if(!userProfile){ var ov=document.getElementById('ovLogin'); if(ov) ov.classList.remove('hidden'); }
   else {
     var ov2=document.getElementById('ovStart'); if(ov2) ov2.classList.remove('hidden');
-    refreshCards(); updateWalletDisplays(); renderColorPicker();
+    refreshCards(); updateWalletDisplays(); renderColorPicker(); _startLobbyCountPoll();
     // Silently refresh on-chain balance when lobby screen opens.
     // Pass null so a timeout never shows an error toast — cached balance stays valid.
     if (W.pubkey) {
@@ -3894,6 +3894,26 @@ function _cacheHudEls(){
   _elSidebar        = document.querySelector('.sidebar');
 }
 var lobbyTimer=null,lobbyCount=1;
+var _lobbyCountTimer=null;
+function _pollLobbyCounts(){
+  fetch('https://ws.slither-sol.com/counts',{cache:'no-store'})
+    .then(function(r){return r.ok?r.json():null;})
+    .then(function(d){
+      if(!d) return;
+      var map={free:'onlinefree',1:'online1',5:'online5',10:'online10'};
+      Object.keys(map).forEach(function(k){
+        var el=document.getElementById(map[k]);
+        var n=d[k]||0;
+        if(el) el.textContent=n+' online'+(n===1?' player':' players');
+      });
+    }).catch(function(){});
+}
+function _startLobbyCountPoll(){
+  _pollLobbyCounts();
+  clearInterval(_lobbyCountTimer);
+  _lobbyCountTimer=setInterval(_pollLobbyCounts,5000);
+}
+function _stopLobbyCountPoll(){ clearInterval(_lobbyCountTimer); _lobbyCountTimer=null; }
 
 function initCanvas(){
   gc=document.getElementById('gc'); mm=document.getElementById('minimap');
@@ -3924,6 +3944,7 @@ function enterLobby(tier,e) {
   // BEFORE enterLobby is called. Do NOT check balance here — the fee has already been
   // deducted, so re-checking causes paid lobbies to silently fail.
   clearInterval(lobbyTimer); lobbyTimer = null; // prevent stacking on rejoin
+  _stopLobbyCountPoll();
   activeTier=tier; hideAll();
   document.getElementById('ovLobby').classList.remove('hidden');
   var wb=document.getElementById('waitBadge');
