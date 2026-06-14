@@ -4659,7 +4659,7 @@ function eatFood(){
   var eaten=[];
   for(var i=food.length-1;i>=0;i--){
     var f=food[i];
-    if(player.alive&&dst(player.x,player.y,f.x,f.y)<player.headR+f.r){ score+=f.value; for(var _gv=0;_gv<(f.value||1)*5;_gv++) grow(player); eaten.push(i); spawnPt(f.x,f.y,f.color); continue; }
+    if(player.alive&&dst(player.x,player.y,f.x,f.y)<player.headR+f.r){ score+=f.value; var _growAmt=Math.max(1,Math.round(player.length*0.02)); for(var _gv=0;_gv<_growAmt;_gv++) grow(player); eaten.push(i); spawnPt(f.x,f.y,f.color); continue; }
     for(var j=0;j<peers.length;j++){ if(!peers[j].alive||peers[j].isRemote) continue; if(dst(peers[j].x,peers[j].y,f.x,f.y)<peers[j].headR+f.r){ peers[j].score++; grow(peers[j]); eaten.push(i); break; } }
   }
   // No bots → no duplicate indices; sort descending and splice in one pass
