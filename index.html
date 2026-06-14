@@ -3014,7 +3014,7 @@ function _wsSend(type, data) {
 // Only players who appear on the Ably channel are added to _remoteMap; attackers
 // who connect directly to fly.io WebSocket will send pos but those are ignored.
 function _ablyConnect(tier) {
-  if (!_ablyToken) { console.warn('[ably] no token — payEntryFee must succeed first'); return; }
+  if (!_ablyToken) { return; }
   if (_ablyClient) { try { _ablyClient.close(); } catch(_) {} _ablyClient = null; _ablyChannel = null; }
   _ablyVerifiedPeers = {}; _pendingVerifyTs = {};
 
