@@ -5002,7 +5002,7 @@ function draw(){
 
 function drawS(s){
   if(s.segs.length<2) return;
-  var n = Math.min(s.segs.length, 108); // cap visual tail; full body still used for collision
+  var n = Math.min(s.segs.length, 110); // cap visual tail; full body still used for collision
   var hs   = Math.max(13, Math.min(22, 13 + s.length * 0.08));
   var baseW = hs * 2;
   ctx.lineCap='round'; ctx.lineJoin='round';
