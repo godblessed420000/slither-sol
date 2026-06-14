@@ -6130,14 +6130,23 @@ setInterval(function(){
 // Tries Jupiter first (Solana-native, CORS-friendly), falls back to Coinbase.
 async function _fetchSolPrice() {
   var p = 0;
+  // Jupiter v2 API (current)
   try {
-    var r1 = await fetch('https://price.jup.ag/v6/price?ids=SOL', {cache:'no-store'});
-    if (r1.ok) { var d1 = await r1.json(); p = parseFloat((d1.data&&d1.data.SOL&&d1.data.SOL.price)||0); }
+    var r1 = await fetch('https://api.jup.ag/price/v2?ids=So11111111111111111111111111111111111111112', {cache:'no-store'});
+    if (r1.ok) { var d1 = await r1.json(); var _sol=d1.data&&d1.data['So11111111111111111111111111111111111111112']; p = parseFloat((_sol&&_sol.price)||0); }
   } catch(_) {}
+  // Coinbase fallback
   if (!(p > 10 && p < 5000)) {
     try {
       var r2 = await fetch('https://api.coinbase.com/v2/prices/SOL-USD/spot', {cache:'no-store'});
       if (r2.ok) { var d2 = await r2.json(); p = parseFloat((d2.data&&d2.data.amount)||0); }
+    } catch(_) {}
+  }
+  // CoinGecko second fallback
+  if (!(p > 10 && p < 5000)) {
+    try {
+      var r3 = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd', {cache:'no-store'});
+      if (r3.ok) { var d3 = await r3.json(); p = parseFloat((d3.solana&&d3.solana.usd)||0); }
     } catch(_) {}
   }
   if (p > 10 && p < 5000) {
