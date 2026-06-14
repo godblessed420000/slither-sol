@@ -1,9 +1,14 @@
-name: Deploy to Vercel
+name: Deploy to GitHub Pages
 
 on:
   push:
     branches:
       - main
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -11,6 +16,9 @@ env:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -18,18 +26,17 @@ jobs:
       - name: Stamp build version
         run: |
           BUILD="V2"
-          # Update the JS config variable (drives all version displays at runtime)
           sed -i "s/var GAME_BUILD = .*/var GAME_BUILD = '${BUILD}';/" index.html
-          # Update static HTML placeholders (visible before JS loads)
-          sed -i "s|<title>SLITHER\.SOL — V[0-9]*</title>|<title>SLITHER.SOL — ${BUILD}</title>|g" index.html
-          sed -i "s|document\.title = 'SLITHER\.SOL — V[0-9]*';|document.title = 'SLITHER.SOL — ${BUILD}';|g" index.html
           echo "Stamped: ${BUILD}"
 
-      - name: Install Vercel CLI
-        run: npm install -g vercel@latest
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
 
-      - name: Deploy to Vercel Production
-        run: vercel deploy --prod --yes --token ${{ secrets.VERCEL_TOKEN }}
-        env:
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: '.'
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
