@@ -3291,6 +3291,7 @@ function _wsHandleMsg(msg, fromAbly) {
             for (var _ps=0; _ps<_dvSegs.length; _ps++)
               addFood(_dvSegs[_ps].x+(Math.random()-.5)*14, _dvSegs[_ps].y+(Math.random()-.5)*14);
           }
+          _recentLeaves[cid] = Date.now();
           delete _remoteMap[cid];
           peers = peers.filter(function(pp){ return pp !== rp; });
           if (gameRunning) _updateArenaSize();
@@ -3323,6 +3324,7 @@ function _wsHandleMsg(msg, fromAbly) {
 
   // ── Death notification ──────────────────────────────────────────────────
   if (type === 'die') {
+    _recentLeaves[cid] = Date.now(); // always stamp — even if already processed via pos v:false
     if (_processedDies[cid]) return;
     var rp = _remoteMap[cid];
     // Stale: death timestamp predates our first sight of this player → ghost from old session.
@@ -4497,7 +4499,7 @@ function update(_dt){
       var _sp=peers[_si];
       if(_sp.isRemote && _sp.alive && _sp.lastT && _staleNow - _sp.lastT > 3000){
         _sp.alive=false; _sp.segs=[];
-        if(_sp.remoteId) delete _remoteMap[_sp.remoteId];
+        if(_sp.remoteId){ _recentLeaves[_sp.remoteId]=Date.now(); delete _remoteMap[_sp.remoteId]; }
         peers.splice(_si,1);
         _staleChanged=true;
       }
