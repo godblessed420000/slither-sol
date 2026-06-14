@@ -3866,6 +3866,7 @@ async function doJoinGame() {
 var gc,ctx,mm,mctx,gameRunning=false,player=null,peers=[],food=[],parts=[];
 var _inGameSession=false; // true from launchGame() until showStart() — email hidden the whole time
 var _staleFrame=0; // frame counter for stale-peer eviction (runs every 60 frames)
+var _lastLoopT=0;  // last loop timestamp for delta-time calculation
 var _preRejoinAvgSegs=0; // snapshot of peer avg segs taken just before _wsJoin() clears peers[]
 var _boostExhaustedUntil=0; // performance.now() timestamp when the 3s exhaustion penalty expires
 var _mmFrame=0; // minimap throttle — redrawn every 3 game frames, not every frame
@@ -4465,9 +4466,20 @@ async function triggerCashout(){
 // Cashout value = TOTAL SOL currently carried (entry + all kill earnings accumulated this round)
 function calcVal(){ return Math.max(0, +((W.balance||0).toFixed(6))); }
 
-function loop(){ if(!gameRunning&&!_spectating) return; update(); draw(); requestAnimationFrame(loop); }
+function loop(){
+  if(!gameRunning&&!_spectating) return;
+  var _lt = performance.now();
+  // Normalize to 60fps: dt=1.0 at 60fps, 0.5 at 120fps, 2.0 at 30fps.
+  // Cap at 2.5 to prevent huge jumps after tab-switch or GC pause.
+  var _dt = _lastLoopT ? Math.min((_lt - _lastLoopT) / 16.667, 2.5) : 1.0;
+  _lastLoopT = _lt;
+  update(_dt);
+  draw();
+  requestAnimationFrame(loop);
+}
 
-function update(){
+function update(_dt){
+  _dt = (_dt && _dt > 0) ? _dt : 1.0; // fallback for first frame or spectator calls
   // Evict stale peers every ~1s regardless of player state (alive, dead, or spectating).
   // Cleans up ghosts whose die/leave was lost in transit.
   if(++_staleFrame >= 60){
@@ -4524,21 +4536,21 @@ function update(){
     mouseY=gc.height/2+_joyDY*gc.height*0.45;
   }
   if(_autoCircle){
-    player.angle += TURN_RATE; // spin at full turn rate — tight circle, ignores mouse
+    player.angle += TURN_RATE * _dt;
   } else {
     var dx=mouseX-gc.width/2, dy=mouseY-gc.height/2, tgt=Math.atan2(dy,dx);
     var da=tgt-player.angle; while(da>Math.PI) da-=Math.PI*2; while(da<-Math.PI) da+=Math.PI*2;
-    player.angle += Math.sign(da)*Math.min(Math.abs(da), TURN_RATE);
+    player.angle += Math.sign(da)*Math.min(Math.abs(da), TURN_RATE * _dt);
   }
 
   // ── Speed + boost ──
   // Boost requires 100+ segments — too small = no boost
   if(boosting && player.segs.length < 55) boosting = false;
-  var spd = BASE_SPEED; // all players same base speed — no device advantage
+  var spd = BASE_SPEED * _dt; // delta-time scaled — same real-world speed on all frame rates
   if(boosting && boostE>0){
-    spd *= BOOST_MULT; // same boost multiplier for everyone
+    spd *= BOOST_MULT;
     var prevBoostE = boostE;
-    boostE = Math.max(0, boostE - 0.12); // ~14s full boost
+    boostE = Math.max(0, boostE - 0.12 * _dt); // drain at same rate regardless of fps
     if(boostE <= 0) _boostExhaustedUntil = performance.now() + 3000; // trigger 3s penalty
     var _minLen = Math.round(55 / SEG_MULT);
     if(player.segs.length > 55 && Math.floor(prevBoostE / 2.5) > Math.floor(boostE / 2.5)){
@@ -4547,8 +4559,8 @@ function update(){
       player.length = Math.max(_minLen, player.length - 1);
     }
   } else {
-    boostE = Math.min(100, boostE + 0.20);
-    if(performance.now() < _boostExhaustedUntil) spd *= 0.7; // 3s exhaustion penalty
+    boostE = Math.min(100, boostE + 0.20 * _dt); // recharge at same rate regardless of fps
+    if(performance.now() < _boostExhaustedUntil) spd *= 0.7;
   }
   moveS(player, player.angle, spd);
   // Enforce exact segment count — moveS only pops once per frame, but we may need to pop
@@ -4562,6 +4574,8 @@ function update(){
   // ── Remote players: dead reckoning + LERP toward predicted position ──
   var rNow = performance.now(); // one call per frame — shared across all remote peers
   var extCap = BASE_SPEED * BOOST_MULT * 60; // constant — hoist outside loop
+  // Frame-rate-independent lerp alpha: same time-constant at 30fps, 60fps, or 120fps
+  var _la = 1 - Math.pow(1 - _LERP, _dt);
   for(var i=0; i<peers.length; i++){
     var p=peers[i]; if(!p.alive) continue;
     if(p.isRemote){
@@ -4573,11 +4587,11 @@ function update(){
       // Cap extrapolation to ~1 update interval of max movement
       predX = Math.min(p.targetX+extCap, Math.max(p.targetX-extCap, predX));
       predY = Math.min(p.targetY+extCap, Math.max(p.targetY-extCap, predY));
-      p.x += (predX - p.x) * _LERP;
-      p.y += (predY - p.y) * _LERP;
+      p.x += (predX - p.x) * _la;
+      p.y += (predY - p.y) * _la;
       var da2=p.targetAngle-p.angle;
       while(da2>Math.PI) da2-=Math.PI*2; while(da2<-Math.PI) da2+=Math.PI*2;
-      p.angle += da2*_LERP;
+      p.angle += da2*_la;
       p.segs.unshift({x:p.x,y:p.y});
       // maxS uses base length unit × SEG_MULT (d.l is now base unit, no double-multiply)
       var maxS=Math.max(p.length*SEG_MULT, 45);
