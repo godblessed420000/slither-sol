@@ -1213,7 +1213,7 @@ var MAX_ZOOM   = 1.4;
 var _zoomOffset = 0;       // user's manual scroll offset on top of auto-zoom
 var _smoothLen  = 100;     // exponentially-smoothed snake length used for zoom (avoids per-frame jitter)
 // Slither.io-accurate movement constants
-var BASE_SPEED = 3.2;      // base snake speed
+var BASE_SPEED = 6.4;      // base snake speed (2× original for snappier feel)
 var BOOST_MULT = 1.5;      // slither.io-accurate boost multiplier (~1.5× base)
 var TURN_RATE  = 0.082;    // max radians per frame — matches slither.io responsiveness
 var SEG_MULT   = 4;        // segments per length unit — lower = shorter tail
@@ -3255,7 +3255,7 @@ function _wsHandleMsg(msg, fromAbly) {
         remoteId: cid, joinTs: _rpJoinTs,
         velX: 0, velY: 0, lastT: performance.now()
       };
-      rp.headR = Math.max(13, Math.min(24, 13 + initLen * 0.1));
+      rp.headR = Math.max(20, Math.min(36, 20 + initLen * 0.15));
       var initSegs = Math.min(initLen * SEG_MULT, 120);
       // Spread segments backward along the peer's angle so the snake looks full-size immediately
       var _ia = d.a || 0;
@@ -3322,7 +3322,7 @@ function _wsHandleMsg(msg, fromAbly) {
         }
         return;
       }
-      if (d.l) { rp.length = d.l; rp.headR = Math.max(13, Math.min(24, 13 + rp.length * 0.1)); }
+      if (d.l) { rp.length = d.l; rp.headR = Math.max(20, Math.min(36, 20 + rp.length * 0.15)); }
     }
     return;
   }
@@ -4138,7 +4138,7 @@ function mkSnake(x,y,color,name,isMe,startSegs){
   var initLen  = Math.round(initSegs/SEG_MULT);
   var segs=[]; for(var i=0;i<initSegs;i++) segs.push({x:x-i*2,y:y});
   return{x:x,y:y,segs:segs,angle:0,color:color,name:name,isMe:isMe,speed:BASE_SPEED,
-         headR:Math.max(8,Math.min(20,8+initLen*0.1)),length:initLen,score:0,alive:true};
+         headR:Math.max(20,Math.min(36,20+initLen*0.15)),length:initLen,score:0,alive:true};
 }
 // Max segments for the local player = 150 × dollar value of SOL carried.
 // Min 150 so there's always room to grow. Other players are uncapped (we don't know their balance).
@@ -4569,7 +4569,7 @@ function update(_dt){
   while(player.segs.length > _tgt) player.segs.pop();
 
   // ── Update local player headR so collision radius stays accurate as they grow ──
-  player.headR = Math.max(13, Math.min(24, 13 + player.length * 0.1)); // match visual hs formula
+  player.headR = Math.max(20, Math.min(36, 20 + player.length * 0.15)); // match visual hs formula
 
   // ── Remote players: dead reckoning + LERP toward predicted position ──
   var rNow = performance.now(); // one call per frame — shared across all remote peers
@@ -5016,7 +5016,7 @@ function draw(){
 function drawS(s){
   if(s.segs.length<2) return;
   var n = Math.min(s.segs.length, 80);
-  var hs   = Math.max(13, Math.min(24, 13 + s.length * 0.10));
+  var hs   = Math.max(20, Math.min(36, 20 + s.length * 0.15));
   var baseW = hs * 2;
   ctx.lineCap='round'; ctx.lineJoin='round';
 
