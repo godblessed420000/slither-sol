@@ -4140,12 +4140,7 @@ function mkSnake(x,y,color,name,isMe,startSegs){
   return{x:x,y:y,segs:segs,angle:0,color:color,name:name,isMe:isMe,speed:BASE_SPEED,
          headR:Math.max(17,Math.min(30,17+initLen*0.12)),length:initLen,score:0,alive:true};
 }
-// Max segments for the local player = 150 × dollar value of SOL carried.
-// Min 150 so there's always room to grow. Other players are uncapped (we don't know their balance).
-function getMaxSegs(){
-  var dollars = (W.balance || 0) * SOL_USD;
-  return Math.max(150, Math.floor(dollars * 150));
-}
+function getMaxSegs(){ return 235 * SEG_MULT; }
 function grow(s){
   if(s.isMe && boosting) return;           // no growth while boosting — food eaten but no length added
   if(s.isMe && s.segs.length >= getMaxSegs()) return;
