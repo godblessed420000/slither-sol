@@ -2996,6 +2996,7 @@ document.addEventListener('visibilitychange', function() {
 // chat → Ably only (cosmetic, no WS fallback needed)
 var _processedDies  = {}; // cid → true; prevents double-credit if both WS + Ably deliver
 var _killNotifyTs   = {}; // cid → timestamp; throttle victim-side kill_target sends (1s/target)
+var _recentLeaves   = {}; // cid → timestamp; blocks pos from recreating a just-left/dead peer
 var _bodyHitFrames  = {}; // cid → consecutive-frame count; debounce iHitTheirBody detection
 function _wsSend(type, data) {
   if (type === 'pos' || type === 'ping') {
@@ -3182,6 +3183,7 @@ function _wsHandleMsg(msg, fromAbly) {
 
   if (type === 'leave') {
     delete _lobbyPeers[cid];
+    _recentLeaves[cid] = Date.now(); // block late pos messages from recreating this peer
     var rp = _remoteMap[cid];
     if (rp) {
       rp.alive = false;
@@ -3219,12 +3221,15 @@ function _wsHandleMsg(msg, fromAbly) {
     // If this is a death pos and the peer is already gone (die message arrived first),
     // do NOT recreate a ghost peer — just drop the message.
     if (d.v === false && !rp) return;
+    // Block late pos messages from recreating a peer that just left or died
+    if (!rp && _recentLeaves[cid] && Date.now() - _recentLeaves[cid] < 5000) return;
     if (!rp) {
       var lobby = _lobbyPeers[cid] || {};
       var usedColors = peers.map(function(p){ return p.color; });
       var col = d.color || lobby.color || PC.find(function(c){ return usedColors.indexOf(c)<0; }) || PC[1];
       var initLen = d.l || Math.round(15/SEG_MULT); // match real starting size
       delete _processedDies[cid]; // respawn — reset so their new death is tracked fresh
+      delete _recentLeaves[cid];  // allow this new session's pos messages through
       var _rpJoinTs = Date.now();
       rp = {
         x: d.x, y: d.y, angle: d.a||0,
@@ -3333,6 +3338,7 @@ function _wsHandleMsg(msg, fromAbly) {
         for (var si=0; si<_dSegs.length; si++)
           addFood(_dSegs[si].x+(Math.random()-.5)*14, _dSegs[si].y+(Math.random()-.5)*14);
       }
+      _recentLeaves[cid] = Date.now(); // block late pos messages from recreating this peer
       delete _remoteMap[cid];
       peers = peers.filter(function(p){ return p !== rp; });
       if (gameRunning) _updateArenaSize();
@@ -3370,6 +3376,7 @@ function _wsJoin(tier) {
   _remoteMap      = {};
   _processedDies  = {};
   _killNotifyTs   = {};
+  _recentLeaves   = {};
   peers = peers.filter(function(p){ return !p.isRemote; });
 
   _wsClientId   = PRIVY.walletAddress || ('guest_' + Date.now());
@@ -4488,7 +4495,7 @@ function update(_dt){
     var _staleChanged = false;
     for(var _si=peers.length-1; _si>=0; _si--){
       var _sp=peers[_si];
-      if(_sp.isRemote && _sp.alive && _sp.lastT && _staleNow - _sp.lastT > 8000){
+      if(_sp.isRemote && _sp.alive && _sp.lastT && _staleNow - _sp.lastT > 3000){
         _sp.alive=false; _sp.segs=[];
         if(_sp.remoteId) delete _remoteMap[_sp.remoteId];
         peers.splice(_si,1);
