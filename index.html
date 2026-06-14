@@ -3255,7 +3255,7 @@ function _wsHandleMsg(msg, fromAbly) {
         remoteId: cid, joinTs: _rpJoinTs,
         velX: 0, velY: 0, lastT: performance.now()
       };
-      rp.headR = Math.max(15, Math.min(26, 15 + initLen * 0.10));
+      rp.headR = Math.max(13, Math.min(22, 13 + initLen * 0.08));
       var initSegs = Math.min(initLen * SEG_MULT, 120);
       // Spread segments backward along the peer's angle so the snake looks full-size immediately
       var _ia = d.a || 0;
@@ -3322,7 +3322,7 @@ function _wsHandleMsg(msg, fromAbly) {
         }
         return;
       }
-      if (d.l) { rp.length = d.l; rp.headR = Math.max(15, Math.min(26, 15 + rp.length * 0.10)); }
+      if (d.l) { rp.length = d.l; rp.headR = Math.max(13, Math.min(22, 13 + rp.length * 0.08)); }
     }
     return;
   }
@@ -4138,7 +4138,7 @@ function mkSnake(x,y,color,name,isMe,startSegs){
   var initLen  = Math.round(initSegs/SEG_MULT);
   var segs=[]; for(var i=0;i<initSegs;i++) segs.push({x:x-i*2,y:y});
   return{x:x,y:y,segs:segs,angle:0,color:color,name:name,isMe:isMe,speed:BASE_SPEED,
-         headR:Math.max(15,Math.min(26,15+initLen*0.10)),length:initLen,score:0,alive:true};
+         headR:Math.max(13,Math.min(22,13+initLen*0.08)),length:initLen,score:0,alive:true};
 }
 function getMaxSegs(){ return 235 * SEG_MULT; }
 function grow(s){
@@ -4564,7 +4564,7 @@ function update(_dt){
   while(player.segs.length > _tgt) player.segs.pop();
 
   // ── Update local player headR so collision radius stays accurate as they grow ──
-  player.headR = Math.max(15, Math.min(26, 15 + player.length * 0.10)); // match visual hs formula
+  player.headR = Math.max(13, Math.min(22, 13 + player.length * 0.08)); // match visual hs formula
 
   // ── Remote players: dead reckoning + LERP toward predicted position ──
   var rNow = performance.now(); // one call per frame — shared across all remote peers
@@ -5011,7 +5011,7 @@ function draw(){
 function drawS(s){
   if(s.segs.length<2) return;
   var n = Math.min(s.segs.length, 130);
-  var hs   = Math.max(15, Math.min(26, 15 + s.length * 0.10));
+  var hs   = Math.max(13, Math.min(22, 13 + s.length * 0.08));
   var baseW = hs * 2;
   ctx.lineCap='round'; ctx.lineJoin='round';
 
