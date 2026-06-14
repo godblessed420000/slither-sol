@@ -1215,7 +1215,7 @@ var _smoothLen  = 100;     // exponentially-smoothed snake length used for zoom 
 // Slither.io-accurate movement constants
 var BASE_SPEED = 7.0;      // base snake speed
 var BOOST_MULT = 1.5;      // slither.io-accurate boost multiplier (~1.5× base)
-var TURN_RATE  = 0.18;     // max radians per frame — matches slither.io responsiveness
+var TURN_RATE  = 0.22;     // max radians per frame — matches slither.io responsiveness
 var SEG_MULT   = 4;        // segments per length unit — lower = shorter tail
 var MAX_FOOD   = 150;      // hard cap on food pellets
 var CASHOUT_FEE= 0.10;
@@ -4697,14 +4697,15 @@ function killCheck(){
     // — Body collision — same radius on both sides for fair/symmetric hitboxes.
     // iHitTheirBody has a 2-frame debounce (below) to filter LERP false positives.
     var iHitTheirBody = false;
+    var _bodyR = player.headR + p.headR + 20; // +20px bonus makes coil walls solid
     for(var j=5;j<segLimit;j++){
-      if(dst(player.x,player.y,p.segs[j].x,p.segs[j].y) < player.headR+p.headR){
+      if(dst(player.x,player.y,p.segs[j].x,p.segs[j].y) < _bodyR){
         iHitTheirBody=true; break;
       }
     }
     var theyHitMyBody = false;
     for(var k=5;k<myLimit;k++){
-      if(dst(px,py,player.segs[k].x,player.segs[k].y) < p.headR+player.headR){
+      if(dst(px,py,player.segs[k].x,player.segs[k].y) < _bodyR){
         theyHitMyBody=true; break;
       }
     }
