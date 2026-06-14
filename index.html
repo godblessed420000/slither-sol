@@ -3016,8 +3016,9 @@ document.addEventListener('visibilitychange', function() {
 // pos / ping → fly.io WebSocket only (latency-sensitive)
 // die → fly.io WS (primary, guaranteed relay) + Ably (secondary, for verified clients)
 // chat → Ably only (cosmetic, no WS fallback needed)
-var _processedDies = {}; // cid → true; prevents double-credit if both WS + Ably deliver
-var _killNotifyTs  = {}; // cid → timestamp; throttle victim-side kill_target sends (1s/target)
+var _processedDies  = {}; // cid → true; prevents double-credit if both WS + Ably deliver
+var _killNotifyTs   = {}; // cid → timestamp; throttle victim-side kill_target sends (1s/target)
+var _bodyHitFrames  = {}; // cid → consecutive-frame count; debounce iHitTheirBody detection
 function _wsSend(type, data) {
   if (type === 'pos' || type === 'ping') {
     if (!_ws || _ws.readyState !== WebSocket.OPEN) return;
@@ -3224,11 +3225,6 @@ function _wsHandleMsg(msg, fromAbly) {
     // We call killPlayer() here so the SOL transfer + die broadcast come from OUR client.
     if (d.kill_target) {
       if (d.kill_target === _wsClientId && player && player.alive) {
-        // Tiebreaker: if my clientId is *smaller* I win this fight — ignore the kill_target.
-        // This prevents mutual death when both clients simultaneously send kill_target to
-        // each other (e.g. both falsely detect iHitTheirBody due to LERP lag).
-        // Must match the tiebreaker in killCheck() so exactly one player dies per fight.
-        if (_wsClientId < (cid || '')) return;
         var _ktNow = Date.now();
         if (!_killNotifyTs['__self__'] || _ktNow - _killNotifyTs['__self__'] > 2000) {
           _killNotifyTs['__self__'] = _ktNow;
@@ -4672,14 +4668,11 @@ function killCheck(){
     var px = (p.targetX!=null)?p.targetX:p.x;
     var py = (p.targetY!=null)?p.targetY:p.y;
 
-    // — Check 2: Head-on collision — pure clientId tiebreaker, never size-based.
-    // Size-based tiebreakers cause mutual death when each client sees different lengths
-    // due to lag. ClientId comparison is identical on both sides regardless of network state.
-    // Winner also sends kill_target so the loser dies even if their client missed the hit.
+    // — Head-on: pure clientId tiebreaker. Winner skips body checks (continue) so
+    // the winner can't also die from a body segment overlapping during the same frame.
     if(dst(player.x,player.y,px,py) < player.headR+p.headR+8){
       var iLose = myId > (p.remoteId||'');
       if(iLose){ killPlayer('Head-on with '+p.name, p.remoteId); return; }
-      // I won — push kill_target so their client dies even if they didn't detect the collision
       var _kNowH=Date.now();
       if(!_killNotifyTs[p.remoteId]||_kNowH-_killNotifyTs[p.remoteId]>1000){
         _killNotifyTs[p.remoteId]=_kNowH;
@@ -4689,29 +4682,31 @@ function killCheck(){
           }}));}catch(_){}
         }
       }
+      continue; // resolved — don't also check body for this peer this frame
     }
 
-    // — Combined body-collision check: detect both sides, apply tiebreaker for mutual hits
+    // — Body collision: my head vs their body segments
+    // Use p.headR * 0.6 for body segments (bodies are narrower than heads visually).
     var iHitTheirBody = false;
     for(var j=10;j<segLimit;j++){
-      if(dst(player.x,player.y,p.segs[j].x,p.segs[j].y)<player.headR+p.headR){
+      if(dst(player.x,player.y,p.segs[j].x,p.segs[j].y) < player.headR + p.headR*0.6){
         iHitTheirBody=true; break;
       }
     }
+    // Their head vs my body segments (full headR — we own these, positions are accurate)
     var theyHitMyBody = false;
     for(var k=10;k<myLimit;k++){
-      if(dst(px,py,player.segs[k].x,player.segs[k].y)<p.headR+player.headR){
+      if(dst(px,py,player.segs[k].x,player.segs[k].y) < p.headR+player.headR){
         theyHitMyBody=true; break;
       }
     }
 
+    var _bhk = p.remoteId || 'x';
     if(iHitTheirBody && theyHitMyBody){
-      // Mutual body collision — smaller dies; equal length uses clientId tiebreaker so
-      // exactly one client calls killPlayer (mirrors head-on logic above).
+      _bodyHitFrames[_bhk] = 0;
       var iLoseMutual = player.segs.length < p.segs.length ||
                         (player.segs.length === p.segs.length && myId > (p.remoteId||''));
       if(iLoseMutual){ killPlayer('Eliminated by '+p.name, p.remoteId); return; }
-      // I'm larger — notify them they lost
       var _kNowM=Date.now();
       if(!_killNotifyTs[p.remoteId]||_kNowM-_killNotifyTs[p.remoteId]>1000){
         _killNotifyTs[p.remoteId]=_kNowM;
@@ -4722,29 +4717,24 @@ function killCheck(){
         }
       }
     } else if(iHitTheirBody){
-      // Apply same clientId tiebreaker used for head-on and kill_target to prevent mutual
-      // death when both clients falsely detect iHitTheirBody simultaneously due to LERP lag.
-      if(myId > (p.remoteId||'')){
+      // Require 2 consecutive frames before dying. LERP false positives last only 1 frame
+      // (remote body snaps back to true position on next update), but real hits persist.
+      _bodyHitFrames[_bhk] = (_bodyHitFrames[_bhk] || 0) + 1;
+      if(_bodyHitFrames[_bhk] >= 2){
+        delete _bodyHitFrames[_bhk];
         killPlayer('Eliminated by '+p.name, p.remoteId); return;
       }
-      // I win the tiebreaker — notify them to die instead
-      var _kNowB=Date.now();
-      if(!_killNotifyTs[p.remoteId]||_kNowB-_killNotifyTs[p.remoteId]>1000){
-        _killNotifyTs[p.remoteId]=_kNowB;
-        if(_ws&&_ws.readyState===WebSocket.OPEN){
-          try{_ws.send(JSON.stringify({type:'pos',clientId:_wsClientId,data:{
-            kill_target:p.remoteId,killer:_wsClientId
-          }}));}catch(_){}
-        }
-      }
-    } else if(theyHitMyBody){
-      var _kNow3=Date.now();
-      if(!_killNotifyTs[p.remoteId]||_kNow3-_killNotifyTs[p.remoteId]>1000){
-        _killNotifyTs[p.remoteId]=_kNow3;
-        if(_ws&&_ws.readyState===WebSocket.OPEN){
-          try{_ws.send(JSON.stringify({type:'pos',clientId:_wsClientId,data:{
-            kill_target:p.remoteId,killer:_wsClientId
-          }}));}catch(_){}
+    } else {
+      _bodyHitFrames[_bhk] = 0; // not hitting — reset debounce counter
+      if(theyHitMyBody){
+        var _kNow3=Date.now();
+        if(!_killNotifyTs[p.remoteId]||_kNow3-_killNotifyTs[p.remoteId]>1000){
+          _killNotifyTs[p.remoteId]=_kNow3;
+          if(_ws&&_ws.readyState===WebSocket.OPEN){
+            try{_ws.send(JSON.stringify({type:'pos',clientId:_wsClientId,data:{
+              kill_target:p.remoteId,killer:_wsClientId
+            }}));}catch(_){}
+          }
         }
       }
     }
