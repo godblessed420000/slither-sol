@@ -25,7 +25,7 @@ jobs:
 
       - name: Stamp build version
         run: |
-          BUILD="V2"
+          BUILD="V3"
           sed -i "s/var GAME_BUILD = .*/var GAME_BUILD = '${BUILD}';/" index.html
           echo "Stamped: ${BUILD}"
 
