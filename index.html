@@ -1215,7 +1215,7 @@ var _smoothLen  = 100;     // exponentially-smoothed snake length used for zoom 
 // Slither.io-accurate movement constants
 var BASE_SPEED = 6.72;      // base snake speed
 var BOOST_MULT = 1.5;      // slither.io-accurate boost multiplier (~1.5× base)
-var TURN_RATE  = 0.22;     // max radians per frame — matches slither.io responsiveness
+var TURN_RATE  = 0.10;     // max radians per frame — smooth slither.io-style curves
 var SEG_MULT   = 4;        // segments per length unit — lower = shorter tail
 var MAX_FOOD   = 150;      // hard cap on food pellets
 var CASHOUT_FEE= 0.10;
@@ -3242,7 +3242,7 @@ function _wsHandleMsg(msg, fromAbly) {
       var lobby = _lobbyPeers[cid] || {};
       var usedColors = peers.map(function(p){ return p.color; });
       var col = d.color || lobby.color || PC.find(function(c){ return usedColors.indexOf(c)<0; }) || PC[1];
-      var initLen = d.l || Math.round(56/SEG_MULT); // match real starting size
+      var initLen = d.l || Math.round(15/SEG_MULT); // match real starting size
       delete _processedDies[cid]; // respawn — reset so their new death is tracked fresh
       var _rpJoinTs = Date.now();
       rp = {
@@ -3281,7 +3281,7 @@ function _wsHandleMsg(msg, fromAbly) {
         clearTimeout(rp._dtClear);
         rp._dtClear = setTimeout(function(){ if(_processedDies[_cid3]===true) delete _processedDies[_cid3]; }, 500);
         var _rja = d.a || 0;
-        var _rjn = Math.min((d.l || Math.round(55/SEG_MULT)) * SEG_MULT, 120);
+        var _rjn = Math.min((d.l || Math.round(15/SEG_MULT)) * SEG_MULT, 120);
         for (var _rji=0; _rji<_rjn; _rji++)
           rp.segs.push({x: d.x - Math.cos(_rja)*_rji*2, y: d.y - Math.sin(_rja)*_rji*2});
       }
@@ -4134,7 +4134,7 @@ function launchGame() {
 }
 
 function mkSnake(x,y,color,name,isMe,startSegs){
-  var initSegs = startSegs || 56;               // default 56 raw segments; mid-match spawn passes peer average
+  var initSegs = startSegs || 15;               // default 15 raw segments; mid-match spawn passes peer average
   var initLen  = Math.round(initSegs/SEG_MULT);
   var segs=[]; for(var i=0;i<initSegs;i++) segs.push({x:x-i*2,y:y});
   return{x:x,y:y,segs:segs,angle:0,color:color,name:name,isMe:isMe,speed:BASE_SPEED,
@@ -4171,11 +4171,11 @@ function spawnPlayer(){
   var pn=userProfile?userProfile.name.split(' ')[0].slice(0,14):'YOU';
   // Mid-match size: start at the average live peer length so new joiners aren't tiny
   var _livePeers=peers.filter(function(p){ return p.alive&&p.isRemote; });
-  var _startSegs=56;
+  var _startSegs=15;
   if(_livePeers.length>0){
     var _avgSegs=Math.round(_livePeers.reduce(function(s,p){ return s+p.length*SEG_MULT; },0)/_livePeers.length);
-    _startSegs=Math.max(56,Math.min(_avgSegs,325));
-  } else if(_preRejoinAvgSegs>56){
+    _startSegs=Math.max(15,Math.min(_avgSegs,325));
+  } else if(_preRejoinAvgSegs>15){
     // peers[] is empty on rejoin (cleared by _wsJoin) — use snapshot taken before the clear
     _startSegs=_preRejoinAvgSegs;
   }
@@ -4547,8 +4547,8 @@ function update(_dt){
     var prevBoostE = boostE;
     boostE = Math.max(0, boostE - 0.12 * _dt); // drain at same rate regardless of fps
     if(boostE <= 0) _boostExhaustedUntil = performance.now() + 3000; // trigger 3s penalty
-    var _minLen = Math.round(55 / SEG_MULT);
-    if(player.segs.length > 55 && Math.floor(prevBoostE / 2.5) > Math.floor(boostE / 2.5)){
+    var _minLen = Math.round(15 / SEG_MULT);
+    if(player.segs.length > 15 && Math.floor(prevBoostE / 2.5) > Math.floor(boostE / 2.5)){
       var tl=player.segs[player.segs.length-1];
       addFood(tl.x+(Math.random()-.5)*10, tl.y+(Math.random()-.5)*10, true);
       player.length = Math.max(_minLen, player.length - 1);
@@ -4659,7 +4659,7 @@ function eatFood(){
   var eaten=[];
   for(var i=food.length-1;i>=0;i--){
     var f=food[i];
-    if(player.alive&&dst(player.x,player.y,f.x,f.y)<player.headR+f.r){ score+=f.value; var _growAmt=Math.max(1,Math.round(player.length*0.005)); for(var _gv=0;_gv<_growAmt;_gv++) grow(player); eaten.push(i); spawnPt(f.x,f.y,f.color); continue; }
+    if(player.alive&&dst(player.x,player.y,f.x,f.y)<player.headR+f.r){ score+=f.value; grow(player); eaten.push(i); spawnPt(f.x,f.y,f.color); continue; }
     for(var j=0;j<peers.length;j++){ if(!peers[j].alive||peers[j].isRemote) continue; if(dst(peers[j].x,peers[j].y,f.x,f.y)<peers[j].headR+f.r){ peers[j].score++; grow(peers[j]); eaten.push(i); break; } }
   }
   // No bots → no duplicate indices; sort descending and splice in one pass
