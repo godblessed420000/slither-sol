@@ -4937,35 +4937,44 @@ function _exitSpectate(){
 }
 function draw(){
   ctx.clearRect(0,0,gc.width,gc.height);
-  // Background grid drawn in world space (will be clipped to circle)
-  ctx.save(); ctx.strokeStyle='rgba(255,255,255,.026)'; ctx.lineWidth=1;
-  ctx.restore();
   ctx.save();
   ctx.translate(gc.width/2, gc.height/2);
   ctx.scale(CAM_ZOOM, CAM_ZOOM);
   ctx.translate(-camX, -camY);
   var t=TIERS[activeTier]||TIERS[1];
   var cx=WORLD/2, cy=WORLD/2;
-  // ── Viewport bounds computed first — used for culling AND background fill ──
+  // ── Viewport bounds — used for culling AND background fill ────────────────
   var vBuf=180;
   var vx1=camX - gc.width/(2*CAM_ZOOM) - vBuf;
   var vx2=camX + gc.width/(2*CAM_ZOOM) + vBuf;
   var vy1=camY - gc.height/(2*CAM_ZOOM) - vBuf;
   var vy2=camY + gc.height/(2*CAM_ZOOM) + vBuf;
-  // Dark area outside arena — fill only the visible viewport minus the arena circle.
-  // Old approach: fillRect(0,0,WORLD,WORLD) painted 6.7M px/frame then cleared most of it.
-  // Even-odd: viewport rect is wound CW, circle arc is wound CCW → fills only the gap.
-  ctx.fillStyle='rgba(0,0,0,.72)';
+  // ── Dark base (arena interior) ────────────────────────────────────────────
+  ctx.fillStyle='#0f0f0f';
+  ctx.fillRect(vx1,vy1,vx2-vx1,vy2-vy1);
+  // ── Hexagonal honeycomb grid (viewport-culled, no clip needed) ─────────────
+  // Red fill below will cover hexes outside the arena boundary automatically.
+  var _hR=35, _hH=_hR*Math.sqrt(3), _hCS=_hR*1.5;
+  ctx.fillStyle='#1a1a1a'; ctx.strokeStyle='#0a0a0a'; ctx.lineWidth=1.5;
+  ctx.beginPath();
+  for(var _hc=Math.floor(vx1/_hCS)-1; _hc<=Math.ceil(vx2/_hCS)+1; _hc++){
+    var _hx=_hc*_hCS, _hOff=(_hc&1)?_hH*0.5:0;
+    for(var _hr=Math.floor((vy1-_hOff)/_hH)-1; _hr<=Math.ceil((vy2-_hOff)/_hH)+1; _hr++){
+      var _hy=_hr*_hH+_hOff;
+      for(var _hi=0;_hi<6;_hi++){ var _ha=Math.PI/3*_hi; var _hpx=_hx+_hR*Math.cos(_ha),_hpy=_hy+_hR*Math.sin(_ha); if(_hi===0) ctx.moveTo(_hpx,_hpy); else ctx.lineTo(_hpx,_hpy); }
+      ctx.closePath();
+    }
+  }
+  ctx.fill(); ctx.stroke();
+  // ── Red fill outside arena (even-odd: rect CW, circle CCW) ───────────────
+  ctx.fillStyle='#cc0000';
   ctx.beginPath();
   ctx.rect(vx1,vy1,vx2-vx1,vy2-vy1);
-  ctx.arc(cx,cy,WORLD_R-2,0,Math.PI*2,true);
+  ctx.arc(cx,cy,WORLD_R,0,Math.PI*2,true);
   ctx.fill('evenodd');
-  // Circular arena border
-  ctx.beginPath(); ctx.arc(cx,cy,WORLD_R-2,0,Math.PI*2);
-  ctx.strokeStyle=t.color; ctx.lineWidth=6; ctx.stroke();
-  // Inner danger ring
-  ctx.beginPath(); ctx.arc(cx,cy,WORLD_R-30,0,Math.PI*2);
-  ctx.strokeStyle='rgba(255,69,96,.25)'; ctx.lineWidth=28; ctx.stroke();
+  // ── Inner danger glow at boundary edge ────────────────────────────────────
+  ctx.beginPath(); ctx.arc(cx,cy,WORLD_R-16,0,Math.PI*2);
+  ctx.strokeStyle='rgba(204,0,0,0.30)'; ctx.lineWidth=34; ctx.stroke();
 
   // Batch food by color — reuse _fcBuckets to avoid per-frame {} alloc + GC
   var _fk=Object.keys(_fcBuckets);
