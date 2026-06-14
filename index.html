@@ -4685,15 +4685,14 @@ function killCheck(){
       continue; // resolved — don't also check body for this peer this frame
     }
 
-    // — Body collision: my head vs their body segments
-    // Use p.headR * 0.6 for body segments (bodies are narrower than heads visually).
+    // — Body collision — same radius on both sides for fair/symmetric hitboxes.
+    // iHitTheirBody has a 2-frame debounce (below) to filter LERP false positives.
     var iHitTheirBody = false;
     for(var j=10;j<segLimit;j++){
-      if(dst(player.x,player.y,p.segs[j].x,p.segs[j].y) < player.headR + p.headR*0.6){
+      if(dst(player.x,player.y,p.segs[j].x,p.segs[j].y) < player.headR+p.headR){
         iHitTheirBody=true; break;
       }
     }
-    // Their head vs my body segments (full headR — we own these, positions are accurate)
     var theyHitMyBody = false;
     for(var k=10;k<myLimit;k++){
       if(dst(px,py,player.segs[k].x,player.segs[k].y) < p.headR+player.headR){
