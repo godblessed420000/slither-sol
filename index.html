@@ -3000,6 +3000,18 @@ function _wsConnect(onReady) {
   _ws.onerror = function() { if (_ws) _ws.close(); };
 }
 
+// Re-announce presence when the player switches back to the tab.
+// Browsers heavily throttle JS in background tabs, causing pos updates to slow
+// to ~1/s. When they return, immediately re-send join so other clients reset
+// their stale timer and don't evict this player.
+document.addEventListener('visibilitychange', function() {
+  if (document.visibilityState === 'visible' && (gameRunning || _spectating) && _wsClientId && _currentTier) {
+    if (_ws && _ws.readyState === WebSocket.OPEN) {
+      try { _ws.send(JSON.stringify({ type:'join', clientId:_wsClientId, tier:_currentTier, data:{ n:_currentName, color:_currentColor, reply:true } })); } catch(_) {}
+    }
+  }
+});
+
 // ── Send helper ──────────────────────────────────────────────────────────────
 // pos / ping → fly.io WebSocket only (latency-sensitive)
 // die → fly.io WS (primary, guaranteed relay) + Ably (secondary, for verified clients)
@@ -3867,7 +3879,7 @@ var _autoCircle=false; // Y key — snake spins in a tight circle at max turn ra
 var _elHudScore=null,_elHudSub=null,_elCashoutEarnVal=null,_elBoostBar=null;
 var _elCashoutQhint=null,_elPingEl=null,_elSidebar=null;
 var _hudScoreV='',_hudSubV='',_hudEarnV='',_hudBoostV='';
-var _LERP=0.7; // remote snake interpolation — higher = faster tracking, less visual lag on join
+var _LERP=0.5; // remote snake interpolation — 0.5 is smoother, reduces rubber-banding on missed packets
 function _cacheHudEls(){
   _elHudScore       = document.getElementById('hudScore');
   _elHudSub         = document.getElementById('hudSub');
@@ -4461,7 +4473,7 @@ function update(){
     var _staleChanged = false;
     for(var _si=peers.length-1; _si>=0; _si--){
       var _sp=peers[_si];
-      if(_sp.isRemote && _sp.alive && _sp.lastT && _staleNow - _sp.lastT > 2000){
+      if(_sp.isRemote && _sp.alive && _sp.lastT && _staleNow - _sp.lastT > 8000){
         _sp.alive=false; _sp.segs=[];
         if(_sp.remoteId) delete _remoteMap[_sp.remoteId];
         peers.splice(_si,1);
