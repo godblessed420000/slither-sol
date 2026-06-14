@@ -2628,17 +2628,8 @@ async function doWithdraw() {
 async function payEntryFee(tierKey) {
   var t = TIERS[tierKey]; if (!t) return false;
 
-  // ── Free tier: no payment — just get an Ably token scoped to game-free ──────
+  // ── Free tier: no payment needed ────────────────────────────────────────────
   if (tierKey === 'free') {
-    var _fPub = W.pubkey || ('guest_' + Date.now());
-    try {
-      var _fRes = await fetch('/api/ably-auth', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ playerPubkey: _fPub })
-      });
-      if (_fRes.ok) { var _fData = await _fRes.json(); _ablyToken = _fData.tokenRequest; }
-    } catch(_fe) { console.warn('[ably-auth] free tier token failed:', _fe.message); }
     return 'FREE-' + Math.random().toString(36).slice(2,10).toUpperCase();
   }
 
@@ -2841,26 +2832,6 @@ async function payEntryFee(tierKey) {
     }
     toast('Entry fee TX failed: ' + _errMsg + ' — please try again', 'error');
     console.error('[entry] join TX failed after retries:', _joinErr);
-    return false;
-  }
-
-  // ── Server verifies TX and issues scoped Ably token ─────────────────────────
-  try {
-    var _vRes = await fetch('/api/verify-entry', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ txSignature: _txSig, playerPubkey: W.pubkey, tier: String(tierKey) })
-    });
-    if (!_vRes.ok) {
-      var _vErr = await _vRes.json().catch(function(){ return {}; });
-      toast('Server verification failed: ' + (_vErr.error || _vRes.status), 'error');
-      return false;
-    }
-    var _vData = await _vRes.json();
-    _ablyToken = _vData.tokenRequest;
-    console.log('[entry] Ably token issued for game-' + tierKey);
-  } catch(_ve) {
-    toast('Could not reach verification server — try again', 'error');
     return false;
   }
 
