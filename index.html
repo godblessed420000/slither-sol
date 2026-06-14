@@ -2492,8 +2492,7 @@ async function execCashout(gross, label, destAddr) {
       try { _coLsData = JSON.parse(_coLsRaw); } catch(_) {}
       var _coAge = _coLsData ? (Date.now() - (_coLsData.ts || 0)) : Infinity;
       if (_coLsData && _coLsData.sig && _coAge < 300000) {
-        var _coChk = await fetch('/api/tx-status?sig=' + encodeURIComponent(_coLsData.sig))
-          .then(function(r){ return r.json(); }).catch(function(){ return null; });
+        var _coChk = await _checkTxStatus(_coLsData.sig);
         if (_coChk && _coChk.confirmed === true) {
           try { localStorage.removeItem(_coLsKey); } catch(_) {}
           toast('Previous cashout TX already confirmed — no duplicate sent', 'info');
@@ -2522,12 +2521,7 @@ async function execCashout(gross, label, destAddr) {
                   '| net(90%):', net.toFixed(6), 'SOL stays in wallet (no self-send)');
     }
 
-    var _coBhResp = await fetch('/api/blockhash').then(function(r) {
-      if (!r.ok) throw new Error('blockhash proxy error ' + r.status);
-      return r.json();
-    });
-    if (!_coBhResp || !_coBhResp.blockhash) throw new Error('RPC blockhash unavailable for cashout');
-    var bh = _coBhResp;
+    var bh = await _getBlockhash();
 
     var fromKey  = new solanaWeb3.PublicKey(W.pubkey);
     var houseKey = new solanaWeb3.PublicKey(HOUSE_WALLET_ADDRESS); // 2QnrdhxX… creator fee
@@ -2625,6 +2619,24 @@ async function doWithdraw() {
   if(r) toast('Withdraw complete: $'+(r.net*SOL_USD).toFixed(2)+' sent (no fees)','info');
 }
 
+// ── RPC helpers replacing dead /api/blockhash and /api/tx-status Vercel endpoints ─
+var _rpcConn = new solanaWeb3.Connection('https://solana-rpc.publicnode.com', { commitment: 'confirmed' });
+async function _getBlockhash() {
+  var bh = await _rpcConn.getLatestBlockhash('confirmed');
+  if (!bh || !bh.blockhash) throw new Error('RPC blockhash unavailable');
+  return bh;
+}
+async function _checkTxStatus(sig) {
+  try {
+    var r = await _rpcConn.getSignatureStatuses([sig]);
+    var s = r && r.value && r.value[0];
+    if (!s) return { confirmed: null };
+    if (s.err) return { confirmed: false };
+    if (s.confirmationStatus === 'confirmed' || s.confirmationStatus === 'finalized') return { confirmed: true };
+    return { confirmed: null };
+  } catch(_) { return null; }
+}
+
 async function payEntryFee(tierKey) {
   var t = TIERS[tierKey]; if (!t) return false;
 
@@ -2672,8 +2684,7 @@ async function payEntryFee(tierKey) {
       try { _lsData = JSON.parse(_lsRaw); } catch(_) {}
       var _lsAge = _lsData ? (Date.now() - (_lsData.ts || 0)) : Infinity;
       if (_lsData && _lsData.sig && _lsAge < 300000) {
-        var _lsChk = await fetch('/api/tx-status?sig=' + encodeURIComponent(_lsData.sig))
-          .then(function(r){ return r.json(); }).catch(function(){ return null; });
+        var _lsChk = await _checkTxStatus(_lsData.sig);
         if (_lsChk && _lsChk.confirmed === true) {
           _txSig = _lsData.sig;
           try { localStorage.removeItem(_lsKey); } catch(_) {}
@@ -2702,8 +2713,7 @@ async function payEntryFee(tierKey) {
     if (_txSig) {
       try {
         // Server-side check: browser cannot reliably query Solana RPCs due to CORS
-        var _prevChk = await fetch('/api/tx-status?sig=' + encodeURIComponent(_txSig))
-          .then(function(r){ return r.json(); }).catch(function(){ return null; });
+        var _prevChk = await _checkTxStatus(_txSig);
         if (_prevChk && _prevChk.confirmed === true) {
           console.log('[entry] prev TX confirmed — reusing to prevent double charge:', _txSig.slice(0,12));
           try { localStorage.removeItem(_lsKey); } catch(_) {}
@@ -2719,12 +2729,8 @@ async function payEntryFee(tierKey) {
     }
     _txSig = null;
     try {
-      var _bhResp = await fetch('/api/blockhash').then(function(r) {
-        if (!r.ok) throw new Error('blockhash proxy error ' + r.status);
-        return r.json();
-      });
-      if (!_bhResp || !_bhResp.blockhash) throw new Error('RPC blockhash unavailable');
-      var _bh = _bhResp;
+      var _bh = await _pollConn.getLatestBlockhash('confirmed');
+      if (!_bh || !_bh.blockhash) throw new Error('RPC blockhash unavailable');
       console.log('[entry] attempt ' + (_attempt + 1) + ' blockhash=' + _bh.blockhash.slice(0,8) + ' lastValidBH=' + _bh.lastValidBlockHeight);
 
       var _from  = new solanaWeb3.PublicKey(W.pubkey);
@@ -2788,8 +2794,7 @@ async function payEntryFee(tierKey) {
         // Poll timed out — check server-side before retrying to prevent double charge.
         // The blockhash is valid for ~60 s; after 45 s of polling there is a ~15 s window
         // where the TX could still confirm. Never retry blindly inside that window.
-        var _tmChk = await fetch('/api/tx-status?sig=' + encodeURIComponent(_txSig))
-          .then(function(r){ return r.json(); }).catch(function(){ return null; });
+        var _tmChk = await _checkTxStatus(_txSig);
         if (_tmChk && _tmChk.confirmed === true) {
           try { localStorage.removeItem(_lsKey); } catch(_) {}
           _pollOk = true; break;
@@ -2797,8 +2802,7 @@ async function payEntryFee(tierKey) {
         if (!_tmChk || _tmChk.confirmed === null) {
           // Status still unknown — wait for blockhash to definitively expire (~62 s total)
           await new Promise(function(r){ setTimeout(r, 17000); });
-          var _tmChk2 = await fetch('/api/tx-status?sig=' + encodeURIComponent(_txSig))
-            .then(function(r){ return r.json(); }).catch(function(){ return null; });
+          var _tmChk2 = await _checkTxStatus(_txSig);
           if (_tmChk2 && _tmChk2.confirmed === true) {
             try { localStorage.removeItem(_lsKey); } catch(_) {}
             _pollOk = true; break;
