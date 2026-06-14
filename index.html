@@ -4146,6 +4146,9 @@ function getMaxSegs(){ return 325; }
 function grow(s){
   if(s.isMe && boosting) return;           // no growth while boosting — food eaten but no length added
   if(s.isMe && s.segs.length >= getMaxSegs()) return;
+  s._growAccum = (s._growAccum || 0) + 1;
+  if(s._growAccum < 3) return;            // grow 1 segment every 3 orbs
+  s._growAccum = 0;
   var l=s.segs[s.segs.length-1]; s.segs.push({x:l.x,y:l.y}); s.length++;
 }
 function spawnPlayer(){
