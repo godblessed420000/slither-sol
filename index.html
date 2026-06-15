@@ -3905,12 +3905,8 @@ function initCanvas(){
   gc=document.getElementById('gc'); mm=document.getElementById('minimap');
   ctx=gc.getContext('2d'); mctx=mm.getContext('2d');
   resizeC(); window.addEventListener('resize',resizeC);
-  // Scroll wheel zoom — stored as offset from auto-zoom so it sticks
-  gc.addEventListener('wheel', function(e){
-    e.preventDefault();
-    _zoomOffset -= e.deltaY * 0.0012;
-    _zoomOffset = Math.max(-0.55, Math.min(0.55, _zoomOffset));
-  }, {passive:false});
+  // Scroll wheel — prevent default page scroll only; zoom is locked
+  gc.addEventListener('wheel', function(e){ e.preventDefault(); }, {passive:false});
 }
 function resizeC(){
   var wrap=document.getElementById('canvasWrap');
@@ -4214,15 +4210,8 @@ function onMouse(e){
 function onTouch(e){
   e.preventDefault();
   if(e.touches.length===2){
-    // Two fingers — handle pinch zoom
-    var dx=e.touches[0].clientX-e.touches[1].clientX;
-    var dy=e.touches[0].clientY-e.touches[1].clientY;
-    var d=Math.sqrt(dx*dx+dy*dy);
-    if(_pinchDist!==null){
-      var delta=(d-_pinchDist)*0.004;
-      _zoomOffset=Math.max(-0.55,Math.min(0.55,_zoomOffset+delta));
-    }
-    _pinchDist=d;
+    // Two fingers — pinch zoom disabled; just track for future gesture changes
+    _pinchDist=null;
     return;
   }
   // Single finger — aim
@@ -4618,9 +4607,7 @@ function update(_dt){
   }
 
   var len=player.segs.length; // used by HUD below
-  // Fixed zoom — no auto-zoom based on snake length. User scroll-wheel offset still works.
-  var targetZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, 1.0 + _zoomOffset));
-  CAM_ZOOM += (targetZoom - CAM_ZOOM) * 0.08;
+  CAM_ZOOM = 1.0; // locked — no auto-zoom, no scroll zoom
 
   camX=player.x; camY=player.y;
   var isFreeGame=(activeTier==='free');
