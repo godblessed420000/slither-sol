@@ -3905,8 +3905,11 @@ function initCanvas(){
   gc=document.getElementById('gc'); mm=document.getElementById('minimap');
   ctx=gc.getContext('2d'); mctx=mm.getContext('2d');
   resizeC(); window.addEventListener('resize',resizeC);
-  // Scroll wheel — prevent default page scroll only; zoom is locked
-  gc.addEventListener('wheel', function(e){ e.preventDefault(); }, {passive:false});
+  gc.addEventListener('wheel', function(e){
+    e.preventDefault();
+    _zoomOffset -= e.deltaY * 0.0012;
+    _zoomOffset = Math.max(-0.55, Math.min(0.55, _zoomOffset));
+  }, {passive:false});
 }
 function resizeC(){
   var wrap=document.getElementById('canvasWrap');
@@ -4607,7 +4610,7 @@ function update(_dt){
   }
 
   var len=player.segs.length; // used by HUD below
-  CAM_ZOOM = 0.75; // locked — no auto-zoom, no scroll zoom
+  CAM_ZOOM = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, 0.75 + _zoomOffset));
 
   camX=player.x; camY=player.y;
   var isFreeGame=(activeTier==='free');
