@@ -4617,20 +4617,10 @@ function update(_dt){
     }
   }
 
-  // ── Auto-zoom + user scroll offset ──
-  // Freeze zoom while boosting — rapid mass ejection causes rapid length changes which
-  // Zoom: use an exponentially-smoothed length so eating one pellet (len +1) or losing
-  // one segment during boost doesn't immediately jitter the camera.
-  // _smoothLen follows the real length slowly (0.04/frame ≈ settles over ~1.5 s),
-  // then CAM_ZOOM lerps to the target quickly (0.08/frame ≈ settles over ~0.6 s).
-  // During boost the zoom is frozen entirely to prevent sway.
-  var len=player.segs.length; // used here and by HUD below
-  if (!boosting) {
-    _smoothLen += (len - _smoothLen) * 0.04;
-    var autoZoom = _smoothLen < 80 ? 1.0 : Math.max(0.35, 1.0 - (_smoothLen - 80) * 0.002);
-    var targetZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, autoZoom + _zoomOffset));
-    CAM_ZOOM += (targetZoom - CAM_ZOOM) * 0.08;
-  }
+  var len=player.segs.length; // used by HUD below
+  // Fixed zoom — no auto-zoom based on snake length. User scroll-wheel offset still works.
+  var targetZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, 1.0 + _zoomOffset));
+  CAM_ZOOM += (targetZoom - CAM_ZOOM) * 0.08;
 
   camX=player.x; camY=player.y;
   var isFreeGame=(activeTier==='free');
