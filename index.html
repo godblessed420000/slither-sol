@@ -5023,9 +5023,9 @@ function draw(){
 
 function drawS(s){
   if(s.segs.length<2) return;
-  var n = s.segs.length; // no visual cap — full snake always visible so growth is seen
-  var hs   = Math.max(13, Math.min(22, 13 + s.length * 0.08));
-  var baseW = hs * 2;
+  var n = Math.min(s.segs.length, 80); // fixed visual length — snake never grows longer on screen
+  var hs   = 14;  // fixed head/body size — doesn't scale with length
+  var baseW = 28;
   ctx.lineCap='round'; ctx.lineJoin='round';
 
   // Outer glow — one cheap semi-transparent wide pass for local player only
