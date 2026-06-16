@@ -4146,33 +4146,27 @@ function grow(s){
   var l=s.segs[s.segs.length-1]; s.segs.push({x:l.x,y:l.y}); s.length++;
 }
 function spawnPlayer(){
-  // Spread players across the whole arena — random angle, 25-65% of radius from center
-  // Try to spawn away from any existing remote players
-  var cx=WORLD/2, cy=WORLD/2;
-  var best=null, bestDist=0;
-  for(var attempt=0; attempt<12; attempt++){
-    var angle=Math.random()*Math.PI*2;
-    var dist=WORLD_R*(0.25+Math.random()*0.4);
-    var tx=cx+Math.cos(angle)*dist;
-    var ty=cy+Math.sin(angle)*dist;
-    // Find min distance to any existing live peer
-    var minD=9999;
-    for(var k=0;k<peers.length;k++){
-      if(!peers[k].alive) continue;
-      var dd=dst(tx,ty,peers[k].x,peers[k].y);
-      if(dd<minD) minD=dd;
-    }
-    if(minD>bestDist){ bestDist=minD; best={x:tx,y:ty}; }
-    if(bestDist>500) break; // far enough from everyone
+  var cx=WORLD/2, cy=WORLD/2, sx, sy;
+  var _livePeers=peers.filter(function(p){ return p.alive&&p.isRemote; });
+  if(_livePeers.length>0){
+    // Find centroid of all live players then spawn on the exact opposite side
+    var _pcx=0,_pcy=0;
+    for(var _pk=0;_pk<_livePeers.length;_pk++){_pcx+=_livePeers[_pk].x;_pcy+=_livePeers[_pk].y;}
+    _pcx/=_livePeers.length; _pcy/=_livePeers.length;
+    var _pdx=_pcx-cx,_pdy=_pcy-cy,_pdl=Math.sqrt(_pdx*_pdx+_pdy*_pdy)||1;
+    // Opposite direction, 65-80% of arena radius from center
+    var _spR=WORLD_R*(0.65+Math.random()*0.15);
+    sx=cx-(_pdx/_pdl)*_spR; sy=cy-(_pdy/_pdl)*_spR;
+  } else {
+    // No peers — pick a random position 40-70% from center
+    var _sa=Math.random()*Math.PI*2,_sr=WORLD_R*(0.4+Math.random()*0.3);
+    sx=cx+Math.cos(_sa)*_sr; sy=cy+Math.sin(_sa)*_sr;
   }
-  var sx=best?best.x:cx+(Math.random()-.5)*400;
-  var sy=best?best.y:cy+(Math.random()-.5)*400;
   var pn=userProfile?userProfile.name.split(' ')[0].slice(0,14):'YOU';
   // Mid-match size: start at the average live peer length so new joiners aren't tiny
-  var _livePeers=peers.filter(function(p){ return p.alive&&p.isRemote; });
   var _startSegs=40;
   if(_livePeers.length>0){
-    var _avgSegs=Math.round(_livePeers.reduce(function(s,p){ return s+p.length*SEG_MULT; },0)/_livePeers.length);
+    var _avgSegs=Math.round(_livePeers.reduce(function(s,p){return s+p.length*SEG_MULT;},0)/_livePeers.length);
     _startSegs=Math.max(40,Math.min(_avgSegs,325));
   } else if(_preRejoinAvgSegs>15){
     // peers[] is empty on rejoin (cleared by _wsJoin) — use snapshot taken before the clear
