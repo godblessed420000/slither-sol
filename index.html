@@ -3242,7 +3242,7 @@ function _wsHandleMsg(msg, fromAbly) {
         remoteId: cid, joinTs: _rpJoinTs,
         velX: 0, velY: 0, lastT: performance.now()
       };
-      rp.headR = Math.max(13, Math.min(22, 13 + initLen * 0.08));
+      rp.headR = 14;
       var initSegs = Math.min(initLen * SEG_MULT, 120);
       // Spread segments backward along the peer's angle so the snake looks full-size immediately
       var _ia = d.a || 0;
@@ -3307,7 +3307,7 @@ function _wsHandleMsg(msg, fromAbly) {
         }
         return;
       }
-      if (d.l) { rp.length = d.l; rp.headR = Math.max(13, Math.min(22, 13 + rp.length * 0.08)); }
+      if (d.l) { rp.length = d.l; rp.headR = 14; }
     }
     return;
   }
@@ -4144,7 +4144,7 @@ function mkSnake(x,y,color,name,isMe,startSegs){
   var initLen  = Math.round(initSegs/SEG_MULT);
   var segs=[]; for(var i=0;i<initSegs;i++) segs.push({x:x-i*2,y:y});
   return{x:x,y:y,segs:segs,angle:0,color:color,name:name,isMe:isMe,speed:BASE_SPEED,
-         headR:Math.max(13,Math.min(22,13+initLen*0.08)),length:initLen,score:0,alive:true};
+         headR:14,length:initLen,score:0,alive:true};
 }
 function getMaxSegs(){ return 325; }
 function grow(s){
@@ -4565,8 +4565,7 @@ function update(_dt){
   var _tgt = player.length * SEG_MULT;
   while(player.segs.length > _tgt) player.segs.pop();
 
-  // ── Update local player headR so collision radius stays accurate as they grow ──
-  player.headR = Math.max(13, Math.min(22, 13 + player.length * 0.08)); // match visual hs formula
+  player.headR = 14; // fixed — matches the locked visual head size
 
   // ── Remote players: dead reckoning + LERP toward predicted position ──
   var rNow = performance.now(); // one call per frame — shared across all remote peers
@@ -4669,7 +4668,7 @@ function killCheck(){
 
     // — Head-on: pure clientId tiebreaker. Winner skips body checks (continue) so
     // the winner can't also die from a body segment overlapping during the same frame.
-    if(dst(player.x,player.y,px,py) < player.headR+p.headR+8){
+    if(dst(player.x,player.y,px,py) < player.headR+p.headR+4){
       var iLose = myId > (p.remoteId||'');
       if(iLose){ killPlayer('Head-on with '+p.name, p.remoteId); return; }
       var _kNowH=Date.now();
@@ -4688,7 +4687,7 @@ function killCheck(){
     // — Body collision — same radius on both sides for fair/symmetric hitboxes.
     // iHitTheirBody has a 2-frame debounce (below) to filter LERP false positives.
     var iHitTheirBody = false;
-    var _bodyR = player.headR + p.headR + 20; // +20px bonus makes coil walls solid
+    var _bodyR = player.headR + p.headR + 4; // matches visual body width
     for(var j=5;j<segLimit;j++){
       if(dst(player.x,player.y,p.segs[j].x,p.segs[j].y) < _bodyR){
         iHitTheirBody=true; break;
