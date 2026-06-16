@@ -4096,7 +4096,7 @@ function launchGame() {
   // Seed 35 orbs near the map center, then fill the rest randomly
   var _cx=WORLD/2, _cy=WORLD/2;
   for(var _cf=0;_cf<35;_cf++) addFood(_cx+(Math.random()-.5)*WORLD*0.22, _cy+(Math.random()-.5)*WORLD*0.22);
-  spawnFood(MAX_FOOD); gameRunning=true; _cashoutInProgress=false;
+  spawnFood(MAX_FOOD); spawnBots(); gameRunning=true; _cashoutInProgress=false;
   _spectating=false; _specTargetId=null; var _shEl=document.getElementById('specHud'); if(_shEl) _shEl.style.display='none';
   _hideMobileBar(); // hide wallet bar during gameplay — HUD shows score/balance
   var _hee=document.getElementById('headerEmailEl'); if(_hee) _hee.style.display='none';
@@ -4139,7 +4139,7 @@ function mkSnake(x,y,color,name,isMe,startSegs){
 function getMaxSegs(){ return 325; }
 function grow(s){
   if(s.isMe && boosting) return;           // no growth while boosting — food eaten but no length added
-  if(s.isMe && s.segs.length >= getMaxSegs()) return;
+  if(s.segs.length >= getMaxSegs()) return;
   s._growAccum = (s._growAccum || 0) + 1;
   if(s._growAccum < 3) return;            // grow 1 segment every 3 orbs
   s._growAccum = 0;
@@ -4182,6 +4182,90 @@ function spawnPlayer(){
   player=mkSnake(sx,sy,_playerColor,pn,true,_startSegs);
 }
 function spawnPeers(){ /* no-op — real players only, all peers come from Ably */ }
+var _BOT_NAMES=['V1per','Sl1th3r','NeonCoil','VenomX','GhostByte','DriftSnek','HexKing','ZeroCoil','Kr4ken','AspVoid','RuinSnek','CryptoAsp'];
+function _killBot(b){
+  var _bs=b.segs.slice(0,80); b.alive=false; b.segs=[]; b._deadAt=Date.now();
+  for(var _i=0;_i<_bs.length;_i++) addFood(_bs[_i].x+(Math.random()-.5)*14,_bs[_i].y+(Math.random()-.5)*14);
+}
+function spawnBots(){
+  var _bc=['#FF4560','#9945FF','#00C2FF','#FFD700','#FF6B35','#FF3CAC'];
+  for(var _bi=0;_bi<3;_bi++){
+    var _ba=Math.random()*Math.PI*2,_br=0.25+Math.random()*0.35;
+    var _bx=WORLD/2+Math.cos(_ba)*WORLD_R*_br,_by=WORLD/2+Math.sin(_ba)*WORLD_R*_br;
+    var _bn=_BOT_NAMES[Math.floor(Math.random()*_BOT_NAMES.length)]+(Math.floor(Math.random()*89)+10);
+    var _bot=mkSnake(_bx,_by,_bc[_bi%_bc.length],_bn,false,40);
+    _bot.angle=Math.random()*Math.PI*2; _bot.segs=[];
+    for(var _bsi=0;_bsi<40;_bsi++) _bot.segs.push({x:_bx-Math.cos(_bot.angle)*_bsi*2,y:_by-Math.sin(_bot.angle)*_bsi*2});
+    _bot.isBot=true; _bot.isRemote=false; _bot.remoteId='__bot_'+_bi;
+    _bot._deadAt=null; _bot._wanderAngle=_bot.angle;
+    peers.push(_bot);
+  }
+}
+function updateBots(){
+  if(!gameRunning) return;
+  var _vSB=Math.round(80*0.92/CAM_ZOOM);
+  var _plLim=player&&player.alive?Math.min(player.segs.length,_vSB):0;
+  for(var _bi=0;_bi<peers.length;_bi++){
+    var b=peers[_bi]; if(!b.isBot) continue;
+    if(!b.alive){
+      if(b._deadAt&&Date.now()-b._deadAt>8000){
+        var _ra=Math.random()*Math.PI*2,_rr=0.25+Math.random()*0.35;
+        b.x=WORLD/2+Math.cos(_ra)*WORLD_R*_rr; b.y=WORLD/2+Math.sin(_ra)*WORLD_R*_rr;
+        b.angle=Math.random()*Math.PI*2; b.segs=[];
+        for(var _rsi=0;_rsi<40;_rsi++) b.segs.push({x:b.x-Math.cos(b.angle)*_rsi*2,y:b.y-Math.sin(b.angle)*_rsi*2});
+        b.length=10; b.alive=true; b._deadAt=null; b._growAccum=0;
+      }
+      continue;
+    }
+    // ── Steering ──────────────────────────────────────────────────────────────
+    var _ta=b.angle;
+    var _bwdx=b.x-WORLD/2,_bwdy=b.y-WORLD/2;
+    var _bedge=WORLD_R-Math.sqrt(_bwdx*_bwdx+_bwdy*_bwdy);
+    if(_bedge<200){
+      _ta=Math.atan2(WORLD/2-b.y,WORLD/2-b.x); // flee inward from wall
+    } else {
+      // Repulsion from nearby snake segments
+      var _avx=0,_avy=0,_avhit=false;
+      var _allS=(player&&player.alive)?peers.concat([player]):peers;
+      for(var _asi=0;_asi<_allS.length;_asi++){
+        var _as=_allS[_asi]; if(_as===b||!_as.alive) continue;
+        var _asn=Math.min(_as.segs.length,25);
+        for(var _asj=0;_asj<_asn;_asj++){
+          var _seg=_as.segs[_asj],_sdx=b.x-_seg.x,_sdy=b.y-_seg.y,_sd2=_sdx*_sdx+_sdy*_sdy;
+          if(_sd2<85*85&&_sd2>1){var _sd=Math.sqrt(_sd2),_wt=(85-_sd)/85;_avx+=_sdx/_sd*_wt;_avy+=_sdy/_sd*_wt;_avhit=true;}
+        }
+      }
+      if(_avhit&&(_avx*_avx+_avy*_avy)>0.15){
+        _ta=Math.atan2(_avy,_avx);
+      } else {
+        // Seek nearest food
+        var _bf=null,_bfd=500;
+        for(var _fi=0;_fi<food.length;_fi++){
+          var _fd=dst(b.x,b.y,food[_fi].x,food[_fi].y);
+          if(_fd<_bfd){_bfd=_fd;_bf=food[_fi];}
+        }
+        if(_bf){_ta=Math.atan2(_bf.y-b.y,_bf.x-b.x);}
+        else{if(Math.random()<0.02)b._wanderAngle=(b._wanderAngle||b.angle)+((Math.random()-.5)*1.5); _ta=b._wanderAngle||b.angle;}
+      }
+    }
+    // Smooth turn respecting TURN_RATE
+    var _da=_ta-b.angle;
+    while(_da>Math.PI)_da-=Math.PI*2; while(_da<-Math.PI)_da+=Math.PI*2;
+    b.angle+=Math.max(-TURN_RATE,Math.min(TURN_RATE,_da));
+    moveS(b,b.angle,BASE_SPEED);
+    // ── Bot vs player collision ────────────────────────────────────────────────
+    if(player&&player.alive){
+      // Head-on: bot always loses
+      if(dst(b.x,b.y,player.x,player.y)<b.headR+player.headR+4){ _killBot(b); continue; }
+      // Bot head hits player body: bot dies
+      for(var _bk=0;_bk<_plLim;_bk++){
+        var _bms=player.segs[_bk];
+        if(dst(player.x,player.y,_bms.x,_bms.y)<28) continue;
+        if(dst(b.x,b.y,_bms.x,_bms.y)<b.headR+player.headR+4){ _killBot(b); break; }
+      }
+    }
+  }
+}
 function spawnFood(n){ for(var i=0;i<n;i++) addFood(); }
 function addFood(x,y,isBoostPebble){
   if(food.length >= MAX_FOOD) return; // hard cap — never let the list blow up
@@ -4586,7 +4670,7 @@ function update(_dt){
     // No AI bots — only real remote players exist in peers[]
   }
 
-  eatFood(); killCheck();
+  eatFood(); killCheck(); updateBots();
   // Replenish food — cap at 5 spawns/frame to avoid a spike when many items are eaten at once
   var _fAdd=0; while(food.length<MAX_FOOD&&_fAdd<5){ addFood(); _fAdd++; }
   // Enforce dynamic max-length cap (based on SOL balance) — trims if balance dropped
@@ -4678,6 +4762,7 @@ function killCheck(){
       var iLoseMutual = player.segs.length < p.segs.length ||
                         (player.segs.length === p.segs.length && myId > (p.remoteId||''));
       if(iLoseMutual){ killPlayer('Eliminated by '+p.name, p.remoteId); return; }
+      if(p.isBot){ _killBot(p); continue; } // player wins mutual — kill bot locally
       var _kNowM=Date.now();
       if(!_killNotifyTs[p.remoteId]||_kNowM-_killNotifyTs[p.remoteId]>1000){
         _killNotifyTs[p.remoteId]=_kNowM;
@@ -4697,6 +4782,7 @@ function killCheck(){
       }
     } else if(theyHitMyBody){
       _bodyHitFrames[_bhk] = 0;
+      if(p.isBot) continue; // bot ran into my body — updateBots handles the kill
       var _kNow3=Date.now();
       if(!_killNotifyTs[p.remoteId]||_kNow3-_killNotifyTs[p.remoteId]>1000){
         _killNotifyTs[p.remoteId]=_kNow3;
@@ -4711,6 +4797,7 @@ function killCheck(){
       _bodyHitFrames[_bhk] = 0;
       // — Head-on: only when no body collision detected. clientId tiebreaker.
       if(dst(player.x,player.y,px,py) < player.headR+p.headR+4){
+        if(p.isBot) continue; // bot head-on resolved in updateBots (player always wins)
         var iLose = myId > (p.remoteId||'');
         if(iLose){ killPlayer('Head-on with '+p.name, p.remoteId); return; }
         var _kNowH=Date.now();
