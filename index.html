@@ -113,10 +113,6 @@ canvas{display:block;width:100%;height:100%;}
 #cashoutProgress{position:absolute;top:0;left:0;right:0;height:4px;background:rgba(20,241,149,.15);display:none;z-index:30;}
 #cashoutBar{height:100%;width:0%;background:linear-gradient(90deg,var(--purple),var(--green));box-shadow:0 0 8px var(--green);}
 #cashoutFlash{position:absolute;inset:0;background:rgba(20,241,149,.12);pointer-events:none;opacity:0;z-index:25;transition:opacity .3s;}
-.boost-wrap{position:absolute;bottom:12px;left:12px;display:none;flex-direction:column;gap:3px;}
-.boost-lbl{font-size:.58rem;color:var(--dim);}
-.boost-outer{width:115px;height:5px;background:rgba(215,215,215,.08);border-radius:3px;overflow:hidden;}
-.boost-inner{height:100%;background:linear-gradient(90deg,var(--purple),var(--green));border-radius:3px;transition:width .1s;}
 .ping{position:absolute;top:8px;left:10px;font-size:.58rem;color:var(--green);background:rgba(0,0,0,.5);padding:2px 7px;border-radius:3px;display:none;}
 /* ── In-game chat ── */
 #chatBox{position:absolute;bottom:52px;left:12px;display:none;flex-direction:column;gap:3px;max-width:300px;pointer-events:none;z-index:6;}
@@ -807,10 +803,6 @@ canvas{display:block;width:100%;height:100%;}
     </div>
     <div class="kill-feed" id="killFeed"></div>
     <div class="ping" id="pingEl">&#9679; 8ms</div>
-    <div class="boost-wrap" id="boostWrap">
-      <div class="boost-lbl">BOOST [LMB / SPACE] &middot; [T] CHAT</div>
-      <div class="boost-outer"><div class="boost-inner" id="boostBarEl" style="width:100%"></div></div>
-    </div>
     <!-- In-game chat -->
     <div id="chatBox"></div>
     <div id="chatInputWrap">
@@ -3866,15 +3858,14 @@ var score=0,myKills=0,killSOL=0,pingInt,lbInt;
 var qDown=false,qStart=0,cashingOut=false,cashoutAnimId=null;
 var _autoCircle=false; // Y key — snake spins in a tight circle at max turn rate
 // ── Cached HUD element refs — set once at game start, avoids getElementById every frame ──
-var _elHudScore=null,_elHudSub=null,_elCashoutEarnVal=null,_elBoostBar=null;
+var _elHudScore=null,_elHudSub=null,_elCashoutEarnVal=null;
 var _elCashoutQhint=null,_elPingEl=null,_elSidebar=null;
-var _hudScoreV='',_hudSubV='',_hudEarnV='',_hudBoostV='';
+var _hudScoreV='',_hudSubV='',_hudEarnV='';
 var _LERP=0.5; // remote snake interpolation — 0.5 is smoother, reduces rubber-banding on missed packets
 function _cacheHudEls(){
   _elHudScore       = document.getElementById('hudScore');
   _elHudSub         = document.getElementById('hudSub');
   _elCashoutEarnVal = document.getElementById('cashoutEarnVal');
-  _elBoostBar       = document.getElementById('boostBarEl');
   _elCashoutQhint   = document.getElementById('cashoutQhint');
   _elPingEl         = document.getElementById('pingEl');
   _elSidebar        = document.querySelector('.sidebar');
@@ -4065,15 +4056,14 @@ function launchGame() {
   var sb=document.querySelector('.sidebar'); if(sb) sb.style.display='none';
   setTimeout(resizeC, 30);
   hideAll();
-  ['boostWrap','cashoutHud','pingEl'].forEach(function(id){ var el=document.getElementById(id); if(el) el.style.display=id==='cashoutHud'?'flex':'block'; });
-  document.getElementById('boostWrap').style.display='flex';
+  ['cashoutHud','pingEl'].forEach(function(id){ var el=document.getElementById(id); if(el) el.style.display=id==='cashoutHud'?'flex':'block'; });
   var _cb=document.getElementById('chatBox'); if(_cb) _cb.style.display='flex';
   _initChat();
   var tb=document.getElementById('hudTierBadge');
   if(tb){ tb.style.display='inline-flex'; tb.className='lobby-badge '+t.badgeCls; tb.textContent=t.name; }
   var alb=document.getElementById('activeLobbyBadge');
   if(alb){ alb.style.display='flex'; alb.innerHTML='<div class="lobby-badge '+t.badgeCls+'">● '+t.name+' Active</div>'; }
-  score=0; myKills=0; killSOL=0; boostE=100; boosting=false; cashingOut=false; qDown=false; _zoomOffset=0; CAM_ZOOM=1.0; _smoothLen=100; _autoCircle=false; _hudScoreV=''; _hudSubV=''; _hudEarnV=''; _hudBoostV='';
+  score=0; myKills=0; killSOL=0; boostE=100; boosting=false; cashingOut=false; qDown=false; _zoomOffset=0; CAM_ZOOM=1.0; _smoothLen=100; _autoCircle=false; _hudScoreV=''; _hudSubV=''; _hudEarnV='';
   _updateArenaSize(); // set WORLD/WORLD_R based on how many remote players are already in the room
   // Restore W.balance from on-chain if it was zeroed by a previous death or is stale.
   // refreshBalance() won't sync during gameplay (gameRunning guard), so we must do it here.
@@ -4387,7 +4377,7 @@ async function triggerCashout(){
     if(_elSidebar) _elSidebar.style.display=''; setTimeout(resizeC,30);
     var flash=document.getElementById('cashoutFlash'); if(flash){ flash.style.opacity='1'; setTimeout(function(){ flash.style.opacity='0'; },400); }
     cleanupL();
-    ['cashoutHud','boostWrap','pingEl','hudTierBadge','activeLobbyBadge','chatBox'].forEach(function(id){ var el=document.getElementById(id); if(el) el.style.display='none'; }); _closeChat();
+    ['cashoutHud','pingEl','hudTierBadge','activeLobbyBadge','chatBox'].forEach(function(id){ var el=document.getElementById(id); if(el) el.style.display='none'; }); _closeChat();
     var coMsg=document.getElementById('coMsg'); if(coMsg) coMsg.textContent='Free Play · Score:'+score+' · Length:'+player.segs.length+' · Kills:'+myKills;
     var coAmt=document.getElementById('coAmt'); if(coAmt) coAmt.textContent='Practice round — no SOL wagered';
     var coFees=document.getElementById('coFees'); if(coFees) coFees.innerHTML='<div class="pf-row" style="justify-content:center;color:var(--dim)">Enter a paid lobby to earn real SOL</div>';
@@ -4430,7 +4420,7 @@ async function triggerCashout(){
   // Sync wallet balance after cashout so displayed balance matches on-chain truth
   if(W.pubkey){ setTimeout(function(){ refreshBalance(null); }, 1500); }
   cleanupL();
-  ['cashoutHud','boostWrap','pingEl','hudTierBadge','activeLobbyBadge','chatBox'].forEach(function(id){ var el=document.getElementById(id); if(el) el.style.display='none'; }); _closeChat();
+  ['cashoutHud','pingEl','hudTierBadge','activeLobbyBadge','chatBox'].forEach(function(id){ var el=document.getElementById(id); if(el) el.style.display='none'; }); _closeChat();
   var coMsg=document.getElementById('coMsg'); if(coMsg) coMsg.textContent=t.name+' · Kills:'+myKills+' · Score:'+score+' · Length:'+player.segs.length;
   var coAmt=document.getElementById('coAmt');
   var _entrySOL = t.sol || 0;
@@ -4631,8 +4621,6 @@ function update(_dt){
     var _he=isFreeGame?'Free Play':('$'+((W.balance||0)*SOL_USD).toFixed(2)+' carrying');
     if(_he!==_hudEarnV){ _elCashoutEarnVal.textContent=_he; _hudEarnV=_he; }
   }
-  var _hb=Math.round(boostE)+'%';
-  if(_elBoostBar&&_hb!==_hudBoostV){ _elBoostBar.style.width=_hb; _hudBoostV=_hb; }
 }
 
 function moveS(s,angle,spd){
@@ -4871,7 +4859,7 @@ function killPlayer(reason, killedBy){
   // Update rejoin button label with tier name
   var rb=document.getElementById('rejoinBtnDeath');
   if(rb) rb.textContent='▶ Rejoin '+(t.usd>0?'$'+t.usd+' Lobby':'Free Lobby');
-  ['cashoutHud','boostWrap','pingEl','hudTierBadge','activeLobbyBadge','chatBox'].forEach(function(id){ var e2=document.getElementById(id); if(e2) e2.style.display='none'; }); _closeChat();
+  ['cashoutHud','pingEl','hudTierBadge','activeLobbyBadge','chatBox'].forEach(function(id){ var e2=document.getElementById(id); if(e2) e2.style.display='none'; }); _closeChat();
   hideAll(); var ov=document.getElementById('ovDeath'); if(ov) ov.classList.remove('hidden');
 }
 
