@@ -3128,8 +3128,11 @@ function _wsHandleMsg(msg, fromAbly) {
 
   // Round-trip ping response — update ping display
   if (type === 'ping') {
-    var rtt = Date.now() - (d.t || 0);
-    if (_elPingEl && gameRunning) _elPingEl.textContent = '● ' + rtt + 'ms';
+    var rtt = Math.round(performance.now() - (d.t || 0));
+    if (_elPingEl) {
+      _elPingEl.textContent = '● ' + rtt + 'ms';
+      _elPingEl.style.color = rtt < 30 ? '#14F195' : rtt < 60 ? '#FFD700' : '#FF4560';
+    }
     return;
   }
 
@@ -3415,25 +3418,9 @@ function _wsJoin(tier) {
 var _posMsg = { type:'pos', clientId:'', data:{x:0,y:0,a:0,l:0,s:0,n:'',color:'',v:true} };
 var _posSeq  = 0; // frame counter — name+color only sent every 5th update
 function _startPub() {
-  clearInterval(_pubTimer);
+  clearInterval(_pubTimer); _pubTimer = null;
   _posSeq = 0;
-  _pubTimer = setInterval(function() {
-    if (!gameRunning || !player || !player.alive || !_ws || _ws.readyState !== WebSocket.OPEN) return;
-    try {
-      _posSeq++;
-      _posMsg.clientId = _wsClientId;
-      var d = _posMsg.data;
-      d.x = +(player.x.toFixed(1));
-      d.y = +(player.y.toFixed(1));
-      d.a = +(player.angle.toFixed(3));
-      d.l = player.length;   // base length unit — no double SEG_MULT on receiver
-      d.s = score;
-      // Name + color don't change mid-game — only include every 5th update to reduce packet size
-      d.n     = (_posSeq % 5 === 1) ? player.name  : undefined;
-      d.color = (_posSeq % 5 === 1) ? player.color : undefined;
-      _ws.send(JSON.stringify(_posMsg));
-    } catch(e) {}
-  }, 20); // 50fps — smooth remote movement over low-latency WebSocket
+  _lastPosSend = 0;
 }
 
 // ── Leave / cleanup ──────────────────────────────────────────────────────────
@@ -3652,9 +3639,9 @@ setInterval(function() {
 // ── Ping display ─────────────────────────────────────────────────────────────
 function _wsPingLoop() {
   setInterval(function() {
-    if (!gameRunning || !_ws || _ws.readyState !== WebSocket.OPEN) return;
-    _wsSend('ping', { t: Date.now() });
-  }, 3000); // 3s is plenty — reduces server ping traffic vs 2s
+    if (!_ws || _ws.readyState !== WebSocket.OPEN) return;
+    _wsSend('ping', { t: performance.now() });
+  }, 1000); // 1s keeps display current; performance.now() gives sub-ms precision
 }
 
 // ════════════════ SERVER + LOBBY SELECT ════════════════
@@ -3848,6 +3835,7 @@ var gc,ctx,mm,mctx,gameRunning=false,player=null,peers=[],food=[],parts=[];
 var _inGameSession=false; // true from launchGame() until showStart() — email hidden the whole time
 var _staleFrame=0; // frame counter for stale-peer eviction (runs every 60 frames)
 var _lastLoopT=0;  // last loop timestamp for delta-time calculation
+var _lastPosSend=0; // last position-publish timestamp (rAF-driven, ~60fps)
 var _preRejoinAvgSegs=0; // snapshot of peer avg segs taken just before _wsJoin() clears peers[]
 var _boostExhaustedUntil=0; // performance.now() timestamp when the 3s exhaustion penalty expires
 var _mmFrame=0; // minimap throttle — redrawn every 3 game frames, not every frame
@@ -4457,6 +4445,23 @@ function loop(){
   var _dt = _lastLoopT ? Math.min((_lt - _lastLoopT) / 16.667, 2.5) : 1.0;
   _lastLoopT = _lt;
   update(_dt);
+  // Publish position every ~16ms (≈60fps) tightly coupled to the render frame
+  if (gameRunning && player && player.alive && _ws && _ws.readyState === WebSocket.OPEN && _lt - _lastPosSend >= 16) {
+    _lastPosSend = _lt;
+    try {
+      _posSeq++;
+      _posMsg.clientId = _wsClientId;
+      var _pd = _posMsg.data;
+      _pd.x = +player.x.toFixed(1);
+      _pd.y = +player.y.toFixed(1);
+      _pd.a = +player.angle.toFixed(3);
+      _pd.l = player.length;
+      _pd.s = score;
+      _pd.n     = (_posSeq % 5 === 1) ? player.name  : undefined;
+      _pd.color = (_posSeq % 5 === 1) ? player.color : undefined;
+      _ws.send(JSON.stringify(_posMsg));
+    } catch(e) {}
+  }
   draw();
   requestAnimationFrame(loop);
 }
