@@ -1231,23 +1231,7 @@ function _refreshTierPrices() {
 var PC = ['#14F195','#9945FF','#00C2FF','#FF4560','#FFD700','#FF6B35','#FF3CAC','#7FFF00','#FF1493','#00FFFF','#FF8C00','#ADFF2F','#DA70D6','#1E90FF','#FF6347','#40E0D0'];
 var _playerColor = PC[0]; // currently selected snake color (user-editable)
 var HN = ['xX_SOLkiller_Xx','wagmi_snake','ngmi_lmao','degenViber','rugged_again','alphaCoil','moonSnek','rugpuller'];
-var tierOnline = {'free':12, 1:6, 5:3, 10:2};
-// Simulate realistic fluctuating player counts per tier
-function _updateTierOnline(){
-  tierOnline['free'] = 10 + Math.floor(Math.random()*18); // free: 10-27 players
-  tierOnline[1]  = 8  + Math.floor(Math.random()*14);     // $1: 8-21 players
-  tierOnline[5]  = 3  + Math.floor(Math.random()*8);      // $5: 3-10 players
-  tierOnline[10] = 1  + Math.floor(Math.random()*4);      // $10: 1-4 players
-}
-_updateTierOnline();
-setInterval(function(){
-  // Gradually adjust counts +/- 1 every 8s for realism
-  var mins={'free':6,1:4,5:1,10:1}, maxs={'free':30,1:24,5:12,10:6};
-  ['free',1,5,10].forEach(function(t){
-    tierOnline[t] = Math.max(mins[t], Math.min(maxs[t], tierOnline[t] + (Math.random()<.5?1:-1)));
-  });
-  if(!gameRunning) refreshCards();
-}, 8000);
+var tierOnline = {'free':0, 1:0, 5:0, 10:0};
 
 // ════════════════ UTILS ════════════════
 function sh(a)  { if(!a)return'---'; return String(a).slice(0,4)+'...'+String(a).slice(-4); }
@@ -1332,6 +1316,19 @@ function _toastFallbackCopy(text, btn) {
   }
 }
 
+function playJoinDing(){
+  try{
+    var ac=new(window.AudioContext||window.webkitAudioContext)();
+    var o=ac.createOscillator(), g=ac.createGain();
+    o.connect(g); g.connect(ac.destination);
+    o.type='sine';
+    o.frequency.setValueAtTime(660,ac.currentTime);
+    o.frequency.exponentialRampToValueAtTime(1320,ac.currentTime+0.08);
+    g.gain.setValueAtTime(0.25,ac.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001,ac.currentTime+0.5);
+    o.start(ac.currentTime); o.stop(ac.currentTime+0.5);
+  }catch(e){}
+}
 function kFeed(msg, type){
   var el=document.createElement('div');
   el.className='kill-item'+(type?' '+type:''); el.textContent=msg;
@@ -3247,6 +3244,7 @@ function _wsHandleMsg(msg, fromAbly) {
       _remoteMap[cid] = rp;
       peers.push(rp);
       _updateArenaSize(); // world grows when a new player enters
+      playJoinDing();
       kFeed(rp.name + ' is in the game!');
     } else {
       var now2 = performance.now();
@@ -3882,12 +3880,10 @@ function _pollLobbyCounts(){
     .then(function(r){return r.ok?r.json():null;})
     .then(function(d){
       if(!d) return;
-      var map={free:'onlinefree',1:'online1',5:'online5',10:'online10'};
-      Object.keys(map).forEach(function(k){
-        var el=document.getElementById(map[k]);
-        var n=d[k]||0;
-        if(el) el.textContent=n+' online'+(n===1?' player':' players');
+      ['free',1,5,10].forEach(function(k){
+        if(d[k]!=null) tierOnline[k]=d[k];
       });
+      if(!gameRunning) refreshCards();
     }).catch(function(){});
 }
 function _startLobbyCountPoll(){
@@ -6091,10 +6087,6 @@ setInterval(function(){
   });
 },4000);
 
-setInterval(function(){
-  ['free',1,5,10].forEach(function(t){ tierOnline[t]=Math.max(1,tierOnline[t]+(Math.random()<.5?1:-1)); });
-  if(!gameRunning) refreshCards();
-},7000);
 
 // ════════════════ INIT ════════════════
 // ── Live SOL/USD price — fetched client-side every 30 s ─────────────────────
