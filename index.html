@@ -4513,6 +4513,12 @@ function update(_dt){
         else _specTargetId=null; // no one alive — keep camera still, wait for joiners
         _updateSpecHud();
       }
+      // Update score HUD every frame with the spectated player's live stats
+      var _spPeer=_specTargetId?peers.find(function(p){return p.remoteId===_specTargetId&&p.alive;}):null;
+      var _shs=_spPeer?'SCORE: '+(_spPeer.score||0):'SPECTATING';
+      if(_elHudScore&&_shs!==_hudScoreV){_elHudScore.textContent=_shs;_hudScoreV=_shs;}
+      var _shsu=_spPeer?'Length: '+(_spPeer.segs?_spPeer.segs.length:0):'';
+      if(_elHudSub&&_shsu!==_hudSubV){_elHudSub.textContent=_shsu;_hudSubV=_shsu;}
     }
     return;
   }
