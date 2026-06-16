@@ -837,8 +837,12 @@ canvas{display:block;width:100%;height:100%;}
           <div style="font-family:'Orbitron',monospace;font-size:.75rem;color:var(--dim);letter-spacing:2px;text-align:center;">CREATE YOUR ACCOUNT</div>
           <input id="loginEmail" type="email" placeholder="Your email (e.g. you@gmail.com)"
             style="background:#0d1628;border:1px solid #334115;color:#e2e8f0;border-radius:8px;padding:13px 14px;font-size:.9rem;width:100%;box-sizing:border-box;outline:none;transition:border-color .2s;"
+            onfocus="this.style.borderColor='#9945FF'" onblur="this.style.borderColor='#334115';_loginEmailBlur(this.value)"
+            onkeydown="if(event.key==='Enter'){document.getElementById('loginPassword').focus();}" autofocus />
+          <input id="loginPassword" type="password" placeholder="Password (min 8 characters)"
+            style="background:#0d1628;border:1px solid #334115;color:#e2e8f0;border-radius:8px;padding:13px 14px;font-size:.9rem;width:100%;box-sizing:border-box;outline:none;transition:border-color .2s;"
             onfocus="this.style.borderColor='#9945FF'" onblur="this.style.borderColor='#334115'"
-            onkeydown="if(event.key==='Enter')submitEmailLogin()" autofocus />
+            onkeydown="if(event.key==='Enter'){document.getElementById('loginName').focus();}" />
           <input id="loginName" type="text" placeholder="Display name (optional)"
             style="background:#0d1628;border:1px solid #334115;color:#e2e8f0;border-radius:8px;padding:11px 14px;font-size:.85rem;width:100%;box-sizing:border-box;outline:none;transition:border-color .2s;"
             onfocus="this.style.borderColor='#9945FF'" onblur="this.style.borderColor='#334115'"
@@ -1383,34 +1387,76 @@ function _generateOrRestoreWallet(email) {
   return pseudo;
 }
 
+function _hashPassword(password, email) {
+  var input = email.toLowerCase().trim() + ':' + password;
+  var buf = new TextEncoder().encode(input);
+  return crypto.subtle.digest('SHA-256', buf).then(function(hash) {
+    return Array.from(new Uint8Array(hash)).map(function(b){ return b.toString(16).padStart(2,'0'); }).join('');
+  });
+}
+
+function _loginEmailBlur(email) {
+  var pwEl = document.getElementById('loginPassword');
+  if (!pwEl || !email || !email.includes('@')) return;
+  var emailKey = email.toLowerCase().replace(/[^a-z0-9]/g, '');
+  var hasPassword = !!_ls.getItem('ss_pw_' + emailKey);
+  pwEl.placeholder = hasPassword ? 'Enter your password' : 'Create a password (min 8 chars)';
+}
+
 function submitEmailLogin() {
   try {
     var emailEl = document.getElementById('loginEmail');
+    var pwEl    = document.getElementById('loginPassword');
     var nameEl  = document.getElementById('loginName');
-    var email = emailEl ? emailEl.value.trim() : '';
-    var name  = nameEl  ? nameEl.value.trim()  : '';
+    var email    = emailEl ? emailEl.value.trim() : '';
+    var password = pwEl    ? pwEl.value           : '';
+    var name     = nameEl  ? nameEl.value.trim()  : '';
 
     if (!email || !email.includes('@')) {
       toast('Enter your email address to sign in', 'error');
       if (emailEl) emailEl.focus();
       return;
     }
-    // Name is optional — auto-derive from email prefix if blank
-    if (!name) {
-      name = email.split('@')[0].replace(/[._\-]/g, ' ').replace(/\s+/g,' ').trim();
-      name = name.charAt(0).toUpperCase() + name.slice(1) || 'Player';
+    if (!password || password.length < 8) {
+      toast('Password must be at least 8 characters', 'error');
+      if (pwEl) pwEl.focus();
+      return;
     }
 
-    var walletAddr      = _generateOrRestoreWallet(email);
-    W.pubkey            = walletAddr;
-    PRIVY.walletAddress = walletAddr;
+    var emailKey   = email.toLowerCase().replace(/[^a-z0-9]/g, '');
+    var pwStoreKey = 'ss_pw_' + emailKey;
+    var storedHash = _ls.getItem(pwStoreKey);
 
-    var uid    = 'local_' + email.toLowerCase().replace(/[^a-z0-9]/g,'_');
-    var avatar = name.split(' ').map(function(w){ return w[0]||''; }).join('').slice(0,2).toUpperCase() || 'PL';
-    _finishLogin(name, email, avatar, uid, '');
-    updateWalletDisplays();
-    _fetchPrivyWalletBalance(walletAddr);
-    saveSession();
+    _hashPassword(password, email).then(function(hash) {
+      if (storedHash) {
+        if (hash !== storedHash) {
+          toast('Incorrect password', 'error');
+          if (pwEl) { pwEl.value = ''; pwEl.focus(); }
+          return;
+        }
+      } else {
+        _ls.setItem(pwStoreKey, hash);
+      }
+
+      if (!name) {
+        name = email.split('@')[0].replace(/[._\-]/g, ' ').replace(/\s+/g,' ').trim();
+        name = name.charAt(0).toUpperCase() + name.slice(1) || 'Player';
+      }
+
+      var walletAddr      = _generateOrRestoreWallet(email);
+      W.pubkey            = walletAddr;
+      PRIVY.walletAddress = walletAddr;
+
+      var uid    = 'local_' + email.toLowerCase().replace(/[^a-z0-9]/g,'_');
+      var avatar = name.split(' ').map(function(w){ return w[0]||''; }).join('').slice(0,2).toUpperCase() || 'PL';
+      _finishLogin(name, email, avatar, uid, '');
+      updateWalletDisplays();
+      _fetchPrivyWalletBalance(walletAddr);
+      saveSession();
+    }).catch(function(err) {
+      console.error('[login hash]', err);
+      toast('Login error: ' + (err.message || err), 'error');
+    });
   } catch(err) {
     console.error('[login]', err);
     toast('Login error: ' + (err.message || err), 'error');
