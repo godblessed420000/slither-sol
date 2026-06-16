@@ -4647,10 +4647,12 @@ function eatFood(){
 function killCheck(){
   if(!player.alive) return;
   var myId = _wsClientId || 'zzz';
-  var myLimit = player.segs.length;
+  // Cap to visual segment count — segments beyond this are invisible and must not be deadly.
+  var _visSegs = Math.round(80 * 0.92 / CAM_ZOOM);
+  var myLimit = Math.min(player.segs.length, _visSegs);
   for(var i=0;i<peers.length;i++){
     var p=peers[i]; if(!p.alive) continue;
-    var segLimit = p.segs.length;
+    var segLimit = Math.min(p.segs.length, _visSegs);
     var px = (p.targetX!=null)?p.targetX:p.x;
     var py = (p.targetY!=null)?p.targetY:p.y;
 
