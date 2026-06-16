@@ -4578,9 +4578,7 @@ function update(_dt){
   if(_autoCircle){
     player.angle += TURN_RATE * _dt;
   } else {
-    var dx=mouseX-gc.width/2, dy=mouseY-gc.height/2, tgt=Math.atan2(dy,dx);
-    var da=tgt-player.angle; while(da>Math.PI) da-=Math.PI*2; while(da<-Math.PI) da+=Math.PI*2;
-    player.angle += Math.sign(da)*Math.min(Math.abs(da), TURN_RATE * _dt);
+    player.angle = Math.atan2(mouseY-gc.height/2, mouseX-gc.width/2);
   }
 
   // ── Speed + boost ──
@@ -4712,16 +4710,16 @@ function killCheck(){
     // — Body checks first — body collision takes precedence over head-on.
     // iHitTheirBody has a 2-frame debounce to filter LERP false positives.
     var iHitTheirBody = false;
-    var _bodyR = player.headR + p.headR + 4;
+    var _bodyR = 24;
     // Skip segments inside the opponent's head visual region (distance-based, not fixed count —
     // fixed count of 5 is too generous at boost speed where segments are 9px apart).
     for(var j=0;j<segLimit;j++){
-      var _ps=p.segs[j]; if(dst(px,py,_ps.x,_ps.y)<28) continue;
+      var _ps=p.segs[j]; if(dst(px,py,_ps.x,_ps.y)<20) continue;
       if(dst(player.x,player.y,_ps.x,_ps.y)<_bodyR){ iHitTheirBody=true; break; }
     }
     var theyHitMyBody = false;
     for(var k=0;k<myLimit;k++){
-      var _ms=player.segs[k]; if(dst(player.x,player.y,_ms.x,_ms.y)<28) continue;
+      var _ms=player.segs[k]; if(dst(player.x,player.y,_ms.x,_ms.y)<20) continue;
       if(dst(px,py,_ms.x,_ms.y)<_bodyR){ theyHitMyBody=true; break; }
     }
 
@@ -4763,7 +4761,7 @@ function killCheck(){
     } else {
       _bodyHitFrames[_bhk] = 0;
       // — Head-on: only when no body collision detected. clientId tiebreaker.
-      if(dst(player.x,player.y,px,py) < player.headR+p.headR+4){
+      if(dst(player.x,player.y,px,py) < 24){
         var iLose = myId > (p.remoteId||'');
         if(iLose){ killPlayer('Head-on with '+p.name, p.remoteId); return; }
         var _kNowH=Date.now();
