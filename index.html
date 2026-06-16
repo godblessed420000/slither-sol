@@ -4654,28 +4654,10 @@ function killCheck(){
     var px = (p.targetX!=null)?p.targetX:p.x;
     var py = (p.targetY!=null)?p.targetY:p.y;
 
-    // — Head-on: pure clientId tiebreaker. Winner skips body checks (continue) so
-    // the winner can't also die from a body segment overlapping during the same frame.
-    if(dst(player.x,player.y,px,py) < player.headR+p.headR+4){
-      var iLose = myId > (p.remoteId||'');
-      if(iLose){ killPlayer('Head-on with '+p.name, p.remoteId); return; }
-      var _kNowH=Date.now();
-      if(!_killNotifyTs[p.remoteId]||_kNowH-_killNotifyTs[p.remoteId]>1000){
-        _killNotifyTs[p.remoteId]=_kNowH;
-        var _kRpH=_remoteMap[p.remoteId]; if(_kRpH&&_kRpH.alive){var _kShH=_kRpH.segs.slice(0,80);_kRpH.alive=false;_kRpH.segs=[];if(gameRunning)for(var _kiH=0;_kiH<_kShH.length;_kiH++)addFood(_kShH[_kiH].x+(Math.random()-.5)*14,_kShH[_kiH].y+(Math.random()-.5)*14);}
-        if(_ws&&_ws.readyState===WebSocket.OPEN){
-          try{_ws.send(JSON.stringify({type:'pos',clientId:_wsClientId,data:{
-            kill_target:p.remoteId,killer:_wsClientId
-          }}));}catch(_){}
-        }
-      }
-      continue; // resolved — don't also check body for this peer this frame
-    }
-
-    // — Body collision — same radius on both sides for fair/symmetric hitboxes.
-    // iHitTheirBody has a 2-frame debounce (below) to filter LERP false positives.
+    // — Body checks first — body collision takes precedence over head-on.
+    // iHitTheirBody has a 2-frame debounce to filter LERP false positives.
     var iHitTheirBody = false;
-    var _bodyR = player.headR + p.headR + 4; // matches visual body width
+    var _bodyR = player.headR + p.headR + 4;
     for(var j=5;j<segLimit;j++){
       if(dst(player.x,player.y,p.segs[j].x,p.segs[j].y) < _bodyR){
         iHitTheirBody=true; break;
@@ -4705,20 +4687,34 @@ function killCheck(){
         }
       }
     } else if(iHitTheirBody){
-      // Require 2 consecutive frames before dying. LERP false positives last only 1 frame
-      // (remote body snaps back to true position on next update), but real hits persist.
+      // Require 2 consecutive frames before dying — LERP false positives last only 1 frame.
       _bodyHitFrames[_bhk] = (_bodyHitFrames[_bhk] || 0) + 1;
       if(_bodyHitFrames[_bhk] >= 2){
         delete _bodyHitFrames[_bhk];
         killPlayer('Eliminated by '+p.name, p.remoteId); return;
       }
+    } else if(theyHitMyBody){
+      _bodyHitFrames[_bhk] = 0;
+      var _kNow3=Date.now();
+      if(!_killNotifyTs[p.remoteId]||_kNow3-_killNotifyTs[p.remoteId]>1000){
+        _killNotifyTs[p.remoteId]=_kNow3;
+        var _kRp3=_remoteMap[p.remoteId]; if(_kRp3&&_kRp3.alive){var _kSh3=_kRp3.segs.slice(0,80);_kRp3.alive=false;_kRp3.segs=[];if(gameRunning)for(var _ki3=0;_ki3<_kSh3.length;_ki3++)addFood(_kSh3[_ki3].x+(Math.random()-.5)*14,_kSh3[_ki3].y+(Math.random()-.5)*14);}
+        if(_ws&&_ws.readyState===WebSocket.OPEN){
+          try{_ws.send(JSON.stringify({type:'pos',clientId:_wsClientId,data:{
+            kill_target:p.remoteId,killer:_wsClientId
+          }}));}catch(_){}
+        }
+      }
     } else {
-      _bodyHitFrames[_bhk] = 0; // not hitting — reset debounce counter
-      if(theyHitMyBody){
-        var _kNow3=Date.now();
-        if(!_killNotifyTs[p.remoteId]||_kNow3-_killNotifyTs[p.remoteId]>1000){
-          _killNotifyTs[p.remoteId]=_kNow3;
-          var _kRp3=_remoteMap[p.remoteId]; if(_kRp3&&_kRp3.alive){var _kSh3=_kRp3.segs.slice(0,80);_kRp3.alive=false;_kRp3.segs=[];if(gameRunning)for(var _ki3=0;_ki3<_kSh3.length;_ki3++)addFood(_kSh3[_ki3].x+(Math.random()-.5)*14,_kSh3[_ki3].y+(Math.random()-.5)*14);}
+      _bodyHitFrames[_bhk] = 0;
+      // — Head-on: only when no body collision detected. clientId tiebreaker.
+      if(dst(player.x,player.y,px,py) < player.headR+p.headR+4){
+        var iLose = myId > (p.remoteId||'');
+        if(iLose){ killPlayer('Head-on with '+p.name, p.remoteId); return; }
+        var _kNowH=Date.now();
+        if(!_killNotifyTs[p.remoteId]||_kNowH-_killNotifyTs[p.remoteId]>1000){
+          _killNotifyTs[p.remoteId]=_kNowH;
+          var _kRpH=_remoteMap[p.remoteId]; if(_kRpH&&_kRpH.alive){var _kShH=_kRpH.segs.slice(0,80);_kRpH.alive=false;_kRpH.segs=[];if(gameRunning)for(var _kiH=0;_kiH<_kShH.length;_kiH++)addFood(_kShH[_kiH].x+(Math.random()-.5)*14,_kShH[_kiH].y+(Math.random()-.5)*14);}
           if(_ws&&_ws.readyState===WebSocket.OPEN){
             try{_ws.send(JSON.stringify({type:'pos',clientId:_wsClientId,data:{
               kill_target:p.remoteId,killer:_wsClientId
