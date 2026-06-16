@@ -4658,16 +4658,16 @@ function killCheck(){
     // iHitTheirBody has a 2-frame debounce to filter LERP false positives.
     var iHitTheirBody = false;
     var _bodyR = player.headR + p.headR + 4;
-    for(var j=5;j<segLimit;j++){
-      if(dst(player.x,player.y,p.segs[j].x,p.segs[j].y) < _bodyR){
-        iHitTheirBody=true; break;
-      }
+    // Skip segments inside the opponent's head visual region (distance-based, not fixed count —
+    // fixed count of 5 is too generous at boost speed where segments are 9px apart).
+    for(var j=0;j<segLimit;j++){
+      var _ps=p.segs[j]; if(dst(px,py,_ps.x,_ps.y)<28) continue;
+      if(dst(player.x,player.y,_ps.x,_ps.y)<_bodyR){ iHitTheirBody=true; break; }
     }
     var theyHitMyBody = false;
-    for(var k=5;k<myLimit;k++){
-      if(dst(px,py,player.segs[k].x,player.segs[k].y) < _bodyR){
-        theyHitMyBody=true; break;
-      }
+    for(var k=0;k<myLimit;k++){
+      var _ms=player.segs[k]; if(dst(player.x,player.y,_ms.x,_ms.y)<28) continue;
+      if(dst(px,py,_ms.x,_ms.y)<_bodyR){ theyHitMyBody=true; break; }
     }
 
     var _bhk = p.remoteId || 'x';
