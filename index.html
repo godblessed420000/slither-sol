@@ -21,6 +21,8 @@ header{display:flex;align-items:center;justify-content:space-between;padding:5px
 @keyframes titleFlash{0%,100%{opacity:.75;filter:brightness(.9) drop-shadow(0 0 5px rgba(20,241,149,.15));}45%,55%{opacity:1;filter:brightness(1.5) drop-shadow(0 0 22px rgba(20,241,149,1)) drop-shadow(0 0 44px rgba(153,69,215,.8));}}
 @keyframes labelFlash{0%{color:#14F195;}20%{color:#9945FF;}40%{color:#00c2ff;}60%{color:#ff4ecd;}80%{color:#ffb800;}100%{color:#14F195;}}
 @keyframes walletBorder{0%{border-color:#14F195;box-shadow:0 0 8px #14F19566;}20%{border-color:#9945FF;box-shadow:0 0 8px #9945FF66;}40%{border-color:#00c2ff;box-shadow:0 0 8px #00c2ff66;}60%{border-color:#ff4ecd;box-shadow:0 0 8px #ff4ecd66;}80%{border-color:#ffb800;box-shadow:0 0 8px #ffb80066;}100%{border-color:#14F195;box-shadow:0 0 8px #14F19566;}}
+@keyframes lbFlash{0%{color:#14F195;border-bottom-color:#14F195;}20%{color:#9945FF;border-bottom-color:#9945FF;}40%{color:#00c2ff;border-bottom-color:#00c2ff;}60%{color:#ff4ecd;border-bottom-color:#ff4ecd;}80%{color:#ffb800;border-bottom-color:#ffb800;}100%{color:#14F195;border-bottom-color:#14F195;}}
+@keyframes lbBoxFlash{0%{border-color:#14F195;box-shadow:0 0 50px #14F19533;}20%{border-color:#9945FF;box-shadow:0 0 50px #9945FF33;}40%{border-color:#00c2ff;box-shadow:0 0 50px #00c2ff33;}60%{border-color:#ff4ecd;box-shadow:0 0 50px #ff4ecd33;}80%{border-color:#ffb800;box-shadow:0 0 50px #ffb80033;}100%{border-color:#14F195;box-shadow:0 0 50px #14F19533;}}
 @keyframes joinFlash{0%{background:linear-gradient(135deg,#14F195,#0ab06b);box-shadow:0 0 12px #14F195,0 0 24px #14F19588;}20%{background:linear-gradient(135deg,#9945FF,#6e22cc);box-shadow:0 0 12px #9945FF,0 0 24px #9945FF88;}40%{background:linear-gradient(135deg,#00c2ff,#007acc);box-shadow:0 0 12px #00c2ff,0 0 24px #00c2ff88;}60%{background:linear-gradient(135deg,#ff4ecd,#cc1a8a);box-shadow:0 0 12px #ff4ecd,0 0 24px #ff4ecd88;}80%{background:linear-gradient(135deg,#ffb800,#cc8800);box-shadow:0 0 12px #ffb800,0 0 24px #ffb80088;}100%{background:linear-gradient(135deg,#14F195,#0ab06b);box-shadow:0 0 12px #14F195,0 0 24px #14F19588;}}
 #joinBtn:not([disabled]){animation:joinFlash 2s linear infinite;border:none;}
 .logo{font-family:'Orbitron',monospace;font-size:1.3rem;font-weight:900;background:linear-gradient(90deg,var(--purple),var(--green));-webkit-background-clip:text;-webkit-text-fill-color:transparent;letter-spacing:3px;flex-shrink:0;animation:titleFlash 1.8s ease-in-out infinite;}
@@ -40,7 +42,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:5px
 .btn-cancel:hover{border-color:var(--dim);}
 .main{display:flex;flex:1;overflow:hidden;}
 .sidebar{width:170px;background:var(--panel);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:9px;gap:8px;flex-shrink:0;overflow-y:auto;}
-.s-title{font-family:'Orbitron',monospace;font-size:.52rem;color:var(--dim);text-transform:uppercase;letter-spacing:2px;border-bottom:1px solid var(--border);padding-bottom:5px;}
+.s-title{font-family:'Orbitron',monospace;font-size:.52rem;text-transform:uppercase;letter-spacing:2px;border-bottom:1px solid var(--border);padding-bottom:5px;animation:lbFlash 2s linear infinite;}
 .prize-box{background:rgba(153,69,215,.1);border:1px solid rgba(153,69,215,.25);border-radius:6px;padding:10px;text-align:center;}
 .prize-label{font-size:.15rem;color:var(--dim);text-transform:uppercase;letter-spacing:1px;}
 .prize-amt{font-family:'Orbitron',monospace;font-size:1.2rem;font-weight:900;color:var(--green);text-shadow:0 0 12px rgba(20,241,149,.45);}
@@ -327,9 +329,9 @@ canvas{display:block;width:100%;height:100%;}
 /* ══ GLOBAL LEADERBOARD MODAL ══ */
 .lb-modal{position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:400;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px);}
 .lb-modal.hidden{display:none;}
-.lb-box{background:var(--panel);border:1px solid var(--gold);border-radius:14px;width:560px;max-width:95vw;box-shadow:0 0 50px rgba(215,215,0,.2);display:flex;flex-direction:column;overflow:hidden;max-height:88vh;}
+.lb-box{background:var(--panel);border:1px solid var(--gold);border-radius:14px;width:560px;max-width:95vw;display:flex;flex-direction:column;overflow:hidden;max-height:88vh;animation:lbBoxFlash 2s linear infinite;}
 .lbm-header{display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--border);background:rgba(215,215,0,.05);}
-.lbm-title{font-family:'Orbitron',monospace;font-size:.9rem;font-weight:900;color:var(--gold);flex:1;letter-spacing:2px;}
+.lbm-title{font-family:'Orbitron',monospace;font-size:.9rem;font-weight:900;flex:1;letter-spacing:2px;animation:labelFlash 2s linear infinite;}
 .lbm-tabs{display:flex;border-bottom:1px solid var(--border);}
 .lbm-tab{flex:1;padding:9px;font-size:.58rem;font-family:'Orbitron',monospace;background:transparent;border:none;color:var(--dim);cursor:pointer;letter-spacing:1px;text-transform:uppercase;transition:all .2s;border-bottom:2px solid transparent;}
 .lbm-tab.active{color:var(--gold);background:rgba(215,215,0,.05);border-bottom-color:var(--gold);}
