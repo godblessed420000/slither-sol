@@ -4188,7 +4188,7 @@ function addFood(x,y,isBoostPebble){
   var bp=!!isBoostPebble;
   // Boost pebbles are larger (r 5-7) and worth 3 growth segments — regular food r 3-5, worth 1
   food.push({x:x!==undefined?x:Math.random()*WORLD, y:y!==undefined?y:Math.random()*WORLD,
-    r: bp ? 3+Math.random()*1.5 : 1.5+Math.random()*1,
+    r: bp ? 5+Math.random()*2 : 3+Math.random()*1.5,
     color: bp ? '#14F195' : PC[Math.floor(Math.random()*PC.length)], // boost pebbles are green
     value: bp ? 3 : 1});
 }
@@ -4956,13 +4956,17 @@ function draw(){
     if(!_fcBuckets[f.color]) _fcBuckets[f.color]=[];
     _fcBuckets[f.color].push(f);
   }
+  var _orbPulse = 0.5+0.5*Math.sin(performance.now()/600);
+  var _glowBlur = 6+_orbPulse*14;
   var _fk=Object.keys(_fcBuckets);
   for(var ci=0;ci<_fk.length;ci++){
     var col=_fk[ci]; var _fl=_fcBuckets[col]; if(!_fl.length) continue;
+    ctx.shadowColor=col; ctx.shadowBlur=_glowBlur;
     ctx.fillStyle=col; ctx.beginPath();
-    for(var fi=0;fi<_fl.length;fi++){ var f=_fl[fi]; ctx.moveTo(f.x+f.r,f.y); ctx.arc(f.x,f.y,f.r,0,Math.PI*2); }
+    for(var fi=0;fi<_fl.length;fi++){ var f=_fl[fi]; var fr=f.r*(1+_orbPulse*0.35); ctx.moveTo(f.x+fr,f.y); ctx.arc(f.x,f.y,fr,0,Math.PI*2); }
     ctx.fill();
   }
+  ctx.shadowBlur=0;
   for(var i=parts.length-1;i>=0;i--){ var p=parts[i]; p.x+=p.vx; p.y+=p.vy; p.life--; if(p.life<=0){ parts[i]=parts[parts.length-1]; parts.length--; continue; } ctx.globalAlpha=p.life/p.max; ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fillStyle=p.color; ctx.fill(); }
   ctx.globalAlpha=1;
   // Draw snakes — viewport-cull remote snakes (head off-screen + no long tail visible)
