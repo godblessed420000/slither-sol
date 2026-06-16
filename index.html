@@ -4578,7 +4578,9 @@ function update(_dt){
   if(_autoCircle){
     player.angle += TURN_RATE * _dt;
   } else {
-    player.angle = Math.atan2(mouseY-gc.height/2, mouseX-gc.width/2);
+    var dx=mouseX-gc.width/2, dy=mouseY-gc.height/2, tgt=Math.atan2(dy,dx);
+    var da=tgt-player.angle; while(da>Math.PI) da-=Math.PI*2; while(da<-Math.PI) da+=Math.PI*2;
+    player.angle += Math.sign(da)*Math.min(Math.abs(da), TURN_RATE * _dt);
   }
 
   // ── Speed + boost ──
