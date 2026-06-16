@@ -5143,12 +5143,7 @@ function cleanupL(keepAbly){
 // fullAddr: full Solana wallet address (set when a friend is added by wallet addr or known)
 // addr:     display-only truncated form shown in the UI
 // games/kills/earned/wins: leaderboard stats (synced from presence announcements)
-var friendsList=[
-  {id:'f1',name:'SOLwizard', addr:'So1w...izrd',fullAddr:'',status:'online', color:'#9945FF',inGame:false,tier:null,games:359,kills:1990,earned:15.30,wins:167},
-  {id:'f2',name:'CryptoCoil',addr:'CrYp...0iL5',fullAddr:'',status:'ingame', color:'#00C2FF',inGame:true, tier:5,  games:248,kills:1204,earned:31.50,wins:98},
-  {id:'f3',name:'MoonMamba', addr:'M00n...mBa9',fullAddr:'',status:'offline',color:'#FFD700',inGame:false,tier:null,games:132,kills:567, earned:14.20,wins:45},
-  {id:'f4',name:'DegenSlith',addr:'dGN5...L1th',fullAddr:'',status:'online', color:'#FF6B35',inGame:false,tier:null,games:402,kills:2210,earned:61.40,wins:189}
-];
+var friendsList=[];
 var friendRequests=[]; // populated by real fr_req messages from presence WebSocket
 var _pendingFriendReqs={}; // walletAddr → { name, sentAt } — outgoing requests awaiting accept
 var currentTab='friends', panelOpen=false, pendingInvite=null, inviteDismissTimer=null;
@@ -5437,28 +5432,21 @@ async function acceptInvite(){
   enterLobby(tier, null);
 }
 function dismissInvite(){ pendingInvite=null; var p=document.getElementById('invitePopup'); if(p) p.classList.remove('show'); clearTimeout(inviteDismissTimer); }
-// Sync friend status + stats from presence peers; randomize mock-only entries
+// Sync friend status + stats from presence peers — always live
 setInterval(function(){
-  var st=['online','offline','ingame'],ts=[1,5,10];
   friendsList.forEach(function(f){
     if(f.fullAddr && f.fullAddr.length>=32){
       var peer=_wpPeers[f.fullAddr];
       if(peer){
         f.status='online'; f.inGame=false; f.tier=null;
-        // Sync latest leaderboard stats from their presence announcement
         if(peer.games  != null) f.games  = peer.games;
         if(peer.kills  != null) f.kills  = peer.kills;
         if(peer.earned != null) f.earned = peer.earned;
         if(peer.wins   != null) f.wins   = peer.wins;
       }
-      // Don't mark offline — they may be in a game tier without a presence heartbeat
-    } else if(Math.random()<0.04){
-      // Mock/demo friend: randomize status for demo purposes
-      f.status=st[Math.floor(Math.random()*st.length)];
-      f.inGame=f.status==='ingame'; f.tier=f.inGame?ts[Math.floor(Math.random()*ts.length)]:null;
     }
   });
-  if(panelOpen) renderFriendsPanel();
+  renderFriendsPanel();
 },9000);
 
 // ════════════════ SEND SOL TO FRIEND ════════════════
