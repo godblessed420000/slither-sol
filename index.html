@@ -5000,7 +5000,7 @@ function draw(){
 
 function drawS(s){
   if(s.segs.length<2) return;
-  var n = Math.min(s.segs.length, 80); // fixed visual length — snake never grows longer on screen
+  var n = Math.min(s.segs.length, Math.round(80 * 0.92 / CAM_ZOOM)); // constant screen-space tail regardless of zoom
   var hs   = 14;  // fixed head/body size — doesn't scale with length
   var baseW = 28;
   ctx.lineCap='round'; ctx.lineJoin='round';
