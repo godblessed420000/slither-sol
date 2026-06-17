@@ -141,16 +141,18 @@ canvas{display:block;width:100%;height:100%;}
 /* Shared background sits inside #canvasWrap, above the game canvas but below the overlays (z-index 20) */
 #menuBgFx{position:absolute;inset:0;z-index:15;overflow:hidden;pointer-events:none;}
 /* Image layer — slow Ken-Burns push (zoom + drift), looping. Gradient fallback shows if the image is missing. */
-#menuBgImg{position:absolute;inset:-6%;background:
+#menuBgImg{position:absolute;inset:0;background-color:#06040c;background:
    radial-gradient(120% 90% at 50% 18%, rgba(153,69,215,.35), transparent 55%),
    radial-gradient(120% 80% at 50% 100%, rgba(20,241,149,.18), transparent 60%),
    linear-gradient(180deg,#0a0612 0%,#150a26 45%,#1a0a2e 70%,#06040c 100%);
    background-size:cover;background-position:center;
-   animation:menuKenBurns 22s ease-in-out infinite alternate;will-change:transform;}
-#menuBgImg.hasimg{background-image:var(--menu-bg-url);background-size:cover;background-position:center 35%;}
+   animation:menuKenBurns 26s ease-in-out infinite alternate;will-change:transform;}
+/* Fit the WHOLE image (no crop). Dark letterbox fills the sides on wide screens. */
+#menuBgImg.hasimg{background-color:#06040c;background-image:var(--menu-bg-url);
+   background-size:contain;background-repeat:no-repeat;background-position:center center;}
 @keyframes menuKenBurns{
-  0%{transform:scale(1.06) translateY(0);}
-  100%{transform:scale(1.20) translateY(-2.2%);}
+  0%{transform:scale(1.0) translateY(0);}
+  100%{transform:scale(1.05) translateY(-1.4%);}
 }
 /* Drifting fog — two soft layers sliding in opposite directions */
 #menuBgFog{position:absolute;inset:-20%;pointer-events:none;mix-blend-mode:screen;opacity:.5;
