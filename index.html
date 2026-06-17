@@ -3286,7 +3286,7 @@ function _wsHandleMsg(msg, fromAbly) {
         velX: 0, velY: 0, lastT: performance.now()
       };
       rp.headR = Math.max(8, Math.min(28, 8 + (initLen * SEG_MULT) * 0.08));
-      var initSegs = Math.min(initLen * SEG_MULT, 120);
+      var initSegs = Math.max(Math.min(initLen * SEG_MULT, 120), 120);
       // Spread segments backward along the peer's angle so the snake looks full-size immediately
       var _ia = d.a || 0;
       for (var i=0; i<initSegs; i++) rp.segs.push({x: d.x - Math.cos(_ia)*i*2, y: d.y - Math.sin(_ia)*i*2});
@@ -3351,7 +3351,7 @@ function _wsHandleMsg(msg, fromAbly) {
         }
         return;
       }
-      if (d.l) { rp.length = d.l; rp.headR = Math.max(8, Math.min(28, 8 + rp.segs.length * 0.08)); }
+      if (d.l) { rp.length = d.l; rp.headR = Math.max(8, Math.min(28, 8 + rp.length * SEG_MULT * 0.08)); }
     }
     return;
   }
@@ -4167,7 +4167,7 @@ function launchGame() {
 function mkSnake(x,y,color,name,isMe,startSegs){
   var initSegs = startSegs || 40;                // default 40 raw segments; mid-match spawn passes peer average
   var initLen  = Math.round(initSegs/SEG_MULT);
-  var segs=[]; for(var i=0;i<initSegs;i++) segs.push({x:x-i*2,y:y});
+  var _initDraw=Math.max(initSegs,120); var segs=[]; for(var i=0;i<_initDraw;i++) segs.push({x:x-i*2,y:y});
   return{x:x,y:y,segs:segs,angle:0,color:color,name:name,isMe:isMe,speed:BASE_SPEED,
          headR:14,length:initLen,score:0,alive:true};
 }
@@ -4549,7 +4549,7 @@ function update(_dt){
           while(_sda>Math.PI)_sda-=Math.PI*2; while(_sda<-Math.PI)_sda+=Math.PI*2;
           _st.angle+=_sda*_LERP;
           _st.segs.unshift({x:_st.x,y:_st.y});
-          var _smaxS=Math.max(_st.length*SEG_MULT,45); if(_st.segs.length>_smaxS)_st.segs.length=_smaxS;
+          var _smaxS=Math.max(_st.length*SEG_MULT,120); if(_st.segs.length>_smaxS)_st.segs.length=_smaxS;
         }
         camX=_st.x; camY=_st.y;
       } else {
@@ -4605,10 +4605,10 @@ function update(_dt){
   moveS(player, player.angle, spd);
   // Enforce exact segment count — moveS only pops once per frame, but we may need to pop
   // many (e.g. after a length decrement of 1 logical unit = 4 segments drop in target).
-  var _tgt = player.length * SEG_MULT;
+  var _tgt = Math.max(player.length * SEG_MULT, 120);
   while(player.segs.length > _tgt) player.segs.pop();
 
-  player.headR = Math.max(8, Math.min(28, 8 + player.segs.length * 0.08));
+  player.headR = Math.max(8, Math.min(28, 8 + player.length * SEG_MULT * 0.08));
 
   // ── Remote players: dead reckoning + LERP toward predicted position ──
   var rNow = performance.now(); // one call per frame — shared across all remote peers
@@ -4633,7 +4633,7 @@ function update(_dt){
       p.angle += da2*_la;
       p.segs.unshift({x:p.x,y:p.y});
       // maxS uses base length unit × SEG_MULT (d.l is now base unit, no double-multiply)
-      var maxS=Math.max(p.length*SEG_MULT, 45);
+      var maxS=Math.max(p.length*SEG_MULT, 120);
       if(p.segs.length>maxS) p.segs.length=maxS; // O(1) truncation — replaces O(n) while+pop
     }
     // No AI bots — only real remote players exist in peers[]
@@ -4680,7 +4680,7 @@ function moveS(s,angle,spd){
   s.angle=angle;
   s.x=((s.x+Math.cos(angle)*spd)%WORLD+WORLD)%WORLD;
   s.y=((s.y+Math.sin(angle)*spd)%WORLD+WORLD)%WORLD;
-  s.segs.unshift({x:s.x,y:s.y}); if(s.segs.length>s.length*SEG_MULT) s.segs.pop();
+  s.segs.unshift({x:s.x,y:s.y}); if(s.segs.length>Math.max(s.length*SEG_MULT,120)) s.segs.pop();
 }
 
 /* updatePeer removed — no AI bots in this game */
@@ -4728,8 +4728,8 @@ function killCheck(){
     var _bhk = p.remoteId || 'x';
     if(iHitTheirBody && theyHitMyBody){
       _bodyHitFrames[_bhk] = 0;
-      var iLoseMutual = player.segs.length < p.segs.length ||
-                        (player.segs.length === p.segs.length && myId > (p.remoteId||''));
+      var iLoseMutual = player.length < p.length ||
+                        (player.length === p.length && myId > (p.remoteId||''));
       if(iLoseMutual){ killPlayer('Eliminated by '+p.name, p.remoteId); return; }
       var _kNowM=Date.now();
       if(!_killNotifyTs[p.remoteId]||_kNowM-_killNotifyTs[p.remoteId]>1000){
@@ -5071,7 +5071,7 @@ function drawS(s){
   var n = Math.min(s.segs.length, Math.round(80 * 0.92 / CAM_ZOOM)); // constant screen-space tail
   // All sizes divided by CAM_ZOOM → snake appears the same screen size regardless of zoom level
   var iz   = 1 / CAM_ZOOM;
-  var hs   = (s.headR || Math.max(8, Math.min(28, 8 + s.segs.length * 0.08))) * iz;
+  var hs   = (s.headR || Math.max(8, Math.min(28, 8 + (s.length||10) * SEG_MULT * 0.08))) * iz;
   var baseW= hs * 2;
   ctx.lineCap='round'; ctx.lineJoin='round';
 
