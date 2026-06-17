@@ -1210,7 +1210,7 @@ var _zoomOffset = 0;       // user's manual scroll offset on top of auto-zoom
 var _smoothLen  = 100;     // exponentially-smoothed snake length used for zoom (avoids per-frame jitter)
 // Slither.io-accurate movement constants
 var BASE_SPEED = 6.0;       // base snake speed
-var BOOST_MULT = 1.5;      // slither.io-accurate boost multiplier (~1.5× base)
+var BOOST_MULT = 2.0;      // DamnBruh-style boost: 2× base speed
 var TURN_RATE  = 0.13;     // max radians per frame — smooth slither.io-style curves
 var SEG_MULT   = 4;        // segments per length unit — lower = shorter tail
 var MAX_FOOD   = 150;      // hard cap on food pellets
@@ -3285,7 +3285,7 @@ function _wsHandleMsg(msg, fromAbly) {
         remoteId: cid, joinTs: _rpJoinTs,
         velX: 0, velY: 0, lastT: performance.now()
       };
-      rp.headR = 14;
+      rp.headR = Math.max(10, Math.min(22, 8 + (initLen * SEG_MULT) * 0.055));
       var initSegs = Math.min(initLen * SEG_MULT, 120);
       // Spread segments backward along the peer's angle so the snake looks full-size immediately
       var _ia = d.a || 0;
@@ -3351,7 +3351,7 @@ function _wsHandleMsg(msg, fromAbly) {
         }
         return;
       }
-      if (d.l) { rp.length = d.l; rp.headR = 14; }
+      if (d.l) { rp.length = d.l; rp.headR = Math.max(10, Math.min(22, 8 + rp.segs.length * 0.055)); }
     }
     return;
   }
@@ -4590,16 +4590,16 @@ function update(_dt){
   if(boosting && boostE>0){
     spd *= BOOST_MULT;
     var prevBoostE = boostE;
-    boostE = Math.max(0, boostE - 0.12 * _dt); // drain at same rate regardless of fps
-    if(boostE <= 0) _boostExhaustedUntil = performance.now() + 3000; // trigger 3s penalty
+    boostE = Math.max(0, boostE - 0.22 * _dt); // faster drain — boost is a burst resource
+    if(boostE <= 0) _boostExhaustedUntil = performance.now() + 2000; // 2s penalty
     var _minLen = Math.round(15 / SEG_MULT);
-    if(player.segs.length > 15 && Math.floor(prevBoostE / 2.5) > Math.floor(boostE / 2.5)){
+    if(player.segs.length > 15 && Math.floor(prevBoostE / 2.0) > Math.floor(boostE / 2.0)){
       var tl=player.segs[player.segs.length-1];
       addFood(tl.x+(Math.random()-.5)*10, tl.y+(Math.random()-.5)*10, true);
       player.length = Math.max(_minLen, player.length - 1);
     }
   } else {
-    boostE = Math.min(100, boostE + 0.20 * _dt); // recharge at same rate regardless of fps
+    boostE = Math.min(100, boostE + 0.14 * _dt); // slower recharge — makes boost feel earned
     if(performance.now() < _boostExhaustedUntil) spd *= 0.7;
   }
   moveS(player, player.angle, spd);
@@ -4608,7 +4608,7 @@ function update(_dt){
   var _tgt = player.length * SEG_MULT;
   while(player.segs.length > _tgt) player.segs.pop();
 
-  player.headR = 14; // fixed — matches the locked visual head size
+  player.headR = Math.max(10, Math.min(22, 8 + player.segs.length * 0.055)); // scales with length
 
   // ── Remote players: dead reckoning + LERP toward predicted position ──
   var rNow = performance.now(); // one call per frame — shared across all remote peers
@@ -4712,16 +4712,16 @@ function killCheck(){
     // — Body checks first — body collision takes precedence over head-on.
     // iHitTheirBody has a 2-frame debounce to filter LERP false positives.
     var iHitTheirBody = false;
-    var _bodyR = 24;
-    // Skip segments inside the opponent's head visual region (distance-based, not fixed count —
-    // fixed count of 5 is too generous at boost speed where segments are 9px apart).
+    var _bodyR = player.headR + p.headR * 0.8; // dynamic: scales with both snakes' sizes
+    var _skipR = p.headR * 1.5; // skip segments within 1.5× head radius of their head center
     for(var j=0;j<segLimit;j++){
-      var _ps=p.segs[j]; if(dst(px,py,_ps.x,_ps.y)<20) continue;
+      var _ps=p.segs[j]; if(dst(px,py,_ps.x,_ps.y)<_skipR) continue;
       if(dst(player.x,player.y,_ps.x,_ps.y)<_bodyR){ iHitTheirBody=true; break; }
     }
     var theyHitMyBody = false;
+    var _mySkipR = player.headR * 1.5;
     for(var k=0;k<myLimit;k++){
-      var _ms=player.segs[k]; if(dst(player.x,player.y,_ms.x,_ms.y)<20) continue;
+      var _ms=player.segs[k]; if(dst(player.x,player.y,_ms.x,_ms.y)<_mySkipR) continue;
       if(dst(px,py,_ms.x,_ms.y)<_bodyR){ theyHitMyBody=true; break; }
     }
 
@@ -4763,7 +4763,7 @@ function killCheck(){
     } else {
       _bodyHitFrames[_bhk] = 0;
       // — Head-on: only when no body collision detected. clientId tiebreaker.
-      if(dst(player.x,player.y,px,py) < 24){
+      if(dst(player.x,player.y,px,py) < player.headR + p.headR){
         var iLose = myId > (p.remoteId||'');
         if(iLose){ killPlayer('Head-on with '+p.name, p.remoteId); return; }
         var _kNowH=Date.now();
@@ -5069,8 +5069,8 @@ function draw(){
 function drawS(s){
   if(s.segs.length<2) return;
   var n = Math.min(s.segs.length, Math.round(80 * 0.92 / CAM_ZOOM)); // constant screen-space tail regardless of zoom
-  var hs   = 14;  // fixed head/body size — doesn't scale with length
-  var baseW = 28;
+  var hs    = Math.max(10, Math.min(22, 8 + s.segs.length * 0.055)); // grows with snake length
+  var baseW = hs * 2;
   ctx.lineCap='round'; ctx.lineJoin='round';
 
   // Outer glow — one cheap semi-transparent wide pass for local player only
