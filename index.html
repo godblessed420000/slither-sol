@@ -3082,6 +3082,8 @@ var _processedDies  = {}; // cid → true; prevents double-credit if both WS + A
 var _killNotifyTs   = {}; // cid → timestamp; throttle victim-side kill_target sends (1s/target)
 var _recentLeaves   = {}; // cid → timestamp; blocks pos from recreating a just-left/dead peer
 var _bodyHitFrames  = {}; // cid → consecutive-frame count; debounce iHitTheirBody detection
+var _hintHitMe      = {}; // cid → timestamp; non-referee reported its head is in MY body
+var _hintSentTs     = {}; // cid → timestamp; throttle our own kill_hint sends
 function _wsSend(type, data) {
   if (type === 'pos' || type === 'ping') {
     if (!_ws || _ws.readyState !== WebSocket.OPEN) return;
@@ -3300,6 +3302,14 @@ function _wsHandleMsg(msg, fromAbly) {
         }
       }
       return; // not a normal position update
+    }
+    // kill_hint: the NON-referee (higher id) tells us (the referee, lower id) that
+    // ITS head is inside OUR body. We may have missed it because their head reaches
+    // us with network lag. The referee resolves the death; record the hint so our
+    // killCheck treats it as "their head hit my body".
+    if (d.kill_hint) {
+      if (d.kill_hint === _wsClientId && cid) _hintHitMe[cid] = Date.now();
+      return;
     }
 
     // Kill-credit security is handled separately: die/chat events require fromAbly=true.
@@ -4764,6 +4774,16 @@ function killCheck(){
   var myId = _wsClientId || 'zzz';
   var myHead=_hbHead(player), myBody=myHead*0.95;        // my head radius + my body half-width (world)
   var myLimit=_hbSegLimit(player, _hbVisLen(player));     // only drawn segments are deadly
+  var _now=Date.now();
+  // Referee credits a kill on peer p: scatter their body to food locally + tell them to die.
+  function _refKill(p){
+    var _k=_remoteMap[p.remoteId];
+    if(_k&&_k.alive){ var _sh=_k.segs.slice(0,80); _k.alive=false; _k.segs=[];
+      if(gameRunning) for(var _i=0;_i<_sh.length;_i++) addFood(_sh[_i].x+(Math.random()-.5)*14,_sh[_i].y+(Math.random()-.5)*14); }
+    if(_ws&&_ws.readyState===WebSocket.OPEN){
+      try{_ws.send(JSON.stringify({type:'pos',clientId:_wsClientId,data:{kill_target:p.remoteId,killer:_wsClientId}}));}catch(_){}
+    }
+  }
   for(var i=0;i<peers.length;i++){
     var p=peers[i]; if(!p.alive) continue;
     var pHead=_hbHead(p), pBody=pHead*0.95;
@@ -4789,71 +4809,37 @@ function killCheck(){
     }
 
     var _bhk = p.remoteId || 'x';
-    var _headGap = dst(player.x,player.y,px,py);
-    // Close-quarters zone — the two heads are near each other. Under network lag,
-    // each client may only see ITS OWN head intruding into the other's body (the
-    // opponent's head looks just-outside because its position is a few ms stale),
-    // so BOTH clients would take the one-sided branch below and BOTH die. The
-    // head-to-head gap is ~symmetric across clients, so when it's small we treat
-    // the hit as mutual and let the deterministic id tiebreaker pick ONE loser.
-    var _ambiguous = _headGap < (myHead + pHead) * 2.2;
-    if((iHitTheirBody && theyHitMyBody) || (iHitTheirBody && _ambiguous)){
-      _bodyHitFrames[_bhk] = 0;
-      // DETERMINISTIC tiebreaker — pure client-id compare. Both clients compute
-      // (myId > otherId): exactly one is true, so exactly one snake dies. Length
-      // must NOT be used here — each client sees a lag-stale length for the other
-      // snake, so a length compare can make BOTH clients think they win/lose,
-      // killing both snakes. Id is the only value both clients agree on. Head-on
-      // (below) uses the SAME compare, so even if one client classifies the hit as
-      // mutual and the other as head-on, they still agree on who dies.
-      var iLoseMutual = myId > (p.remoteId||'');
-      if(iLoseMutual){ killPlayer('Eliminated by '+p.name, p.remoteId); return; }
-      var _kNowM=Date.now();
-      if(!_killNotifyTs[p.remoteId]||_kNowM-_killNotifyTs[p.remoteId]>1000){
-        _killNotifyTs[p.remoteId]=_kNowM;
-        var _kRpM=_remoteMap[p.remoteId]; if(_kRpM&&_kRpM.alive){var _kShM=_kRpM.segs.slice(0,80);_kRpM.alive=false;_kRpM.segs=[];if(gameRunning)for(var _kiM=0;_kiM<_kShM.length;_kiM++)addFood(_kShM[_kiM].x+(Math.random()-.5)*14,_kShM[_kiM].y+(Math.random()-.5)*14);}
-        if(_ws&&_ws.readyState===WebSocket.OPEN){
-          try{_ws.send(JSON.stringify({type:'pos',clientId:_wsClientId,data:{
-            kill_target:p.remoteId,killer:_wsClientId
-          }}));}catch(_){}
-        }
+    var pid = p.remoteId || '';
+    var headOn = dst(player.x,player.y,px,py) < (myHead + pHead);
+    // ── SINGLE-AUTHORITY resolution ─────────────────────────────────────────────
+    // The client with the SMALLER id is the sole referee for this pair and makes the
+    // ONLY death decision. The other client never self-kills or sends kill_target for
+    // this pair — it only dies when the referee tells it to. This makes a double-death
+    // structurally impossible, no matter the lag or which side saw the hit first.
+    if(myId < pid){
+      // Referee. Merge the non-referee's hint that THEIR head is in MY body — their
+      // head reaches me with lag, so my own check above may have missed it.
+      if(_hintHitMe[pid] && _now-_hintHitMe[pid]<400){ theyHitMyBody=true; delete _hintHitMe[pid]; }
+      if(iHitTheirBody && theyHitMyBody){ _bodyHitFrames[_bhk]=0; _refKill(p); continue; } // mutual → I survive, they die
+      if(iHitTheirBody){ // my head rammed their body → I die (2-frame debounce vs LERP noise)
+        _bodyHitFrames[_bhk]=(_bodyHitFrames[_bhk]||0)+1;
+        if(_bodyHitFrames[_bhk]>=2){ delete _bodyHitFrames[_bhk]; killPlayer('Eliminated by '+p.name, pid); return; }
+        continue;
       }
-    } else if(iHitTheirBody){
-      // Require 2 consecutive frames before dying — LERP false positives last only 1 frame.
-      _bodyHitFrames[_bhk] = (_bodyHitFrames[_bhk] || 0) + 1;
-      if(_bodyHitFrames[_bhk] >= 2){
-        delete _bodyHitFrames[_bhk];
-        killPlayer('Eliminated by '+p.name, p.remoteId); return;
-      }
-    } else if(theyHitMyBody){
-      _bodyHitFrames[_bhk] = 0;
-      var _kNow3=Date.now();
-      if(!_killNotifyTs[p.remoteId]||_kNow3-_killNotifyTs[p.remoteId]>1000){
-        _killNotifyTs[p.remoteId]=_kNow3;
-        var _kRp3=_remoteMap[p.remoteId]; if(_kRp3&&_kRp3.alive){var _kSh3=_kRp3.segs.slice(0,80);_kRp3.alive=false;_kRp3.segs=[];if(gameRunning)for(var _ki3=0;_ki3<_kSh3.length;_ki3++)addFood(_kSh3[_ki3].x+(Math.random()-.5)*14,_kSh3[_ki3].y+(Math.random()-.5)*14);}
-        if(_ws&&_ws.readyState===WebSocket.OPEN){
-          try{_ws.send(JSON.stringify({type:'pos',clientId:_wsClientId,data:{
-            kill_target:p.remoteId,killer:_wsClientId
-          }}));}catch(_){}
-        }
-      }
+      if(theyHitMyBody || headOn){ _bodyHitFrames[_bhk]=0; _refKill(p); continue; } // they ran into me / head-on → they die
+      _bodyHitFrames[_bhk]=0;
     } else {
-      _bodyHitFrames[_bhk] = 0;
-      // — Head-on: only when no body collision detected. clientId tiebreaker.
-      if(dst(player.x,player.y,px,py) < myHead + pHead){
-        var iLose = myId > (p.remoteId||'');
-        if(iLose){ killPlayer('Head-on with '+p.name, p.remoteId); return; }
-        var _kNowH=Date.now();
-        if(!_killNotifyTs[p.remoteId]||_kNowH-_killNotifyTs[p.remoteId]>1000){
-          _killNotifyTs[p.remoteId]=_kNowH;
-          var _kRpH=_remoteMap[p.remoteId]; if(_kRpH&&_kRpH.alive){var _kShH=_kRpH.segs.slice(0,80);_kRpH.alive=false;_kRpH.segs=[];if(gameRunning)for(var _kiH=0;_kiH<_kShH.length;_kiH++)addFood(_kShH[_kiH].x+(Math.random()-.5)*14,_kShH[_kiH].y+(Math.random()-.5)*14);}
+      // Non-referee. NEVER self-kill or send kill_target here. If my head is in their
+      // body (or we're head-on), hint the referee so it can resolve a hit its lagged
+      // view of my head might have missed. I die only via the referee's kill_target.
+      if(iHitTheirBody || headOn){
+        if(!_hintSentTs[pid] || _now-_hintSentTs[pid]>150){
+          _hintSentTs[pid]=_now;
           if(_ws&&_ws.readyState===WebSocket.OPEN){
-            try{_ws.send(JSON.stringify({type:'pos',clientId:_wsClientId,data:{
-              kill_target:p.remoteId,killer:_wsClientId
-            }}));}catch(_){}
+            try{_ws.send(JSON.stringify({type:'pos',clientId:_wsClientId,data:{kill_hint:pid}}));}catch(_){}
           }
         }
-      }
+      } else { _bodyHitFrames[_bhk]=0; }
     }
   }
   var pdx=player.x-WORLD/2, pdy=player.y-WORLD/2;
