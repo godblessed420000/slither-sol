@@ -3285,7 +3285,7 @@ function _wsHandleMsg(msg, fromAbly) {
         remoteId: cid, joinTs: _rpJoinTs,
         velX: 0, velY: 0, lastT: performance.now()
       };
-      rp.headR = Math.max(10, Math.min(22, 8 + (initLen * SEG_MULT) * 0.055));
+      rp.headR = Math.max(8, Math.min(28, 8 + (initLen * SEG_MULT) * 0.08));
       var initSegs = Math.min(initLen * SEG_MULT, 120);
       // Spread segments backward along the peer's angle so the snake looks full-size immediately
       var _ia = d.a || 0;
@@ -3351,7 +3351,7 @@ function _wsHandleMsg(msg, fromAbly) {
         }
         return;
       }
-      if (d.l) { rp.length = d.l; rp.headR = Math.max(10, Math.min(22, 8 + rp.segs.length * 0.055)); }
+      if (d.l) { rp.length = d.l; rp.headR = Math.max(8, Math.min(28, 8 + rp.segs.length * 0.08)); }
     }
     return;
   }
@@ -4608,7 +4608,7 @@ function update(_dt){
   var _tgt = player.length * SEG_MULT;
   while(player.segs.length > _tgt) player.segs.pop();
 
-  player.headR = Math.max(10, Math.min(22, 8 + player.segs.length * 0.055)); // scales with length
+  player.headR = Math.max(8, Math.min(28, 8 + player.segs.length * 0.08));
 
   // ── Remote players: dead reckoning + LERP toward predicted position ──
   var rNow = performance.now(); // one call per frame — shared across all remote peers
@@ -5068,20 +5068,22 @@ function draw(){
 
 function drawS(s){
   if(s.segs.length<2) return;
-  var n = Math.min(s.segs.length, Math.round(80 * 0.92 / CAM_ZOOM)); // constant screen-space tail regardless of zoom
-  var hs    = Math.max(10, Math.min(22, 8 + s.segs.length * 0.055)); // grows with snake length
-  var baseW = hs * 2;
+  var n = Math.min(s.segs.length, Math.round(80 * 0.92 / CAM_ZOOM)); // constant screen-space tail
+  // All sizes divided by CAM_ZOOM → snake appears the same screen size regardless of zoom level
+  var iz   = 1 / CAM_ZOOM;
+  var hs   = (s.headR || Math.max(8, Math.min(28, 8 + s.segs.length * 0.08))) * iz;
+  var baseW= hs * 2;
   ctx.lineCap='round'; ctx.lineJoin='round';
 
-  // Outer glow — one cheap semi-transparent wide pass for local player only
+  // Outer glow
   if(s.isMe){
     ctx.beginPath(); ctx.moveTo(s.segs[0].x,s.segs[0].y);
     for(var i=1;i<n;i++) ctx.lineTo(s.segs[i].x,s.segs[i].y);
-    ctx.strokeStyle=s.color; ctx.lineWidth=baseW+10;
+    ctx.strokeStyle=s.color; ctx.lineWidth=baseW+10*iz;
     ctx.globalAlpha=0.09; ctx.stroke(); ctx.globalAlpha=1;
   }
 
-  // Body — single bezier pass for all snakes (removed second highlight band)
+  // Body — bezier smoothed
   ctx.beginPath();
   ctx.moveTo(s.segs[0].x, s.segs[0].y);
   for(var i=1;i<n-1;i++){
@@ -5092,7 +5094,7 @@ function drawS(s){
   ctx.lineTo(s.segs[n-1].x,s.segs[n-1].y);
   ctx.strokeStyle=s.color; ctx.lineWidth=baseW; ctx.stroke();
 
-  // Spine — only 15 segments (purely cosmetic, short length is indistinguishable)
+  // Spine
   ctx.beginPath(); ctx.moveTo(s.segs[0].x,s.segs[0].y);
   for(var i=1;i<Math.min(n,15);i++) ctx.lineTo(s.segs[i].x,s.segs[i].y);
   ctx.strokeStyle='rgba(0,0,0,.28)'; ctx.lineWidth=baseW*.22; ctx.stroke();
@@ -5100,36 +5102,39 @@ function drawS(s){
   // Head
   ctx.beginPath(); ctx.arc(s.x,s.y,hs,0,Math.PI*2);
   ctx.fillStyle=s.color; ctx.fill();
-  ctx.strokeStyle='rgba(215,215,215,.2)'; ctx.lineWidth=1.5; ctx.stroke();
+  ctx.strokeStyle='rgba(215,215,215,.2)'; ctx.lineWidth=1.5*iz; ctx.stroke();
 
-  // Eyes — sclera + iris + pupil (shine removed — saves 2 arcs/snake/frame)
+  // Eyes
   var ea=s.angle, eyeOff=hs*.6;
   var ex1=s.x+Math.cos(ea+.15)*eyeOff, ey1=s.y+Math.sin(ea+.15)*eyeOff;
   var ex2=s.x+Math.cos(ea-.15)*eyeOff, ey2=s.y+Math.sin(ea-.15)*eyeOff;
-  var eyr=hs*.38;
+  var eyr=hs*.38, epd=hs*.05; // pupil offset scales with head size
   ctx.fillStyle='#fff';
   ctx.beginPath(); ctx.arc(ex1,ey1,eyr,0,Math.PI*2); ctx.fill();
   ctx.beginPath(); ctx.arc(ex2,ey2,eyr,0,Math.PI*2); ctx.fill();
   ctx.fillStyle=s.isMe?'#14F195':'#222';
-  ctx.beginPath(); ctx.arc(ex1+Math.cos(ea)*.5,ey1+Math.sin(ea)*.5,eyr*.15,0,Math.PI*2); ctx.fill();
-  ctx.beginPath(); ctx.arc(ex2+Math.cos(ea)*.5,ey2+Math.sin(ea)*.5,eyr*.15,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(ex1+Math.cos(ea)*epd,ey1+Math.sin(ea)*epd,eyr*.15,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(ex2+Math.cos(ea)*epd,ey2+Math.sin(ea)*epd,eyr*.15,0,Math.PI*2); ctx.fill();
   ctx.fillStyle='#000';
-  ctx.beginPath(); ctx.arc(ex1+Math.cos(ea)*.7,ey1+Math.sin(ea)*.7,eyr*.28,0,Math.PI*2); ctx.fill();
-  ctx.beginPath(); ctx.arc(ex2+Math.cos(ea)*.7,ey2+Math.sin(ea)*.7,eyr*.28,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(ex1+Math.cos(ea)*epd*1.4,ey1+Math.sin(ea)*epd*1.4,eyr*.28,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(ex2+Math.cos(ea)*epd*1.4,ey2+Math.sin(ea)*epd*1.4,eyr*.28,0,Math.PI*2); ctx.fill();
 
-  // Name tag — cache measureText so it runs once per snake, not once per frame
-  var nf=(s.isMe?'bold 13px':'bold 11px')+' Share Tech Mono';
-  if(s._nameCache!==s.name){ s._nameCache=s.name; ctx.font=nf; s._tw=ctx.measureText(s.name).width; }
-  else { ctx.font=nf; }
-  var tw=s._tw, np=5, nh=14, ny=s.y-hs-10;
+  // Name tag — font size + all padding zoom-compensated for constant screen size
+  var _fs=(s.isMe?13:11)*iz;
+  var nf='bold '+_fs.toFixed(1)+'px Share Tech Mono';
+  if(s._nameCache!==s.name||s._nameCZ!==CAM_ZOOM){
+    s._nameCache=s.name; s._nameCZ=CAM_ZOOM;
+    ctx.font=nf; s._tw=ctx.measureText(s.name).width;
+  } else { ctx.font=nf; }
+  var tw=s._tw, np=5*iz, nh=14*iz, ny=s.y-hs-10*iz;
   ctx.fillStyle=s.isMe?'rgba(20,241,149,0.18)':'rgba(0,0,0,0.72)';
   ctx.beginPath();
-  var rx=s.x-tw/2-np, ry=ny-nh+2, rw=tw+np*2, rr=5;
+  var rr=5*iz, rx=s.x-tw/2-np, ry=ny-nh+2*iz, rw=tw+np*2;
   ctx.moveTo(rx+rr,ry); ctx.lineTo(rx+rw-rr,ry); ctx.arcTo(rx+rw,ry,rx+rw,ry+rr,rr);
   ctx.lineTo(rx+rw,ry+nh-rr); ctx.arcTo(rx+rw,ry+nh,rx+rw-rr,ry+nh,rr);
   ctx.lineTo(rx+rr,ry+nh); ctx.arcTo(rx,ry+nh,rx,ry+nh-rr,rr);
   ctx.lineTo(rx,ry+rr); ctx.arcTo(rx,ry,rx+rr,ry,rr); ctx.closePath(); ctx.fill();
-  if(s.isMe){ ctx.strokeStyle='rgba(20,241,149,0.5)'; ctx.lineWidth=1; ctx.stroke(); }
+  if(s.isMe){ ctx.strokeStyle='rgba(20,241,149,0.5)'; ctx.lineWidth=iz; ctx.stroke(); }
   ctx.fillStyle=s.isMe?'#14F195':'#ffffff';
   ctx.textAlign='center'; ctx.shadowBlur=0;
   ctx.fillText(s.name,s.x,ny);
