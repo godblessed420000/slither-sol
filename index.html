@@ -4791,55 +4791,61 @@ function killCheck(){
     var px = (p.targetX!=null)?p.targetX:p.x;
     var py = (p.targetY!=null)?p.targetY:p.y;
 
-    // — Body checks first — body collision takes precedence over head-on.
-    // iHitTheirBody has a 2-frame debounce to filter LERP false positives.
-    var iHitTheirBody = false;
+    // ── The ONLY collision fact a client can trust is "MY OWN head hit their body" —
+    //    my head position is exact, the opponent's is lag-delayed. So death is decided
+    //    purely from each player's report about THEMSELVES, never from guessing where
+    //    the opponent's head is. iRammed = my head inside their body (DamnBruh rule:
+    //    the snake whose head hits a body is the one that dies). ──
+    var iRammed = false;
     var _bodyR_me = myHead + pBody;  // my head edge touching their body edge
-    var _skipR = pHead * 1.4;        // skip their head-region segs (handled by head-on)
+    var _skipR = pHead * 1.4;        // skip their head-region segs (that's head-on, below)
     for(var j=0;j<segLimit;j++){
       var _ps=p.segs[j]; if(dst(px,py,_ps.x,_ps.y)<_skipR) continue;
-      if(dst(player.x,player.y,_ps.x,_ps.y)<_bodyR_me){ iHitTheirBody=true; break; }
+      if(dst(player.x,player.y,_ps.x,_ps.y)<_bodyR_me){ iRammed=true; break; }
     }
-    var theyHitMyBody = false;
-    var _bodyR_them = pHead + myBody; // their head edge touching my body edge
-    var _mySkipR = myHead * 1.4;
-    for(var k=0;k<myLimit;k++){
-      var _ms=player.segs[k]; if(dst(player.x,player.y,_ms.x,_ms.y)<_mySkipR) continue;
-      if(dst(px,py,_ms.x,_ms.y)<_bodyR_them){ theyHitMyBody=true; break; }
-    }
-
     var _bhk = p.remoteId || 'x';
     var pid = p.remoteId || '';
-    var headOn = dst(player.x,player.y,px,py) < (myHead + pHead);
-    // ── SINGLE-AUTHORITY resolution ─────────────────────────────────────────────
-    // The client with the SMALLER id is the sole referee for this pair and makes the
-    // ONLY death decision. The other client never self-kills or sends kill_target for
-    // this pair — it only dies when the referee tells it to. This makes a double-death
-    // structurally impossible, no matter the lag or which side saw the hit first.
+    var headGap = dst(player.x,player.y,px,py);
+    var headOn = headGap < (myHead + pHead);
+
+    // SINGLE AUTHORITY: the smaller-id client is the sole referee for this pair and
+    // makes the ONLY death decision → a double-death is structurally impossible.
     if(myId < pid){
-      // Referee. Merge the non-referee's hint that THEIR head is in MY body — their
-      // head reaches me with lag, so my own check above may have missed it.
-      if(_hintHitMe[pid] && _now-_hintHitMe[pid]<400){ theyHitMyBody=true; delete _hintHitMe[pid]; }
-      if(iHitTheirBody && theyHitMyBody){ _bodyHitFrames[_bhk]=0; _refKill(p); continue; } // mutual → I survive, they die
-      if(iHitTheirBody){ // my head rammed their body → I die (2-frame debounce vs LERP noise)
-        _bodyHitFrames[_bhk]=(_bodyHitFrames[_bhk]||0)+1;
-        if(_bodyHitFrames[_bhk]>=2){ delete _bodyHitFrames[_bhk]; killPlayer('Eliminated by '+p.name, pid); return; }
+      // ── REFEREE ── decides using only ACCURATE signals: my own ram (iRammed) and
+      //    the non-referee's reported ram (_hintHitMe, sent about THEIR own head).
+      var theyRammedMe = (_hintHitMe[pid] && _now-_hintHitMe[pid] < 350);
+      if(theyRammedMe){
+        // Their head ran into my body (their own accurate report) → THEY die, I get the
+        // kill. Also resolves a mutual: if we both rammed, the lower id (me) survives.
+        delete _hintHitMe[pid]; p._refRamSince=0; _bodyHitFrames[_bhk]=0; _refKill(p); continue;
+      }
+      if(iRammed){
+        // I ran into them → I die. If our heads are far apart it can't be mutual, so die
+        // now (2-frame confirm vs jitter). If heads are close it might be a mutual whose
+        // report is still in flight — wait briefly for it before dying.
+        if(headGap > (myHead+pHead)*3){
+          _bodyHitFrames[_bhk]=(_bodyHitFrames[_bhk]||0)+1;
+          if(_bodyHitFrames[_bhk]>=2){ delete _bodyHitFrames[_bhk]; killPlayer('Eliminated by '+p.name, pid); return; }
+          continue;
+        }
+        if(!p._refRamSince) p._refRamSince=_now;
+        else if(_now-p._refRamSince>=150){ p._refRamSince=0; killPlayer('Eliminated by '+p.name, pid); return; }
         continue;
       }
-      if(theyHitMyBody || headOn){ _bodyHitFrames[_bhk]=0; _refKill(p); continue; } // they ran into me / head-on → they die
-      _bodyHitFrames[_bhk]=0;
+      p._refRamSince=0; _bodyHitFrames[_bhk]=0;
+      if(headOn){ _refKill(p); continue; } // head-on tie → lower id (me) survives, they die
     } else {
-      // Non-referee. NEVER self-kill or send kill_target here. If my head is in their
-      // body (or we're head-on), hint the referee so it can resolve a hit its lagged
-      // view of my head might have missed. I die only via the referee's kill_target.
-      if(iHitTheirBody || headOn){
-        if(!_hintSentTs[pid] || _now-_hintSentTs[pid]>150){
+      // ── NON-REFEREE ── never self-kills or sends kill_target for this pair. It reports
+      //    its OWN accurate ram (head in their body, or head-on) so the referee can
+      //    resolve it, and dies only when the referee's kill_target arrives.
+      if(iRammed || headOn){
+        if(!_hintSentTs[pid] || _now-_hintSentTs[pid] > 120){
           _hintSentTs[pid]=_now;
           if(_ws&&_ws.readyState===WebSocket.OPEN){
             try{_ws.send(JSON.stringify({type:'pos',clientId:_wsClientId,data:{kill_hint:pid}}));}catch(_){}
           }
         }
-      } else { _bodyHitFrames[_bhk]=0; }
+      }
     }
   }
   var pdx=player.x-WORLD/2, pdy=player.y-WORLD/2;
