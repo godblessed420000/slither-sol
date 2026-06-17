@@ -136,9 +136,10 @@ canvas{display:block;width:100%;height:100%;}
 .overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(2,8,16,.92);backdrop-filter:blur(5px);z-index:20;gap:14px;padding:16px;overflow-y:auto;}
 .overlay.hidden{display:none;}
 /* ── Animated live-wallpaper background for the login / main menu ── */
-#ovLogin{background:rgba(2,8,16,.40);backdrop-filter:blur(2px);}
-#ovLogin>div{position:relative;z-index:2;}
-#menuBgFx{position:absolute;inset:0;z-index:0;overflow:hidden;pointer-events:none;}
+/* Semi-transparent menu overlays so the shared snake background shows through */
+#ovLogin,#ovStart,#ovLobby{background:rgba(2,8,16,.46)!important;backdrop-filter:blur(2px);}
+/* Shared background sits inside #canvasWrap, above the game canvas but below the overlays (z-index 20) */
+#menuBgFx{position:absolute;inset:0;z-index:15;overflow:hidden;pointer-events:none;}
 /* Image layer — slow Ken-Burns push (zoom + drift), looping. Gradient fallback shows if the image is missing. */
 #menuBgImg{position:absolute;inset:-6%;background:
    radial-gradient(120% 90% at 50% 18%, rgba(153,69,215,.35), transparent 55%),
@@ -857,14 +858,16 @@ canvas{display:block;width:100%;height:100%;}
       <div id="joyBoostBtn"><span class="joy-icon">&#9889;</span><span>BOOST</span></div>
     </div>
 
+    <!-- ══ SHARED ANIMATED MENU BACKGROUND (behind login / start / lobby) ══ -->
+    <div id="menuBgFx" aria-hidden="true" style="display:none;">
+      <div id="menuBgImg"></div>
+      <div id="menuBgFog"></div>
+      <canvas id="menuBgEmber"></canvas>
+      <div id="menuBgVignette"></div>
+    </div>
+
     <!-- ══ LOGIN SCREEN ══ -->
     <div class="overlay" id="ovLogin">
-      <div id="menuBgFx" aria-hidden="true">
-        <div id="menuBgImg"></div>
-        <div id="menuBgFog"></div>
-        <canvas id="menuBgEmber"></canvas>
-        <div id="menuBgVignette"></div>
-      </div>
       <div style="display:flex;flex-direction:column;align-items:center;gap:18px;max-width:420px;width:100%;">
         <div style="font-family:'Orbitron',monospace;font-size:2rem;font-weight:900;background:linear-gradient(90deg,var(--purple),var(--green));-webkit-background-clip:text;-webkit-text-fill-color:transparent;animation:titleFlash 1.8s ease-in-out infinite;">SLITHER.SOL</div>
         <div style="font-family:'Share Tech Mono',monospace;font-size:.95rem;font-weight:700;color:#14F195;text-align:center;letter-spacing:2px;background:rgba(20,241,149,.08);border:1px solid rgba(20,241,149,.3);border-radius:6px;padding:5px 18px;">&#9679; <span id="loginVersionText">V1</span></div>
@@ -6345,12 +6348,29 @@ window.addEventListener('load', function() {
   function start(){ if(raf)return; size(); tick(); }
   function stop(){ if(raf){cancelAnimationFrame(raf); raf=null;} if(cx)cx.clearRect(0,0,W,H); }
   window.addEventListener('resize',function(){ if(raf) size(); });
-  // Only animate while the login overlay is visible — saves CPU once in-game.
-  function vis(){ var ov=document.getElementById('ovLogin'); if(ov && !ov.classList.contains('hidden')) start(); else stop(); }
+  // The background shows on ANY menu screen (login, main menu / start, lobby) and
+  // hides during gameplay so it never covers the arena. Animate embers only while shown.
+  var fx=document.getElementById('menuBgFx');
+  var menuIds=['ovLogin','ovStart','ovLobby'];
+  function menuOpen(){
+    for(var i=0;i<menuIds.length;i++){
+      var el=document.getElementById(menuIds[i]);
+      if(el && !el.classList.contains('hidden')) return true;
+    }
+    return false;
+  }
+  function vis(){
+    if(menuOpen()){ if(fx) fx.style.display=''; start(); }
+    else { if(fx) fx.style.display='none'; stop(); }
+  }
   vis();
-  // React to the overlay being shown/hidden (class toggles elsewhere in the app).
-  var ov=document.getElementById('ovLogin');
-  if(ov && window.MutationObserver){ new MutationObserver(vis).observe(ov,{attributes:true,attributeFilter:['class']}); }
+  // React to any menu overlay being shown/hidden (class toggles elsewhere in the app).
+  if(window.MutationObserver){
+    menuIds.forEach(function(id){
+      var el=document.getElementById(id);
+      if(el) new MutationObserver(vis).observe(el,{attributes:true,attributeFilter:['class']});
+    });
+  }
 })();
 
 
