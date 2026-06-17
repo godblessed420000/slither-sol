@@ -4728,8 +4728,12 @@ function killCheck(){
     var _bhk = p.remoteId || 'x';
     if(iHitTheirBody && theyHitMyBody){
       _bodyHitFrames[_bhk] = 0;
-      var iLoseMutual = player.length < p.length ||
-                        (player.length === p.length && myId > (p.remoteId||''));
+      // DETERMINISTIC tiebreaker — pure client-id compare. Both clients compute
+      // (myId > otherId): exactly one is true, so exactly one snake dies. Length
+      // must NOT be used here — each client sees a lag-stale length for the other
+      // snake, so a length compare can make BOTH clients think they win/lose,
+      // killing both snakes. Id is the only value both clients agree on.
+      var iLoseMutual = myId > (p.remoteId||'');
       if(iLoseMutual){ killPlayer('Eliminated by '+p.name, p.remoteId); return; }
       var _kNowM=Date.now();
       if(!_killNotifyTs[p.remoteId]||_kNowM-_killNotifyTs[p.remoteId]>1000){
