@@ -4741,32 +4741,51 @@ function eatFood(){
   for(var ei=0;ei<eaten.length;ei++) food.splice(eaten[ei],1);
 }
 
+// Hitbox helpers — the deadly region must EXACTLY match the drawn snake.
+// The renderer (drawS) draws a fixed SCREEN-pixel body: head radius R px and
+// body length MAXLEN px, both → world units by dividing by CAM_ZOOM. We mirror
+// that here so collision == what the player actually sees (DamnBruh-style:
+// head circle vs body circles, no invisible deadly tail beyond the drawing).
+function _hbHead(s){ var R=Math.max(9,Math.min(30, 9+(s.length||10)*SEG_MULT*0.075)); return R/(CAM_ZOOM||1); } // world head radius
+function _hbVisLen(s){ var logical=Math.min((s.length||10)*SEG_MULT,120); return Math.max(60, logical*4)/(CAM_ZOOM||1); } // world body length drawn
+// Number of segments that fall within the drawn body length (walk world distance from the head).
+function _hbSegLimit(s, wlen){
+  if(s.segs.length<2) return s.segs.length;
+  var acc=0;
+  for(var j=1;j<s.segs.length;j++){
+    var a=s.segs[j-1], b=s.segs[j], dx=a.x-b.x, dy=a.y-b.y;
+    acc+=Math.sqrt(dx*dx+dy*dy);
+    if(acc>=wlen) return j+1;
+  }
+  return s.segs.length;
+}
 function killCheck(){
   if(!player.alive) return;
   var myId = _wsClientId || 'zzz';
-  // Cap to visual segment count — segments beyond this are invisible and must not be deadly.
-  var _visSegs = Math.round(80 * 0.92 / CAM_ZOOM);
-  var myLimit = Math.min(player.segs.length, _visSegs);
+  var myHead=_hbHead(player), myBody=myHead*0.95;        // my head radius + my body half-width (world)
+  var myLimit=_hbSegLimit(player, _hbVisLen(player));     // only drawn segments are deadly
   for(var i=0;i<peers.length;i++){
     var p=peers[i]; if(!p.alive) continue;
-    var segLimit = Math.min(p.segs.length, _visSegs);
+    var pHead=_hbHead(p), pBody=pHead*0.95;
+    var segLimit=_hbSegLimit(p, _hbVisLen(p));
     var px = (p.targetX!=null)?p.targetX:p.x;
     var py = (p.targetY!=null)?p.targetY:p.y;
 
     // — Body checks first — body collision takes precedence over head-on.
     // iHitTheirBody has a 2-frame debounce to filter LERP false positives.
     var iHitTheirBody = false;
-    var _bodyR = player.headR + p.headR * 0.8; // dynamic: scales with both snakes' sizes
-    var _skipR = p.headR * 1.5; // skip segments within 1.5× head radius of their head center
+    var _bodyR_me = myHead + pBody;  // my head edge touching their body edge
+    var _skipR = pHead * 1.4;        // skip their head-region segs (handled by head-on)
     for(var j=0;j<segLimit;j++){
       var _ps=p.segs[j]; if(dst(px,py,_ps.x,_ps.y)<_skipR) continue;
-      if(dst(player.x,player.y,_ps.x,_ps.y)<_bodyR){ iHitTheirBody=true; break; }
+      if(dst(player.x,player.y,_ps.x,_ps.y)<_bodyR_me){ iHitTheirBody=true; break; }
     }
     var theyHitMyBody = false;
-    var _mySkipR = player.headR * 1.5;
+    var _bodyR_them = pHead + myBody; // their head edge touching my body edge
+    var _mySkipR = myHead * 1.4;
     for(var k=0;k<myLimit;k++){
       var _ms=player.segs[k]; if(dst(player.x,player.y,_ms.x,_ms.y)<_mySkipR) continue;
-      if(dst(px,py,_ms.x,_ms.y)<_bodyR){ theyHitMyBody=true; break; }
+      if(dst(px,py,_ms.x,_ms.y)<_bodyR_them){ theyHitMyBody=true; break; }
     }
 
     var _bhk = p.remoteId || 'x';
@@ -4811,7 +4830,7 @@ function killCheck(){
     } else {
       _bodyHitFrames[_bhk] = 0;
       // — Head-on: only when no body collision detected. clientId tiebreaker.
-      if(dst(player.x,player.y,px,py) < player.headR + p.headR){
+      if(dst(player.x,player.y,px,py) < myHead + pHead){
         var iLose = myId > (p.remoteId||'');
         if(iLose){ killPlayer('Head-on with '+p.name, p.remoteId); return; }
         var _kNowH=Date.now();
