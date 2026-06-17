@@ -4789,13 +4789,23 @@ function killCheck(){
     }
 
     var _bhk = p.remoteId || 'x';
-    if(iHitTheirBody && theyHitMyBody){
+    var _headGap = dst(player.x,player.y,px,py);
+    // Close-quarters zone — the two heads are near each other. Under network lag,
+    // each client may only see ITS OWN head intruding into the other's body (the
+    // opponent's head looks just-outside because its position is a few ms stale),
+    // so BOTH clients would take the one-sided branch below and BOTH die. The
+    // head-to-head gap is ~symmetric across clients, so when it's small we treat
+    // the hit as mutual and let the deterministic id tiebreaker pick ONE loser.
+    var _ambiguous = _headGap < (myHead + pHead) * 2.2;
+    if((iHitTheirBody && theyHitMyBody) || (iHitTheirBody && _ambiguous)){
       _bodyHitFrames[_bhk] = 0;
       // DETERMINISTIC tiebreaker — pure client-id compare. Both clients compute
       // (myId > otherId): exactly one is true, so exactly one snake dies. Length
       // must NOT be used here — each client sees a lag-stale length for the other
       // snake, so a length compare can make BOTH clients think they win/lose,
-      // killing both snakes. Id is the only value both clients agree on.
+      // killing both snakes. Id is the only value both clients agree on. Head-on
+      // (below) uses the SAME compare, so even if one client classifies the hit as
+      // mutual and the other as head-on, they still agree on who dies.
       var iLoseMutual = myId > (p.remoteId||'');
       if(iLoseMutual){ killPlayer('Eliminated by '+p.name, p.remoteId); return; }
       var _kNowM=Date.now();
