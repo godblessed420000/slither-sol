@@ -5066,78 +5066,122 @@ function draw(){
   if(_elCashoutQhint){ var _qh=qDown&&cashingOut?'Cashing out... '+Math.round(Math.min((performance.now()-qStart)/CASHOUT_MS*100,100))+'%':'Hold Q to cashout'; if(_qh!==_elCashoutQhint._last){ _elCashoutQhint.textContent=_qh; _elCashoutQhint._last=_qh; } }
 }
 
+// ── Snake renderer — drawn ENTIRELY in screen pixels ──
+// The world transform (ctx.scale(CAM_ZOOM)) is reset to identity inside here so
+// nothing the snake draws is affected by zoom. World coords are converted to
+// screen coords manually, then the centerline is resampled at a FIXED pixel
+// spacing and capped at a FIXED pixel length. Result: body width, length, head,
+// and eyes are locked to constant on-screen pixels at every zoom level.
 function drawS(s){
   if(s.segs.length<2) return;
-  var n = Math.min(s.segs.length, Math.round(80 * 0.92 / CAM_ZOOM)); // constant screen-space tail
-  // All sizes divided by CAM_ZOOM → snake appears the same screen size regardless of zoom level
-  var iz   = 1 / CAM_ZOOM;
-  var hs   = (s.headR || Math.max(8, Math.min(28, 8 + (s.length||10) * SEG_MULT * 0.08))) * iz;
-  var baseW= hs * 2;
-  ctx.lineCap='round'; ctx.lineJoin='round';
+  var Z=CAM_ZOOM, cw=gc.width/2, ch=gc.height/2;
+  // world → screen pixel conversion (matches the transform set up in draw())
+  var W2SX=function(wx){ return (wx-camX)*Z+cw; };
+  var W2SY=function(wy){ return (wy-camY)*Z+ch; };
 
-  // Outer glow
+  // Fixed SCREEN-PIXEL sizes — never multiplied/divided by zoom.
+  // Head radius grows with the snake's LOGICAL length (DamnBruh-style), not zoom.
+  var R   = Math.max(9, Math.min(30, 9 + (s.length||10) * SEG_MULT * 0.075)); // head radius, px
+  var BW  = R*1.9;            // body width, px
+  var STEP= Math.max(4, R*0.5); // resample spacing along the body, px
+  // Visible body length in px, proportional to logical length so growth still shows.
+  var logical = Math.min((s.length||10) * SEG_MULT, 120);
+  var MAXLEN  = Math.max(60, logical * 4); // px of body to draw
+
+  // ── Resample the world polyline into evenly-spaced SCREEN points ──
+  var hx=W2SX(s.x), hy=W2SY(s.y);
+  var pts=[{x:hx,y:hy}];
+  var cx=hx, cy=hy, acc=0, total=0;
+  for(var i=1;i<s.segs.length && total<MAXLEN;i++){
+    var vx=W2SX(s.segs[i].x), vy=W2SY(s.segs[i].y);
+    var dx=vx-cx, dy=vy-cy, dd=Math.sqrt(dx*dx+dy*dy);
+    if(dd<1e-6){ continue; }
+    var ux=dx/dd, uy=dy/dd;
+    while(acc+dd>=STEP && total<MAXLEN){
+      var step=STEP-acc;
+      cx+=ux*step; cy+=uy*step;
+      pts.push({x:cx,y:cy});
+      total+=STEP; dd-=step; acc=0;
+    }
+    acc+=dd; cx=vx; cy=vy;
+  }
+  if(pts.length<2) pts.push({x:W2SX(s.segs[1].x),y:W2SY(s.segs[1].y)});
+
+  // Draw in pure screen space (identity transform)
+  ctx.save();
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.lineCap='round'; ctx.lineJoin='round';
+  var n=pts.length;
+
+  // Outer glow (local player only)
   if(s.isMe){
-    ctx.beginPath(); ctx.moveTo(s.segs[0].x,s.segs[0].y);
-    for(var i=1;i<n;i++) ctx.lineTo(s.segs[i].x,s.segs[i].y);
-    ctx.strokeStyle=s.color; ctx.lineWidth=baseW+10*iz;
+    ctx.beginPath(); ctx.moveTo(pts[0].x,pts[0].y);
+    for(var i=1;i<n;i++) ctx.lineTo(pts[i].x,pts[i].y);
+    ctx.strokeStyle=s.color; ctx.lineWidth=BW+10;
     ctx.globalAlpha=0.09; ctx.stroke(); ctx.globalAlpha=1;
   }
 
-  // Body — bezier smoothed
-  ctx.beginPath();
-  ctx.moveTo(s.segs[0].x, s.segs[0].y);
+  // Body — smoothed
+  ctx.beginPath(); ctx.moveTo(pts[0].x,pts[0].y);
   for(var i=1;i<n-1;i++){
-    var mx=(s.segs[i].x+s.segs[i+1].x)/2;
-    var my=(s.segs[i].y+s.segs[i+1].y)/2;
-    ctx.quadraticCurveTo(s.segs[i].x,s.segs[i].y,mx,my);
+    var mx=(pts[i].x+pts[i+1].x)/2, my=(pts[i].y+pts[i+1].y)/2;
+    ctx.quadraticCurveTo(pts[i].x,pts[i].y,mx,my);
   }
-  ctx.lineTo(s.segs[n-1].x,s.segs[n-1].y);
-  ctx.strokeStyle=s.color; ctx.lineWidth=baseW; ctx.stroke();
+  ctx.lineTo(pts[n-1].x,pts[n-1].y);
+  ctx.strokeStyle=s.color; ctx.lineWidth=BW; ctx.stroke();
 
-  // Spine
-  ctx.beginPath(); ctx.moveTo(s.segs[0].x,s.segs[0].y);
-  for(var i=1;i<Math.min(n,15);i++) ctx.lineTo(s.segs[i].x,s.segs[i].y);
-  ctx.strokeStyle='rgba(0,0,0,.28)'; ctx.lineWidth=baseW*.22; ctx.stroke();
+  // Spine accent
+  ctx.beginPath(); ctx.moveTo(pts[0].x,pts[0].y);
+  for(var i=1;i<Math.min(n,16);i++) ctx.lineTo(pts[i].x,pts[i].y);
+  ctx.strokeStyle='rgba(0,0,0,.28)'; ctx.lineWidth=BW*.22; ctx.stroke();
 
   // Head
-  ctx.beginPath(); ctx.arc(s.x,s.y,hs,0,Math.PI*2);
+  ctx.beginPath(); ctx.arc(hx,hy,R,0,Math.PI*2);
   ctx.fillStyle=s.color; ctx.fill();
-  ctx.strokeStyle='rgba(215,215,215,.2)'; ctx.lineWidth=1.5*iz; ctx.stroke();
+  ctx.strokeStyle='rgba(215,215,215,.22)'; ctx.lineWidth=1.5; ctx.stroke();
 
-  // Eyes
-  var ea=s.angle, eyeOff=hs*.6;
-  var ex1=s.x+Math.cos(ea+.15)*eyeOff, ey1=s.y+Math.sin(ea+.15)*eyeOff;
-  var ex2=s.x+Math.cos(ea-.15)*eyeOff, ey2=s.y+Math.sin(ea-.15)*eyeOff;
-  var eyr=hs*.38, epd=hs*.05; // pupil offset scales with head size
+  // ── Two eyes (DamnBruh style) — side by side, facing the heading ──
+  var ang=s.angle, fx=Math.cos(ang), fy=Math.sin(ang);
+  var sxp=Math.cos(ang+Math.PI/2), syp=Math.sin(ang+Math.PI/2);
+  var ebx=hx+fx*R*0.30, eby=hy+fy*R*0.30; // eye band slightly forward of center
+  var eo=R*0.52;        // sideways separation
+  var er=R*0.42;        // white radius
+  var pr=er*0.55;       // pupil radius
+  var e1x=ebx+sxp*eo, e1y=eby+syp*eo;
+  var e2x=ebx-sxp*eo, e2y=eby-syp*eo;
+  // whites
   ctx.fillStyle='#fff';
-  ctx.beginPath(); ctx.arc(ex1,ey1,eyr,0,Math.PI*2); ctx.fill();
-  ctx.beginPath(); ctx.arc(ex2,ey2,eyr,0,Math.PI*2); ctx.fill();
-  ctx.fillStyle=s.isMe?'#14F195':'#222';
-  ctx.beginPath(); ctx.arc(ex1+Math.cos(ea)*epd,ey1+Math.sin(ea)*epd,eyr*.15,0,Math.PI*2); ctx.fill();
-  ctx.beginPath(); ctx.arc(ex2+Math.cos(ea)*epd,ey2+Math.sin(ea)*epd,eyr*.15,0,Math.PI*2); ctx.fill();
-  ctx.fillStyle='#000';
-  ctx.beginPath(); ctx.arc(ex1+Math.cos(ea)*epd*1.4,ey1+Math.sin(ea)*epd*1.4,eyr*.28,0,Math.PI*2); ctx.fill();
-  ctx.beginPath(); ctx.arc(ex2+Math.cos(ea)*epd*1.4,ey2+Math.sin(ea)*epd*1.4,eyr*.28,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(e1x,e1y,er,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(e2x,e2y,er,0,Math.PI*2); ctx.fill();
+  // pupils look forward
+  var pox=fx*er*0.40, poy=fy*er*0.40;
+  ctx.fillStyle='#111';
+  ctx.beginPath(); ctx.arc(e1x+pox,e1y+poy,pr,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(e2x+pox,e2y+poy,pr,0,Math.PI*2); ctx.fill();
+  // tiny catch-light
+  ctx.fillStyle='rgba(255,255,255,.85)';
+  ctx.beginPath(); ctx.arc(e1x+pox-pr*0.3,e1y+poy-pr*0.3,pr*0.35,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(e2x+pox-pr*0.3,e2y+poy-pr*0.3,pr*0.35,0,Math.PI*2); ctx.fill();
 
-  // Name tag — font size + all padding zoom-compensated for constant screen size
-  var _fs=(s.isMe?13:11)*iz;
-  var nf='bold '+_fs.toFixed(1)+'px Share Tech Mono';
-  if(s._nameCache!==s.name||s._nameCZ!==CAM_ZOOM){
-    s._nameCache=s.name; s._nameCZ=CAM_ZOOM;
-    ctx.font=nf; s._tw=ctx.measureText(s.name).width;
-  } else { ctx.font=nf; }
-  var tw=s._tw, np=5*iz, nh=14*iz, ny=s.y-hs-10*iz;
+  // Name tag — fixed screen-pixel font, positioned above the head in screen px
+  var _fs=s.isMe?13:11;
+  var nf='bold '+_fs+'px Share Tech Mono';
+  if(s._nameCache!==s.name){ s._nameCache=s.name; ctx.font=nf; s._tw=ctx.measureText(s.name).width; }
+  else { ctx.font=nf; }
+  var tw=s._tw, np=5, nh=14, ny=hy-R-10;
   ctx.fillStyle=s.isMe?'rgba(20,241,149,0.18)':'rgba(0,0,0,0.72)';
   ctx.beginPath();
-  var rr=5*iz, rx=s.x-tw/2-np, ry=ny-nh+2*iz, rw=tw+np*2;
+  var rr=5, rx=hx-tw/2-np, ry=ny-nh+2, rw=tw+np*2;
   ctx.moveTo(rx+rr,ry); ctx.lineTo(rx+rw-rr,ry); ctx.arcTo(rx+rw,ry,rx+rw,ry+rr,rr);
   ctx.lineTo(rx+rw,ry+nh-rr); ctx.arcTo(rx+rw,ry+nh,rx+rw-rr,ry+nh,rr);
   ctx.lineTo(rx+rr,ry+nh); ctx.arcTo(rx,ry+nh,rx,ry+nh-rr,rr);
   ctx.lineTo(rx,ry+rr); ctx.arcTo(rx,ry,rx+rr,ry,rr); ctx.closePath(); ctx.fill();
-  if(s.isMe){ ctx.strokeStyle='rgba(20,241,149,0.5)'; ctx.lineWidth=iz; ctx.stroke(); }
+  if(s.isMe){ ctx.strokeStyle='rgba(20,241,149,0.5)'; ctx.lineWidth=1; ctx.stroke(); }
   ctx.fillStyle=s.isMe?'#14F195':'#ffffff';
   ctx.textAlign='center'; ctx.shadowBlur=0;
-  ctx.fillText(s.name,s.x,ny);
+  ctx.fillText(s.name,hx,ny);
+
+  ctx.restore();
 }
 
 function drawMM(){
