@@ -138,6 +138,9 @@ canvas{display:block;width:100%;height:100%;}
 /* ── Animated live-wallpaper background for the login / main menu ── */
 /* Semi-transparent menu overlays so the shared snake background shows through */
 #ovLogin,#ovStart,#ovLobby{background:rgba(2,8,16,.46)!important;backdrop-filter:blur(2px);}
+/* Login: push the account box to the left so the snake shows on the right */
+#ovLogin{align-items:flex-start;padding-left:max(24px,7%);}
+@media(max-width:560px){#ovLogin{align-items:center;padding-left:16px;}}
 /* Shared background sits inside #canvasWrap, above the game canvas but below the overlays (z-index 20) */
 #menuBgFx{position:absolute;inset:0;z-index:15;overflow:hidden;pointer-events:none;}
 /* Image layer — slow Ken-Burns push (zoom + drift), looping. Gradient fallback shows if the image is missing. */
@@ -870,11 +873,11 @@ canvas{display:block;width:100%;height:100%;}
 
     <!-- ══ LOGIN SCREEN ══ -->
     <div class="overlay" id="ovLogin">
-      <div style="display:flex;flex-direction:column;align-items:center;gap:18px;max-width:420px;width:100%;">
-        <div style="font-family:'Orbitron',monospace;font-size:2rem;font-weight:900;background:linear-gradient(90deg,var(--purple),var(--green));-webkit-background-clip:text;-webkit-text-fill-color:transparent;animation:titleFlash 1.8s ease-in-out infinite;">SLITHER.SOL</div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:14px;max-width:340px;width:100%;">
+        <div style="font-family:'Orbitron',monospace;font-size:1.7rem;font-weight:900;background:linear-gradient(90deg,var(--purple),var(--green));-webkit-background-clip:text;-webkit-text-fill-color:transparent;animation:titleFlash 1.8s ease-in-out infinite;">SLITHER.SOL</div>
         <div style="font-family:'Share Tech Mono',monospace;font-size:.95rem;font-weight:700;color:#14F195;text-align:center;letter-spacing:2px;background:rgba(20,241,149,.08);border:1px solid rgba(20,241,149,.3);border-radius:6px;padding:5px 18px;">&#9679; <span id="loginVersionText">V1</span></div>
         <div style="color:var(--dim);font-size:.76rem;text-align:center;max-width:340px;line-height:1.6;">Real-money PvP snake arena on Solana. Enter your details to get started.</div>
-        <div style="background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:28px 32px;width:100%;display:flex;flex-direction:column;gap:12px;box-shadow:0 0 40px rgba(153,69,215,.15);box-sizing:border-box;">
+        <div style="background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:20px 22px;width:100%;display:flex;flex-direction:column;gap:10px;box-shadow:0 0 40px rgba(153,69,215,.15);box-sizing:border-box;">
           <div style="font-family:'Orbitron',monospace;font-size:.75rem;color:var(--dim);letter-spacing:2px;text-align:center;">CREATE YOUR ACCOUNT</div>
           <input id="loginEmail" type="email" placeholder="Your email (e.g. you@gmail.com)"
             style="background:#0d1628;border:1px solid #334115;color:#e2e8f0;border-radius:8px;padding:13px 14px;font-size:.9rem;width:100%;box-sizing:border-box;outline:none;transition:border-color .2s;"
