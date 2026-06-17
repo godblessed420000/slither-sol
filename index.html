@@ -135,6 +135,36 @@ canvas{display:block;width:100%;height:100%;}
 @keyframes fad{to{opacity:0}}
 .overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(2,8,16,.92);backdrop-filter:blur(5px);z-index:20;gap:14px;padding:16px;overflow-y:auto;}
 .overlay.hidden{display:none;}
+/* ── Animated live-wallpaper background for the login / main menu ── */
+#ovLogin{background:rgba(2,8,16,.40);backdrop-filter:blur(2px);}
+#ovLogin>div{position:relative;z-index:2;}
+#menuBgFx{position:absolute;inset:0;z-index:0;overflow:hidden;pointer-events:none;}
+/* Image layer — slow Ken-Burns push (zoom + drift), looping. Gradient fallback shows if the image is missing. */
+#menuBgImg{position:absolute;inset:-6%;background:
+   radial-gradient(120% 90% at 50% 18%, rgba(153,69,215,.35), transparent 55%),
+   radial-gradient(120% 80% at 50% 100%, rgba(20,241,149,.18), transparent 60%),
+   linear-gradient(180deg,#0a0612 0%,#150a26 45%,#1a0a2e 70%,#06040c 100%);
+   background-size:cover;background-position:center;
+   animation:menuKenBurns 22s ease-in-out infinite alternate;will-change:transform;}
+#menuBgImg.hasimg{background-image:var(--menu-bg-url);background-size:cover;background-position:center 35%;}
+@keyframes menuKenBurns{
+  0%{transform:scale(1.06) translateY(0);}
+  100%{transform:scale(1.20) translateY(-2.2%);}
+}
+/* Drifting fog — two soft layers sliding in opposite directions */
+#menuBgFog{position:absolute;inset:-20%;pointer-events:none;mix-blend-mode:screen;opacity:.5;
+  background:
+   radial-gradient(40% 30% at 25% 40%, rgba(120,90,200,.25), transparent 70%),
+   radial-gradient(45% 32% at 75% 55%, rgba(40,180,160,.18), transparent 70%);
+  filter:blur(14px);animation:menuFog 26s ease-in-out infinite alternate;}
+@keyframes menuFog{0%{transform:translateX(-4%) translateY(0);}100%{transform:translateX(4%) translateY(-3%);}}
+/* Neon vignette + slow hue pulse */
+#menuBgVignette{position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(120% 100% at 50% 38%, transparent 40%, rgba(2,4,12,.55) 78%, rgba(2,4,12,.9) 100%);
+  animation:menuNeonPulse 6.5s ease-in-out infinite;}
+@keyframes menuNeonPulse{0%,100%{opacity:.85;}50%{opacity:1;}}
+#menuBgEmber{position:absolute;inset:0;pointer-events:none;}
+@media(prefers-reduced-motion:reduce){#menuBgImg,#menuBgFog,#menuBgVignette{animation:none;}}
 .ov-title{font-family:'Orbitron',monospace;font-size:1.9rem;font-weight:900;background:linear-gradient(90deg,var(--purple),var(--green));-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
 .ov-sub{color:var(--dim);font-size:.75rem;text-align:center;max-width:500px;line-height:1.6;}
 
@@ -829,6 +859,12 @@ canvas{display:block;width:100%;height:100%;}
 
     <!-- ══ LOGIN SCREEN ══ -->
     <div class="overlay" id="ovLogin">
+      <div id="menuBgFx" aria-hidden="true">
+        <div id="menuBgImg"></div>
+        <div id="menuBgFog"></div>
+        <canvas id="menuBgEmber"></canvas>
+        <div id="menuBgVignette"></div>
+      </div>
       <div style="display:flex;flex-direction:column;align-items:center;gap:18px;max-width:420px;width:100%;">
         <div style="font-family:'Orbitron',monospace;font-size:2rem;font-weight:900;background:linear-gradient(90deg,var(--purple),var(--green));-webkit-background-clip:text;-webkit-text-fill-color:transparent;animation:titleFlash 1.8s ease-in-out infinite;">SLITHER.SOL</div>
         <div style="font-family:'Share Tech Mono',monospace;font-size:.95rem;font-weight:700;color:#14F195;text-align:center;letter-spacing:2px;background:rgba(20,241,149,.08);border:1px solid rgba(20,241,149,.3);border-radius:6px;padding:5px 18px;">&#9679; <span id="loginVersionText">V1</span></div>
@@ -6273,8 +6309,49 @@ window.addEventListener('load', function() {
   // (ambient fake kill feed removed — real players only)
 });
 
+// ── Animated main-menu background: load the user's image + run rising-ember canvas ──
+(function(){
+  // Try to load the menu background image. If it exists, swap from the gradient
+  // fallback to the real photo; if it 404s, the CSS gradient stays.
+  var _mbImg=new Image();
+  _mbImg.onload=function(){
+    var el=document.getElementById('menuBgImg');
+    if(el){ el.style.setProperty('--menu-bg-url','url("menu-bg.jpg")'); el.classList.add('hasimg'); }
+  };
+  _mbImg.src='menu-bg.jpg';
 
-
+  // Rising-ember particle field (matches the drifting sparks in the reference loop).
+  var cv=document.getElementById('menuBgEmber'); if(!cv) return;
+  var cx=cv.getContext('2d'), embers=[], raf=null, W=0, H=0;
+  function size(){ var r=cv.getBoundingClientRect(); W=cv.width=r.width||window.innerWidth; H=cv.height=r.height||window.innerHeight; }
+  function mk(){ return {x:Math.random()*W, y:H+Math.random()*40, r:0.6+Math.random()*2.2,
+    vy:-(0.25+Math.random()*0.85), vx:(Math.random()-0.5)*0.35, life:0, max:160+Math.random()*180,
+    col:Math.random()<0.5?'20,241,149':'153,69,215'}; }
+  function tick(){
+    cx.clearRect(0,0,W,H);
+    if(embers.length<70 && Math.random()<0.5) embers.push(mk());
+    for(var i=embers.length-1;i>=0;i--){
+      var e=embers[i]; e.x+=e.vx; e.y+=e.vy; e.vx+=(Math.random()-0.5)*0.04; e.life++;
+      var a=Math.sin((e.life/e.max)*Math.PI)*0.7; // fade in/out
+      if(e.life>=e.max||e.y<-10){ embers.splice(i,1); continue; }
+      cx.beginPath(); cx.arc(e.x,e.y,e.r,0,Math.PI*2);
+      cx.fillStyle='rgba('+e.col+','+a.toFixed(3)+')';
+      cx.shadowBlur=8; cx.shadowColor='rgba('+e.col+','+(a*0.8).toFixed(3)+')';
+      cx.fill();
+    }
+    cx.shadowBlur=0;
+    raf=requestAnimationFrame(tick);
+  }
+  function start(){ if(raf)return; size(); tick(); }
+  function stop(){ if(raf){cancelAnimationFrame(raf); raf=null;} if(cx)cx.clearRect(0,0,W,H); }
+  window.addEventListener('resize',function(){ if(raf) size(); });
+  // Only animate while the login overlay is visible — saves CPU once in-game.
+  function vis(){ var ov=document.getElementById('ovLogin'); if(ov && !ov.classList.contains('hidden')) start(); else stop(); }
+  vis();
+  // React to the overlay being shown/hidden (class toggles elsewhere in the app).
+  var ov=document.getElementById('ovLogin');
+  if(ov && window.MutationObserver){ new MutationObserver(vis).observe(ov,{attributes:true,attributeFilter:['class']}); }
+})();
 
 
 </script>
