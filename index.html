@@ -4797,29 +4797,27 @@ function killCheck(){
     // head — those segments are visually inside the head circle, not the body.
     var iRammed=false;
     var _bodyR=myHead+pBody;
-    var _headSkip=pHead*2; // world-space exclusion zone around their head
+    // Skip only segs[0] (exact head position). No large exclusion zone — that was causing
+    // the neck/upper-body to be a ghost zone opponents could pass through freely.
     for(var j=1;j<segLimit;j++){
       var _ps=p.segs[j]; if(!_ps) break;
-      if(dst(px,py,_ps.x,_ps.y)<_headSkip) continue; // inside head region — skip
       if(dst(player.x,player.y,_ps.x,_ps.y)<_bodyR){ iRammed=true; break; }
     }
 
     var headGap=dst(player.x,player.y,px,py);
-    var headOn=headGap<(myHead+pHead); // heads overlapping
+    var headOn=headGap<(myHead+pHead);
 
     if(myId<pid){
-      // ── REFEREE (lower id) — sole decision-maker for this pair ──
-      // Priority 1: non-referee confirmed their head hit my body → THEY die, I survive.
-      // Also resolves a mutual: lower-id always wins.
+      // ── REFEREE (lower id) ──
       var theyRammedMe=(_hintHitMe[pid]&&_now-_hintHitMe[pid]<400);
       if(theyRammedMe){
         delete _hintHitMe[pid]; p._refRamSince=0; _refKill(p); continue;
       }
-      // Priority 2: pure head-on (no body entry yet) → lower id wins.
-      if(headOn&&!iRammed){
+      // headOn takes priority over iRammed — head-on always means lower id wins,
+      // even if body segments near the neck also triggered iRammed.
+      if(headOn){
         p._refRamSince=0; _refKill(p); continue;
       }
-      // Priority 3: MY head entered THEIR body → wait 180ms for a mutual kill_hint.
       if(iRammed){
         if(!p._refRamSince) p._refRamSince=_now;
         else if(_now-p._refRamSince>=180){ p._refRamSince=0; killPlayer('Eliminated by '+p.name,pid); return; }
@@ -4827,8 +4825,10 @@ function killCheck(){
       }
       p._refRamSince=0;
     } else {
-      // ── NON-REFEREE (higher id) — never self-kills; reports confirmed body hits only ──
-      if(iRammed){
+      // ── NON-REFEREE (higher id) — only report clear body hits (not head-on) ──
+      // headOn is handled by the referee's own check; sending kill_hint on headOn
+      // would cause false kills on close passes near the head.
+      if(iRammed&&!headOn){
         if(!_hintSentTs[pid]||_now-_hintSentTs[pid]>60){
           _hintSentTs[pid]=_now;
           if(_ws&&_ws.readyState===WebSocket.OPEN){
