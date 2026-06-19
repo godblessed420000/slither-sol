@@ -3391,7 +3391,7 @@ function _wsHandleMsg(msg, fromAbly) {
           peers = peers.filter(function(pp){ return pp !== rp; });
           if (gameRunning) _updateArenaSize();
           if (d.killed_by && _wsClientId && d.killed_by === _wsClientId && player && player.alive) {
-            myKills++;
+            myKills++; boostE=Math.min(100,boostE+50); // kill refills half boost
             var _pSol = +(d.sol || 0);
             if (_pSol > 0) {
               killSOL += _pSol; W.balance += _pSol; saveSession(); refreshWalletUI();
@@ -3439,7 +3439,7 @@ function _wsHandleMsg(msg, fromAbly) {
       if (gameRunning) _updateArenaSize();
     }
     if (d.killed_by && _wsClientId && d.killed_by === _wsClientId && player && player.alive) {
-      myKills++;
+      myKills++; boostE=Math.min(100,boostE+50); // kill refills half boost
       var earnedSol = +(d.sol || 0);
       if (earnedSol > 0) {
         killSOL += earnedSol;
@@ -4640,24 +4640,20 @@ function update(_dt){
   }
 
   // ── Speed + boost ──
-  // Boost requires 100+ segments — too small = no boost
   if(boosting && player.segs.length < 15) boosting = false;
-  var spd = BASE_SPEED * _dt; // delta-time scaled — same real-world speed on all frame rates
+  var spd = BASE_SPEED * _dt;
   if(boosting && boostE>0){
     spd *= BOOST_MULT;
     var prevBoostE = boostE;
-    boostE = Math.max(0, boostE - 0.22 * _dt); // faster drain — boost is a burst resource
-    if(boostE <= 0) _boostExhaustedUntil = performance.now() + 2000; // 2s penalty
+    boostE = Math.max(0, boostE - 0.22 * _dt); // drain while boosting
     var _minLen = Math.round(15 / SEG_MULT);
     if(player.segs.length > 15 && Math.floor(prevBoostE / 2.0) > Math.floor(boostE / 2.0)){
       var tl=player.segs[player.segs.length-1];
       addFood(tl.x+(Math.random()-.5)*10, tl.y+(Math.random()-.5)*10, true);
       player.length = Math.max(_minLen, player.length - 1);
     }
-  } else {
-    boostE = Math.min(100, boostE + 0.14 * _dt); // slower recharge — makes boost feel earned
-    if(performance.now() < _boostExhaustedUntil) spd *= 0.7;
   }
+  // No passive recharge — boost refills only from eating orbs or getting kills
   moveS(player, player.angle, spd);
   // Enforce exact segment count — moveS only pops once per frame, but we may need to pop
   // many (e.g. after a length decrement of 1 logical unit = 4 segments drop in target).
@@ -4745,7 +4741,7 @@ function eatFood(){
   var eaten=[];
   for(var i=food.length-1;i>=0;i--){
     var f=food[i];
-    if(player.alive&&dst(player.x,player.y,f.x,f.y)<player.headR+f.r){ score+=f.value; grow(player); eaten.push(i); spawnPt(f.x,f.y,f.color); continue; }
+    if(player.alive&&dst(player.x,player.y,f.x,f.y)<player.headR+f.r){ score+=f.value; grow(player); boostE=Math.min(100,boostE+8); eaten.push(i); spawnPt(f.x,f.y,f.color); continue; }
     for(var j=0;j<peers.length;j++){ if(!peers[j].alive||peers[j].isRemote) continue; if(dst(peers[j].x,peers[j].y,f.x,f.y)<peers[j].headR+f.r){ peers[j].score++; grow(peers[j]); eaten.push(i); break; } }
   }
   // No bots → no duplicate indices; sort descending and splice in one pass
@@ -4823,8 +4819,7 @@ function killCheck(){
       if(headOn&&!iRammed){
         p._refRamSince=0; _refKill(p); continue;
       }
-      // Priority 3: MY head entered THEIR body → I die.
-      // Wait 180 ms for a mutual kill_hint before committing — covers any RTT ≤ ~150 ms.
+      // Priority 3: MY head entered THEIR body → wait 180ms for a mutual kill_hint.
       if(iRammed){
         if(!p._refRamSince) p._refRamSince=_now;
         else if(_now-p._refRamSince>=180){ p._refRamSince=0; killPlayer('Eliminated by '+p.name,pid); return; }
@@ -4833,8 +4828,6 @@ function killCheck(){
       p._refRamSince=0;
     } else {
       // ── NON-REFEREE (higher id) — never self-kills; reports confirmed body hits only ──
-      // kill_hint = "my head is inside your body" — NOT sent for headOn alone (close pass
-      // near heads should not trigger a kill; referee's own headOn check handles that).
       if(iRammed){
         if(!_hintSentTs[pid]||_now-_hintSentTs[pid]>60){
           _hintSentTs[pid]=_now;
