@@ -3081,7 +3081,6 @@ document.addEventListener('visibilitychange', function() {
 var _processedDies  = {}; // cid → true; prevents double-credit if both WS + Ably deliver
 var _killNotifyTs   = {}; // cid → timestamp; throttle victim-side kill_target sends (1s/target)
 var _recentLeaves   = {}; // cid → timestamp; blocks pos from recreating a just-left/dead peer
-var _bodyHitFrames  = {}; // cid → consecutive-frame count; debounce iHitTheirBody detection
 var _hintHitMe      = {}; // cid → timestamp; non-referee reported its head is in MY body
 var _hintSentTs     = {}; // cid → timestamp; throttle our own kill_hint sends
 function _wsSend(type, data) {
@@ -4771,11 +4770,10 @@ function _hbSegLimit(s, wlen){
 }
 function killCheck(){
   if(!player.alive) return;
-  var myId = _wsClientId || 'zzz';
-  var myHead=_hbHead(player), myBody=myHead*0.95;        // my head radius + my body half-width (world)
-  var myLimit=_hbSegLimit(player, _hbVisLen(player));     // only drawn segments are deadly
+  var myId=_wsClientId||'zzz';
   var _now=Date.now();
-  // Referee credits a kill on peer p: scatter their body to food locally + tell them to die.
+
+  // Referee kills peer p: scatter body as food locally, tell them to die via WS.
   function _refKill(p){
     var _k=_remoteMap[p.remoteId];
     if(_k&&_k.alive){ var _sh=_k.segs.slice(0,80); _k.alive=false; _k.segs=[];
@@ -4784,62 +4782,52 @@ function killCheck(){
       try{_ws.send(JSON.stringify({type:'pos',clientId:_wsClientId,data:{kill_target:p.remoteId,killer:_wsClientId}}));}catch(_){}
     }
   }
+
+  var myHead=_hbHead(player);
   for(var i=0;i<peers.length;i++){
     var p=peers[i]; if(!p.alive) continue;
     var pHead=_hbHead(p), pBody=pHead*0.95;
-    var segLimit=_hbSegLimit(p, _hbVisLen(p));
-    var px = (p.targetX!=null)?p.targetX:p.x;
-    var py = (p.targetY!=null)?p.targetY:p.y;
+    var segLimit=_hbSegLimit(p,_hbVisLen(p));
+    var px=(p.targetX!=null)?p.targetX:p.x, py=(p.targetY!=null)?p.targetY:p.y;
+    var pid=p.remoteId||'';
 
-    // ── The ONLY collision fact a client can trust is "MY OWN head hit their body" —
-    //    my head position is exact, the opponent's is lag-delayed. So death is decided
-    //    purely from each player's report about THEMSELVES, never from guessing where
-    //    the opponent's head is. iRammed = my head inside their body (DamnBruh rule:
-    //    the snake whose head hits a body is the one that dies). ──
-    var iRammed = false;
-    var _bodyR_me = myHead + pBody;  // my head edge touching their body edge
-    var _skipR = pHead * 1.4;        // skip their head-region segs (that's head-on, below)
-    for(var j=0;j<segLimit;j++){
-      var _ps=p.segs[j]; if(dst(px,py,_ps.x,_ps.y)<_skipR) continue;
-      if(dst(player.x,player.y,_ps.x,_ps.y)<_bodyR_me){ iRammed=true; break; }
+    // MY head inside THEIR body — skip segs[0] (head segment) to avoid false head-on hits.
+    // Only the snake whose head enters a body dies (DamnBruh rule).
+    var iRammed=false;
+    var _bodyR=myHead+pBody;
+    for(var j=1;j<segLimit;j++){
+      var _ps=p.segs[j]; if(!_ps) break;
+      if(dst(player.x,player.y,_ps.x,_ps.y)<_bodyR){ iRammed=true; break; }
     }
-    var _bhk = p.remoteId || 'x';
-    var pid = p.remoteId || '';
-    var headGap = dst(player.x,player.y,px,py);
-    var headOn = headGap < (myHead + pHead);
 
-    // SINGLE AUTHORITY: the smaller-id client is the sole referee for this pair and
-    // makes the ONLY death decision → a double-death is structurally impossible.
-    if(myId < pid){
-      // ── REFEREE ── decides using only ACCURATE signals: my own ram (iRammed) and
-      //    the non-referee's reported ram (_hintHitMe, sent about THEIR own head).
-      var theyRammedMe = (_hintHitMe[pid] && _now-_hintHitMe[pid] < 350);
+    var headGap=dst(player.x,player.y,px,py);
+    var headOn=headGap<(myHead+pHead); // heads overlapping
+
+    if(myId<pid){
+      // ── REFEREE (lower id) — sole decision-maker for this pair ──
+      // Priority 1: non-referee self-reported their head hit my body → THEY die, I survive.
+      // This also resolves a mutual: lower-id (me) always wins.
+      var theyRammedMe=(_hintHitMe[pid]&&_now-_hintHitMe[pid]<400);
       if(theyRammedMe){
-        // Their head ran into my body (their own accurate report) → THEY die, I get the
-        // kill. Also resolves a mutual: if we both rammed, the lower id (me) survives.
-        delete _hintHitMe[pid]; p._refRamSince=0; _bodyHitFrames[_bhk]=0; _refKill(p); continue;
+        delete _hintHitMe[pid]; p._refRamSince=0; _refKill(p); continue;
       }
+      // Priority 2: pure head-on (no body entry yet) → lower id wins.
+      if(headOn&&!iRammed){
+        p._refRamSince=0; _refKill(p); continue;
+      }
+      // Priority 3: MY head entered THEIR body → I die.
+      // Wait 180 ms for a mutual kill_hint before dying — handles any network RTT ≤ ~150 ms.
       if(iRammed){
-        // I ran into them → I die. If our heads are far apart it can't be mutual, so die
-        // now (2-frame confirm vs jitter). If heads are close it might be a mutual whose
-        // report is still in flight — wait briefly for it before dying.
-        if(headGap > (myHead+pHead)*3){
-          _bodyHitFrames[_bhk]=(_bodyHitFrames[_bhk]||0)+1;
-          if(_bodyHitFrames[_bhk]>=2){ delete _bodyHitFrames[_bhk]; killPlayer('Eliminated by '+p.name, pid); return; }
-          continue;
-        }
         if(!p._refRamSince) p._refRamSince=_now;
-        else if(_now-p._refRamSince>=150){ p._refRamSince=0; killPlayer('Eliminated by '+p.name, pid); return; }
+        else if(_now-p._refRamSince>=180){ p._refRamSince=0; killPlayer('Eliminated by '+p.name,pid); return; }
         continue;
       }
-      p._refRamSince=0; _bodyHitFrames[_bhk]=0;
-      if(headOn){ _refKill(p); continue; } // head-on tie → lower id (me) survives, they die
+      p._refRamSince=0;
     } else {
-      // ── NON-REFEREE ── never self-kills or sends kill_target for this pair. It reports
-      //    its OWN accurate ram (head in their body, or head-on) so the referee can
-      //    resolve it, and dies only when the referee's kill_target arrives.
-      if(iRammed || headOn){
-        if(!_hintSentTs[pid] || _now-_hintSentTs[pid] > 120){
+      // ── NON-REFEREE (higher id) — never self-kills; reports own head collision ──
+      // Referee resolves it; non-ref dies only when kill_target arrives from referee.
+      if(iRammed||headOn){
+        if(!_hintSentTs[pid]||_now-_hintSentTs[pid]>60){
           _hintSentTs[pid]=_now;
           if(_ws&&_ws.readyState===WebSocket.OPEN){
             try{_ws.send(JSON.stringify({type:'pos',clientId:_wsClientId,data:{kill_hint:pid}}));}catch(_){}
@@ -4849,7 +4837,7 @@ function killCheck(){
     }
   }
   var pdx=player.x-WORLD/2, pdy=player.y-WORLD/2;
-  if(Math.sqrt(pdx*pdx+pdy*pdy) > WORLD_R-10) killPlayer('Hit the boundary', null);
+  if(Math.sqrt(pdx*pdx+pdy*pdy)>WORLD_R-10) killPlayer('Hit the boundary',null);
 }
 
 function killPlayer(reason, killedBy){
