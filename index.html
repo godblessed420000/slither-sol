@@ -3289,10 +3289,20 @@ function _wsHandleMsg(msg, fromAbly) {
   if (type === 'pos') {
     if ((!gameRunning && !_spectating) || !cid) return;
 
-    // kill_target / kill_hint: retired — self-authority model means each client decides
-    // its own death in killCheck. Silently drop these so old-client messages can't
-    // ghost-kill or interfere with local collision detection.
-    if (d.kill_target || d.kill_hint) { return; }
+    // kill_target: sent by the designated referee (lower-ID client) when it detects the
+    // non-referee's head entered the referee's body. Accept only exact-match targets with
+    // a 2-second debounce to prevent ghost kills from stale relay messages.
+    if (d.kill_target) {
+      if (d.kill_target === _wsClientId && player && player.alive) {
+        var _ktNow = Date.now();
+        if (!_killNotifyTs['__self__'] || _ktNow - _killNotifyTs['__self__'] > 2000) {
+          _killNotifyTs['__self__'] = _ktNow;
+          killPlayer('Eliminated', d.killer || cid || null);
+        }
+      }
+      return;
+    }
+    if (d.kill_hint) { return; }
 
     // Kill-credit security is handled separately: die/chat events require fromAbly=true.
     // Rendering is open to all pos senders — blocking here caused players to be
@@ -4762,45 +4772,77 @@ function killCheck(){
   if(_now-(player.spawnTs||0)<3000) return;
   var myHead=_hbHead(player);
 
+  // Referee kills the non-referee: mark dead locally + relay kill_target message.
+  // Local mark prevents the non-ref from continuing to render/move on our screen.
+  function _sendKillTarget(p){
+    var _k=_remoteMap[p.remoteId];
+    if(_k&&_k.alive){
+      var _sh=_k.segs.slice(0,80);
+      _k.alive=false; _k.segs=[]; if(_k.th) _k.th=[];
+      _processedDies[p.remoteId]=true;
+      if(gameRunning) for(var _si=0;_si<_sh.length;_si++)
+        addFood(_sh[_si].x+(Math.random()-.5)*14,_sh[_si].y+(Math.random()-.5)*14);
+    }
+    if(_ws&&_ws.readyState===WebSocket.OPEN){
+      try{_ws.send(JSON.stringify({type:'pos',clientId:_wsClientId,data:{
+        x:player.x,y:player.y,a:player.angle,l:player.length||10,v:true,
+        kill_target:p.remoteId,killer:_wsClientId
+      }}));}catch(_e){}
+    }
+  }
+
   for(var i=0;i<peers.length;i++){
     var p=peers[i]; if(!p.alive) continue;
     if(_now-(p.joinTs||0)<3000) continue;
     var pHead=_hbHead(p);
-    var segLimit=_hbSegLimit(p,_hbVisLen(p));
-    var px=(p.targetX!=null)?p.targetX:p.x, py=(p.targetY!=null)?p.targetY:p.y;
     var pid=p.remoteId||'';
+    var px=(p.targetX!=null)?p.targetX:p.x, py=(p.targetY!=null)?p.targetY:p.y;
     var headGap=dst(player.x,player.y,px,py);
+    var _bodyR=myHead+pHead*0.95;
 
-    // ── Head-on: my center inside their head circle ──
-    // Lower client-ID wins (higher ID self-kills). No messages — each client decides its own fate.
+    // ── Head-on: my center inside their head circle — lower ID wins ──
     if(headGap<pHead){
       if(myId>pid){ killPlayer('Eliminated by '+p.name,p.remoteId||null); return; }
-      continue; // I'm lower ID, I survive this head-on
+      continue;
     }
 
-    // ── Body hit: did MY head enter THEIR body? ──
-    // Use target history (actual broadcast positions) instead of lerped segs — lerped positions
-    // lag 12-25 world units behind actual when moving fast, causing misses and false hits.
+    // ── Did MY head enter THEIR body? (use target history — actual broadcast positions) ──
     var _bsegs=(p.th&&p.th.length>3)?p.th:p.segs;
     var _blim=_hbSegLimit({segs:_bsegs,length:p.length},_hbVisLen(p));
-    var hit=false;
-    var _bodyR=myHead+pHead*0.95;
+    var myHitThem=false;
     for(var j=1;j<_blim;j++){
       var seg=_bsegs[j]; if(!seg) break;
-      if(dst(px,py,seg.x,seg.y)<pHead) continue;
-      if(dst(player.x,player.y,seg.x,seg.y)<_bodyR){ hit=true; break; }
+      if(dst(px,py,seg.x,seg.y)<pHead) continue; // inside their head circle — skip
+      if(dst(player.x,player.y,seg.x,seg.y)<_bodyR){ myHitThem=true; break; }
     }
 
-    if(hit){
-      // In a mutual head-on both snakes detect each other's neck simultaneously → potential double death.
-      // Only suppress when: near-head zone AND I'm genuinely heading toward their head (within ~60°).
-      // Side/rear attacks on the neck always kill the attacker regardless of ID.
-      if(headGap<myHead+pHead && myId<pid){
-        var _toHx=px-player.x, _toHy=py-player.y, _hd=Math.sqrt(_toHx*_toHx+_toHy*_toHy)||1;
-        var _fwd=(_toHx*Math.cos(player.angle)+_toHy*Math.sin(player.angle))/_hd;
-        if(_fwd>0.5) continue; // heading toward their head — mutual head-on, lower ID immune
+    if(myId<pid){
+      // ── REFEREE (lower ID) — sole authority for this pair ──
+      // Also check: did THEIR head enter MY body? Use their target pos vs my exact segments.
+      var theirHitMe=false;
+      var myBlim=_hbSegLimit(player,_hbVisLen(player));
+      var pBodyR=pHead+myHead*0.95;
+      for(var k=1;k<myBlim;k++){
+        var ms=player.segs[k]; if(!ms) break;
+        if(dst(player.x,player.y,ms.x,ms.y)<myHead) continue; // inside my head circle — skip
+        if(dst(px,py,ms.x,ms.y)<pBodyR){ theirHitMe=true; break; }
       }
-      killPlayer('Eliminated by '+p.name,p.remoteId||null); return;
+      // Referee is sole decision-maker — only one outcome possible per frame, no double deaths.
+      if(theirHitMe){
+        // They rammed me (or mutual crossing) → I win, they die.
+        _sendKillTarget(p); continue;
+      }
+      if(myHitThem){
+        // I rammed them → I die.
+        killPlayer('Eliminated by '+p.name,p.remoteId||null); return;
+      }
+    } else {
+      // ── NON-REFEREE (higher ID) — fallback self-kill on clear, unambiguous body hits only ──
+      // Near-head zone (headGap < myHead+pHead) defers entirely to the referee's kill_target.
+      // This prevents the non-ref from dying when the referee already decided the outcome.
+      if(myHitThem && headGap>=myHead+pHead){
+        killPlayer('Eliminated by '+p.name,p.remoteId||null); return;
+      }
     }
   }
   var pdx=player.x-WORLD/2, pdy=player.y-WORLD/2;
