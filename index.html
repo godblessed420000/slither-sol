@@ -4784,9 +4784,14 @@ function killCheck(){
     }
 
     if(hit){
-      // Near-head mutual zone (headGap < myHead+pHead): both snakes' necks are in range.
-      // Lower ID is immune here to prevent double-deaths in crossing approaches.
-      if(headGap<myHead+pHead && myId<pid) continue;
+      // In a mutual head-on both snakes detect each other's neck simultaneously → potential double death.
+      // Only suppress when: near-head zone AND I'm genuinely heading toward their head (within ~60°).
+      // Side/rear attacks on the neck always kill the attacker regardless of ID.
+      if(headGap<myHead+pHead && myId<pid){
+        var _toHx=px-player.x, _toHy=py-player.y, _hd=Math.sqrt(_toHx*_toHx+_toHy*_toHy)||1;
+        var _fwd=(_toHx*Math.cos(player.angle)+_toHy*Math.sin(player.angle))/_hd;
+        if(_fwd>0.5) continue; // heading toward their head — mutual head-on, lower ID immune
+      }
       killPlayer('Eliminated by '+p.name,p.remoteId||null); return;
     }
   }
