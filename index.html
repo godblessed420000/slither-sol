@@ -4236,20 +4236,22 @@ function grow(s){
 function spawnPlayer(){
   var cx=WORLD/2, cy=WORLD/2, sx, sy;
   var _livePeers=peers.filter(function(p){ return p.alive&&p.isRemote; });
-  if(_livePeers.length>0){
-    // Find centroid of all live players then spawn on the exact opposite side
-    var _pcx=0,_pcy=0;
-    for(var _pk=0;_pk<_livePeers.length;_pk++){_pcx+=_livePeers[_pk].x;_pcy+=_livePeers[_pk].y;}
-    _pcx/=_livePeers.length; _pcy/=_livePeers.length;
-    var _pdx=_pcx-cx,_pdy=_pcy-cy,_pdl=Math.sqrt(_pdx*_pdx+_pdy*_pdy)||1;
-    // Opposite direction, 65-80% of arena radius from center
-    var _spR=WORLD_R*(0.65+Math.random()*0.15);
-    sx=cx-(_pdx/_pdl)*_spR; sy=cy-(_pdy/_pdl)*_spR;
-  } else {
-    // No peers — pick a random position 40-70% from center
-    var _sa=Math.random()*Math.PI*2,_sr=WORLD_R*(0.4+Math.random()*0.3);
-    sx=cx+Math.cos(_sa)*_sr; sy=cy+Math.sin(_sa)*_sr;
+  // Try 25 random positions and pick the one furthest from every live player.
+  // This prevents spawning on top of or near any existing snake.
+  var bestX=cx+Math.cos(Math.random()*Math.PI*2)*WORLD_R*0.5;
+  var bestY=cy+Math.sin(Math.random()*Math.PI*2)*WORLD_R*0.5;
+  var bestDist=0;
+  for(var _at=0;_at<25;_at++){
+    var _a=Math.random()*Math.PI*2, _r=WORLD_R*(0.25+Math.random()*0.55);
+    var _tx=cx+Math.cos(_a)*_r, _ty=cy+Math.sin(_a)*_r;
+    var minD=WORLD_R;
+    for(var _pk=0;_pk<_livePeers.length;_pk++){
+      var _dd=dst(_tx,_ty,_livePeers[_pk].x,_livePeers[_pk].y);
+      if(_dd<minD) minD=_dd;
+    }
+    if(minD>bestDist){ bestDist=minD; bestX=_tx; bestY=_ty; }
   }
+  sx=bestX; sy=bestY;
   var pn=userProfile?userProfile.name.split(' ')[0].slice(0,14):'YOU';
   // Mid-match size: start at the average live peer length so new joiners aren't tiny
   var _startSegs=40;
@@ -4262,6 +4264,7 @@ function spawnPlayer(){
   }
   _preRejoinAvgSegs=0; // consumed — reset so a fresh first-join isn't affected
   player=mkSnake(sx,sy,_playerColor,pn,true,_startSegs);
+  player.spawnTs=Date.now(); // grace period start — immune for 3s after spawn
 }
 function spawnPeers(){ /* no-op — real players only, all peers come from Ably */ }
 
@@ -4772,6 +4775,8 @@ function killCheck(){
   if(!player.alive) return;
   var myId=_wsClientId||'zzz';
   var _now=Date.now();
+  // Spawn grace period — no collisions for 3s after spawning (prevents spawn-kill)
+  if(_now-(player.spawnTs||0)<3000) return;
 
   // Referee kills peer p: scatter body as food locally, tell them to die via WS.
   function _refKill(p){
@@ -4786,6 +4791,7 @@ function killCheck(){
   var myHead=_hbHead(player);
   for(var i=0;i<peers.length;i++){
     var p=peers[i]; if(!p.alive) continue;
+    if(_now-(p.joinTs||0)<3000) continue; // peer in spawn grace — skip both ways
     var pHead=_hbHead(p), pBody=pHead*0.95;
     var segLimit=_hbSegLimit(p,_hbVisLen(p));
     var px=(p.targetX!=null)?p.targetX:p.x, py=(p.targetY!=null)?p.targetY:p.y;
