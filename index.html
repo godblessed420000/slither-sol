@@ -3338,7 +3338,7 @@ function _wsHandleMsg(msg, fromAbly) {
       // stretch from the death site to the new spawn and can't kill other players.
       var _tdx = d.x - rp.targetX, _tdy = d.y - rp.targetY;
       if (_tdx*_tdx + _tdy*_tdy > 160000) { // 400^2
-        rp.segs = [];
+        rp.segs = []; rp.th = [];
         rp.velX = 0; rp.velY = 0;
         rp.alive = true; // reset in case we locally marked them dead before the die arrived
         rp.joinTs = Date.now(); // must match d.ts type (both Date.now(), not performance.now())
@@ -3358,12 +3358,17 @@ function _wsHandleMsg(msg, fromAbly) {
       rp.lastT = now2;
       rp.targetX = d.x; rp.targetY = d.y; rp.targetAngle = d.a||0;
       rp.score = d.s||0;
+      // Target history: actual broadcast positions (no LERP lag) used for collision detection.
+      if(!rp.th) rp.th=[];
+      rp.th.unshift({x:d.x,y:d.y});
+      var _thCap=Math.max((rp.length||10)*SEG_MULT,120);
+      if(rp.th.length>_thCap) rp.th.length=_thCap;
       if (d.v === false) {
         if (!_processedDies[cid]) {
           _processedDies[cid] = true;
           var _dvSegs = rp.segs.slice(0, 80); // save before wipe
           rp.alive = false;
-          rp.segs = [];
+          rp.segs = []; rp.th = [];
           kFeed(rp.name + ' was eliminated!');
           if (gameRunning) {
             for (var _ps=0; _ps<_dvSegs.length; _ps++)
@@ -4774,11 +4779,14 @@ function killCheck(){
     }
 
     // ── Body hit: did MY head enter THEIR body? ──
-    // Skip segs that are visually inside their head circle (not deadly body territory).
+    // Use target history (actual broadcast positions) instead of lerped segs — lerped positions
+    // lag 12-25 world units behind actual when moving fast, causing misses and false hits.
+    var _bsegs=(p.th&&p.th.length>3)?p.th:p.segs;
+    var _blim=_hbSegLimit({segs:_bsegs,length:p.length},_hbVisLen(p));
     var hit=false;
     var _bodyR=myHead+pHead*0.95;
-    for(var j=1;j<segLimit;j++){
-      var seg=p.segs[j]; if(!seg) break;
+    for(var j=1;j<_blim;j++){
+      var seg=_bsegs[j]; if(!seg) break;
       if(dst(px,py,seg.x,seg.y)<pHead) continue;
       if(dst(player.x,player.y,seg.x,seg.y)<_bodyR){ hit=true; break; }
     }
