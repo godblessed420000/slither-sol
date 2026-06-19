@@ -4814,21 +4814,29 @@ function killCheck(){
     if(myId<pid){
       // ── REFEREE (lower id) ──
       var theyRammedMe=(_hintHitMe[pid]&&_now-_hintHitMe[pid]<400);
-      if(theyRammedMe){ delete _hintHitMe[pid]; p._refRamSince=0; _refKill(p); continue; }
-      if(headOn){ p._refRamSince=0; _refKill(p); continue; }
+      if(theyRammedMe){ delete _hintHitMe[pid]; p._refRamSince=0; p._ramLastSeen=0; _refKill(p); continue; }
+      if(headOn){ p._refRamSince=0; p._ramLastSeen=0; _refKill(p); continue; }
       if(iRammed){
+        p._ramLastSeen=_now;
         if(!p._refRamSince) p._refRamSince=_now;
-        else if(_now-p._refRamSince>=180){ p._refRamSince=0; killPlayer('Eliminated by '+p.name,pid); return; }
+      }
+      // Sticky timer: once started, only reset if collision has been gone 250ms.
+      // This prevents dense LERP segments flickering iRammed on/off from resetting the timer.
+      if(p._refRamSince){
+        if(_now-p._refRamSince>=180){ p._refRamSince=0; p._ramLastSeen=0; killPlayer('Eliminated by '+p.name,pid); return; }
         continue;
       }
-      p._refRamSince=0;
+      if(p._ramLastSeen && _now-p._ramLastSeen>250){ p._refRamSince=0; p._ramLastSeen=0; }
     } else {
       // ── NON-REFEREE (higher id) ──
       if(iRammed&&!headOn){
         if(!_hintSentTs[pid]||_now-_hintSentTs[pid]>60){
           _hintSentTs[pid]=_now;
           if(_ws&&_ws.readyState===WebSocket.OPEN){
-            try{_ws.send(JSON.stringify({type:'pos',clientId:_wsClientId,data:{kill_hint:pid}}));}catch(_){}
+            // Include position so server treats this as a valid pos message (not filtered)
+            try{_ws.send(JSON.stringify({type:'pos',clientId:_wsClientId,data:{
+              x:player.x,y:player.y,a:player.angle,l:player.length||10,v:true,kill_hint:pid
+            }}));}catch(_){}
           }
         }
       }
