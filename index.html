@@ -4797,12 +4797,14 @@ function killCheck(){
     var px=(p.targetX!=null)?p.targetX:p.x, py=(p.targetY!=null)?p.targetY:p.y;
     var pid=p.remoteId||'';
 
-    // MY head inside THEIR body — skip segs[0] (head segment) to avoid false head-on hits.
-    // Only the snake whose head enters a body dies (DamnBruh rule).
+    // MY head inside THEIR body. Skip any segment within 2 head-radii of their predicted
+    // head — those segments are visually inside the head circle, not the body.
     var iRammed=false;
     var _bodyR=myHead+pBody;
+    var _headSkip=pHead*2; // world-space exclusion zone around their head
     for(var j=1;j<segLimit;j++){
       var _ps=p.segs[j]; if(!_ps) break;
+      if(dst(px,py,_ps.x,_ps.y)<_headSkip) continue; // inside head region — skip
       if(dst(player.x,player.y,_ps.x,_ps.y)<_bodyR){ iRammed=true; break; }
     }
 
@@ -4811,8 +4813,8 @@ function killCheck(){
 
     if(myId<pid){
       // ── REFEREE (lower id) — sole decision-maker for this pair ──
-      // Priority 1: non-referee self-reported their head hit my body → THEY die, I survive.
-      // This also resolves a mutual: lower-id (me) always wins.
+      // Priority 1: non-referee confirmed their head hit my body → THEY die, I survive.
+      // Also resolves a mutual: lower-id always wins.
       var theyRammedMe=(_hintHitMe[pid]&&_now-_hintHitMe[pid]<400);
       if(theyRammedMe){
         delete _hintHitMe[pid]; p._refRamSince=0; _refKill(p); continue;
@@ -4822,7 +4824,7 @@ function killCheck(){
         p._refRamSince=0; _refKill(p); continue;
       }
       // Priority 3: MY head entered THEIR body → I die.
-      // Wait 180 ms for a mutual kill_hint before dying — handles any network RTT ≤ ~150 ms.
+      // Wait 180 ms for a mutual kill_hint before committing — covers any RTT ≤ ~150 ms.
       if(iRammed){
         if(!p._refRamSince) p._refRamSince=_now;
         else if(_now-p._refRamSince>=180){ p._refRamSince=0; killPlayer('Eliminated by '+p.name,pid); return; }
@@ -4830,9 +4832,10 @@ function killCheck(){
       }
       p._refRamSince=0;
     } else {
-      // ── NON-REFEREE (higher id) — never self-kills; reports own head collision ──
-      // Referee resolves it; non-ref dies only when kill_target arrives from referee.
-      if(iRammed||headOn){
+      // ── NON-REFEREE (higher id) — never self-kills; reports confirmed body hits only ──
+      // kill_hint = "my head is inside your body" — NOT sent for headOn alone (close pass
+      // near heads should not trigger a kill; referee's own headOn check handles that).
+      if(iRammed){
         if(!_hintSentTs[pid]||_now-_hintSentTs[pid]>60){
           _hintSentTs[pid]=_now;
           if(_ws&&_ws.readyState===WebSocket.OPEN){
