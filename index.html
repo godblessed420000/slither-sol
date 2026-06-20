@@ -3084,6 +3084,7 @@ var _recentLeaves   = {}; // cid → timestamp; blocks pos from recreating a jus
 var _hintHitMe      = {}; // cid → timestamp; non-referee reported its head is in MY body
 var _hintSentTs     = {}; // cid → timestamp; throttle our own kill_hint sends
 var _sentKillTs     = {}; // cid → timestamp; throttle reverse-kill kill_target sends (2s/target)
+var _debugHitboxes  = false; // toggle with H key
 function _wsSend(type, data) {
   if (type === 'pos' || type === 'ping') {
     if (!_ws || _ws.readyState !== WebSocket.OPEN) return;
@@ -4326,6 +4327,7 @@ function onKD(e){
   if(e.key.toLowerCase()==='q'&&!qDown&&gameRunning&&player&&player.alive){ qDown=true; qStart=performance.now(); startCharge(); }
   if(e.key.toLowerCase()==='t'&&gameRunning&&player&&player.alive){ e.preventDefault(); _openChat(); }
   if(e.key.toLowerCase()==='y'&&gameRunning&&player&&player.alive){ e.preventDefault(); _autoCircle=!_autoCircle; toast(_autoCircle?'🔄 Auto-circle ON':'⬛ Auto-circle OFF','info'); }
+  if(e.key.toLowerCase()==='h'){ _debugHitboxes=!_debugHitboxes; toast(_debugHitboxes?'[H] HITBOXES ON':'[H] HITBOXES OFF','info'); }
 }
 function onKU(e){
   if(e.code==='Space'){ boosting=false; return; }
@@ -5148,7 +5150,79 @@ function draw(){
     drawS(s);
   }
   if(player&&player.alive) drawS(player);
+
+  // ── Debug hitbox overlay (toggle with H key) ─────────────────────────────
+  if(_debugHitboxes && player && player.alive){
+    ctx.save();
+    var _dNow=Date.now(), _dZ=CAM_ZOOM||1;
+    var _myR=(player.headR||12)/_dZ;
+
+    // My body kill zone (tube — radius = what peer's head must enter to die)
+    var _mSegs=player.segs;
+    var _mLim=Math.min(_mSegs.length,Math.max((player.length||10)*SEG_MULT,120));
+    if(_mLim>2 && _mSegs[1]){
+      ctx.globalAlpha=0.22; ctx.strokeStyle='#14F195';
+      ctx.lineWidth=_myR*1.7; ctx.lineJoin='round'; ctx.lineCap='round';
+      ctx.beginPath(); ctx.moveTo(_mSegs[1].x,_mSegs[1].y);
+      for(var _mi=2;_mi<_mLim;_mi++){ var _ms=_mSegs[_mi]; if(!_ms) break; ctx.lineTo(_ms.x,_ms.y); }
+      ctx.stroke();
+    }
+    // My head circle
+    ctx.globalAlpha=0.85; ctx.strokeStyle='#14F195'; ctx.lineWidth=2/_dZ;
+    ctx.beginPath(); ctx.arc(player.x,player.y,_myR,0,Math.PI*2); ctx.stroke();
+    // Spawn protection ring (yellow dashed)
+    if(_dNow-(player.spawnTs||0)<1500){
+      ctx.globalAlpha=0.7; ctx.strokeStyle='#FFD700'; ctx.lineWidth=3/_dZ;
+      ctx.setLineDash([6/_dZ,4/_dZ]);
+      ctx.beginPath(); ctx.arc(player.x,player.y,_myR*2.2,0,Math.PI*2); ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    // Peers
+    for(var _dpi=0;_dpi<peers.length;_dpi++){
+      var _dp=peers[_dpi]; if(!_dp.alive) continue;
+      var _dpx=(_dp.targetX!=null)?_dp.targetX:_dp.x, _dpy=(_dp.targetY!=null)?_dp.targetY:_dp.y;
+      var _dpR=(_dp.headR||12)/_dZ;
+      var _prot=_dNow-(_dp.joinTs||0)<1500;
+      var _pc=_prot?'#FFD700':'#FF4040';
+      var _bR=_myR+_dpR*0.85; // body collision radius (my head must be within this of their segment)
+
+      // Peer body kill zone
+      var _dps=(_dp.th&&_dp.th.length>3)?_dp.th:_dp.segs;
+      var _dpLim=Math.min(_dps.length,Math.max((_dp.length||10)*SEG_MULT,120));
+      if(_dpLim>2 && _dps[1]){
+        ctx.globalAlpha=0.22; ctx.strokeStyle=_pc;
+        ctx.lineWidth=_bR*2; ctx.lineJoin='round'; ctx.lineCap='round';
+        ctx.beginPath(); ctx.moveTo(_dps[1].x,_dps[1].y);
+        for(var _dj=2;_dj<_dpLim;_dj++){ var _dps2=_dps[_dj]; if(!_dps2) break; ctx.lineTo(_dps2.x,_dps2.y); }
+        ctx.stroke();
+      }
+      // Head-on threshold (dashed ring — if my head enters this around their head, head-on triggers)
+      ctx.globalAlpha=0.3; ctx.strokeStyle='#FF8800'; ctx.lineWidth=1/_dZ;
+      ctx.setLineDash([5/_dZ,3/_dZ]);
+      ctx.beginPath(); ctx.arc(_dpx,_dpy,_myR+_dpR,0,Math.PI*2); ctx.stroke();
+      ctx.setLineDash([]);
+      // Peer head circle
+      ctx.globalAlpha=0.85; ctx.strokeStyle=_pc; ctx.lineWidth=2/_dZ;
+      ctx.beginPath(); ctx.arc(_dpx,_dpy,_dpR,0,Math.PI*2); ctx.stroke();
+    }
+    ctx.globalAlpha=1;
+    ctx.restore();
+  }
+
   ctx.restore(); if(++_mmFrame%3===0) drawMM(); // minimap at ~20fps — saves ~2/3 of its cost
+
+  // ── Hitbox HUD label (screen-space) ──────────────────────────────────────
+  if(_debugHitboxes){
+    ctx.save();
+    ctx.font='bold 13px Share Tech Mono';
+    ctx.fillStyle='rgba(0,0,0,0.65)';
+    ctx.fillRect(8,8,170,22);
+    ctx.fillStyle='#14F195';
+    ctx.textAlign='left'; ctx.textBaseline='middle';
+    ctx.fillText('[H] HITBOXES ON  (green=me, red=peer)', 14, 20);
+    ctx.restore();
+  }
 
   // ── Crosshair cursor (canvas-space, no world transform) ──
   if(gameRunning && player && player.alive){
