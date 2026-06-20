@@ -3399,7 +3399,7 @@ function _wsHandleMsg(msg, fromAbly) {
       // Target history: actual broadcast positions (no LERP lag) used for collision detection.
       if(!rp.th) rp.th=[];
       rp.th.unshift({x:d.x,y:d.y});
-      var _thCap=Math.max((rp.length||10)*SEG_MULT,120);
+      var _thCap=Math.max((rp.length||10)*SEG_MULT,15);
       if(rp.th.length>_thCap) rp.th.length=_thCap;
       if (d.v === false) {
         if (!_processedDies[cid]) {
@@ -4838,7 +4838,7 @@ function killCheck(){
 
     // Body hit: my head vs their body — use line segments to close gaps between points
     var _segs=(p.th&&p.th.length>3)?p.th:p.segs;
-    var _lim=Math.min(_segs.length, Math.max((p.length||10)*SEG_MULT, 120));
+    var _lim=Math.min(_segs.length, Math.max((p.length||10)*SEG_MULT, 15));
     var _bodyR=myR+pR*0.85;
     for(var j=1;j<_lim-1;j++){
       var sa=_segs[j], sb=_segs[j+1]; if(!sa||!sb) break;
@@ -4849,7 +4849,7 @@ function killCheck(){
   }
 
   // Reverse check: did anyone's head enter MY body? → send kill_target
-  var _myLim=Math.min(player.segs.length,Math.max((player.length||10)*SEG_MULT,120));
+  var _myLim=Math.min(player.segs.length,Math.max((player.length||10)*SEG_MULT,15));
   for(var ri=0;ri<peers.length;ri++){
     var rp2=peers[ri]; if(!rp2.alive) continue;
     if(_now-(rp2.joinTs||0)<1500) continue;
@@ -5159,7 +5159,7 @@ function draw(){
 
     // My body kill zone (tube — radius = what peer's head must enter to die)
     var _mSegs=player.segs;
-    var _mLim=Math.min(_mSegs.length,Math.max((player.length||10)*SEG_MULT,120));
+    var _mLim=Math.min(_mSegs.length,Math.max((player.length||10)*SEG_MULT,15));
     if(_mLim>2 && _mSegs[1]){
       ctx.globalAlpha=0.22; ctx.strokeStyle='#14F195';
       ctx.lineWidth=_myR*1.7; ctx.lineJoin='round'; ctx.lineCap='round';
@@ -5189,7 +5189,7 @@ function draw(){
 
       // Peer body kill zone
       var _dps=(_dp.th&&_dp.th.length>3)?_dp.th:_dp.segs;
-      var _dpLim=Math.min(_dps.length,Math.max((_dp.length||10)*SEG_MULT,120));
+      var _dpLim=Math.min(_dps.length,Math.max((_dp.length||10)*SEG_MULT,15));
       if(_dpLim>2 && _dps[1]){
         ctx.globalAlpha=0.22; ctx.strokeStyle=_pc;
         ctx.lineWidth=_bR*2; ctx.lineJoin='round'; ctx.lineCap='round';
