@@ -1185,7 +1185,7 @@ canvas{display:block;width:100%;height:100%;}
 // ════════════════ CONFIG ════════════════
 // ── Build stamp — bump this string on every deploy ───────────────────────────
 // Shown live on the lobby screen. Check via DevTools → Console: GAME_BUILD
-var GAME_BUILD = 'V2';
+var GAME_BUILD = 'V110';
 
 var PRIVY_APP_ID          = 'client-WY6aEf1eS4reRDrBq7ghh8arEiMaKSj1Vk37ZG8CAawEF';
 var HOUSE_WALLET_ADDRESS  = '2QnrdhxXYt8ythhGYHDz6MtTZE1z2bYvbss8z3ZGj2uJ';
@@ -4814,15 +4814,15 @@ function killCheck(){
   var myId=_wsClientId||'zzz';
   var _now=Date.now();
   if(_now-(player.spawnTs||0)<1500) return;
-  // headR is in screen pixels — convert to world units via CAM_ZOOM
-  var myR=(player.headR||12)/(CAM_ZOOM||1);
+  // headR is in world units — use directly
+  var myR=player.headR||12;
 
   for(var i=0;i<peers.length;i++){
     var p=peers[i]; if(!p.alive) continue;
     if(_now-(p.joinTs||0)<1500) continue;
     var pid=p.remoteId||'';
     var px=(p.targetX!=null)?p.targetX:p.x, py=(p.targetY!=null)?p.targetY:p.y;
-    var pR=(p.headR||12)/(CAM_ZOOM||1);
+    var pR=p.headR||12;
     var headGap=dst(player.x,player.y,px,py);
 
     // Head-on: both head circles overlap → medium client-ID wins
@@ -4836,12 +4836,13 @@ function killCheck(){
       continue;
     }
 
-    // Body hit: my head vs their body — use line segments to close gaps between points
-    var _segs=(p.th&&p.th.length>3)?p.th:p.segs;
-    var _lim=Math.min(_segs.length, Math.max((p.length||10)*SEG_MULT, 15));
+    // Body hit: my head vs their segs — stop at visual body length so boosting can't extend hitbox
     var _bodyR=myR+pR*0.85;
-    for(var j=1;j<_lim-1;j++){
-      var sa=_segs[j], sb=_segs[j+1]; if(!sa||!sb) break;
+    var _maxBodyWu=Math.min((p.length||10)*16,480), _accWu=0;
+    for(var j=1;j<p.segs.length-1;j++){
+      var sa=p.segs[j], sb=p.segs[j+1]; if(!sa||!sb) break;
+      _accWu+=dst(sa.x,sa.y,sb.x,sb.y);
+      if(_accWu>_maxBodyWu) break;
       if(dstPtSeg(player.x,player.y,sa.x,sa.y,sb.x,sb.y)<_bodyR){
         killPlayer('Eliminated by '+p.name,p.remoteId||null); return;
       }
@@ -4849,18 +4850,20 @@ function killCheck(){
   }
 
   // Reverse check: did anyone's head enter MY body? → send kill_target
-  var _myLim=Math.min(player.segs.length,Math.max((player.length||10)*SEG_MULT,15));
+  var _myMaxWu=Math.min((player.length||10)*16,480);
   for(var ri=0;ri<peers.length;ri++){
     var rp2=peers[ri]; if(!rp2.alive) continue;
     if(_now-(rp2.joinTs||0)<1500) continue;
     var rpid=rp2.remoteId||'';
     if(_sentKillTs[rpid]&&_now-_sentKillTs[rpid]<2000) continue;
     var rpx=(rp2.targetX!=null)?rp2.targetX:rp2.x, rpy=(rp2.targetY!=null)?rp2.targetY:rp2.y;
-    var rpR=(rp2.headR||12)/(CAM_ZOOM||1);
+    var rpR=rp2.headR||12;
     if(dst(player.x,player.y,rpx,rpy)<myR+rpR) continue; // head-on handled above
-    var _rBodyR=rpR+myR*0.85;
-    for(var rk=1;rk<_myLim-1;rk++){
+    var _rBodyR=rpR+myR*0.85, _rAccWu=0;
+    for(var rk=1;rk<player.segs.length-1;rk++){
       var rsa=player.segs[rk], rsb=player.segs[rk+1]; if(!rsa||!rsb) break;
+      _rAccWu+=dst(rsa.x,rsa.y,rsb.x,rsb.y);
+      if(_rAccWu>_myMaxWu) break;
       if(dstPtSeg(rpx,rpy,rsa.x,rsa.y,rsb.x,rsb.y)<_rBodyR){
         _sentKillTs[rpid]=_now;
         var _rkp=_remoteMap[rpid];
@@ -5155,16 +5158,22 @@ function draw(){
   if(_debugHitboxes && player && player.alive){
     ctx.save();
     var _dNow=Date.now(), _dZ=CAM_ZOOM||1;
-    var _myR=(player.headR||12)/_dZ;
+    var _myR=player.headR||12; // world units — matches killCheck exactly
 
     // My body kill zone (tube — radius = what peer's head must enter to die)
     var _mSegs=player.segs;
-    var _mLim=Math.min(_mSegs.length,Math.max((player.length||10)*SEG_MULT,15));
+    var _mMaxWuViz=Math.min((player.length||10)*16,480), _mAccWuViz=0;
+    var _mLim=_mSegs.length;
     if(_mLim>2 && _mSegs[1]){
       ctx.globalAlpha=0.22; ctx.strokeStyle='#14F195';
       ctx.lineWidth=_myR*1.7; ctx.lineJoin='round'; ctx.lineCap='round';
       ctx.beginPath(); ctx.moveTo(_mSegs[1].x,_mSegs[1].y);
-      for(var _mi=2;_mi<_mLim;_mi++){ var _ms=_mSegs[_mi]; if(!_ms) break; ctx.lineTo(_ms.x,_ms.y); }
+      for(var _mi=2;_mi<_mLim;_mi++){
+        var _ms=_mSegs[_mi], _msp=_mSegs[_mi-1]; if(!_ms||!_msp) break;
+        _mAccWuViz+=dst(_msp.x,_msp.y,_ms.x,_ms.y);
+        if(_mAccWuViz>_mMaxWuViz) break;
+        ctx.lineTo(_ms.x,_ms.y);
+      }
       ctx.stroke();
     }
     // My head circle
@@ -5182,19 +5191,24 @@ function draw(){
     for(var _dpi=0;_dpi<peers.length;_dpi++){
       var _dp=peers[_dpi]; if(!_dp.alive) continue;
       var _dpx=(_dp.targetX!=null)?_dp.targetX:_dp.x, _dpy=(_dp.targetY!=null)?_dp.targetY:_dp.y;
-      var _dpR=(_dp.headR||12)/_dZ;
+      var _dpR=_dp.headR||12; // world units — matches killCheck exactly
       var _prot=_dNow-(_dp.joinTs||0)<1500;
       var _pc=_prot?'#FFD700':'#FF4040';
       var _bR=_myR+_dpR*0.85; // body collision radius (my head must be within this of their segment)
 
-      // Peer body kill zone
-      var _dps=(_dp.th&&_dp.th.length>3)?_dp.th:_dp.segs;
-      var _dpLim=Math.min(_dps.length,Math.max((_dp.length||10)*SEG_MULT,15));
-      if(_dpLim>2 && _dps[1]){
+      // Peer body kill zone — use segs (constant spacing, matches visual), stop at visual body length
+      var _dps=_dp.segs;
+      var _dpMaxWu=Math.min((_dp.length||10)*16,480), _dpAccWu=0;
+      if(_dps.length>2 && _dps[1]){
         ctx.globalAlpha=0.22; ctx.strokeStyle=_pc;
         ctx.lineWidth=_bR*2; ctx.lineJoin='round'; ctx.lineCap='round';
         ctx.beginPath(); ctx.moveTo(_dps[1].x,_dps[1].y);
-        for(var _dj=2;_dj<_dpLim;_dj++){ var _dps2=_dps[_dj]; if(!_dps2) break; ctx.lineTo(_dps2.x,_dps2.y); }
+        for(var _dj=2;_dj<_dps.length;_dj++){
+          var _dps2=_dps[_dj], _dps1=_dps[_dj-1]; if(!_dps2||!_dps1) break;
+          _dpAccWu+=dst(_dps1.x,_dps1.y,_dps2.x,_dps2.y);
+          if(_dpAccWu>_dpMaxWu) break;
+          ctx.lineTo(_dps2.x,_dps2.y);
+        }
         ctx.stroke();
       }
       // Head-on threshold (dashed ring — if my head enters this around their head, head-on triggers)
