@@ -4811,13 +4811,13 @@ function killCheck(){
   if(!player.alive) return;
   var myId=_wsClientId||'zzz';
   var _now=Date.now();
-  if(_now-(player.spawnTs||0)<3000) return;
+  if(_now-(player.spawnTs||0)<1500) return;
   // headR is in screen pixels — convert to world units via CAM_ZOOM
   var myR=(player.headR||12)/(CAM_ZOOM||1);
 
   for(var i=0;i<peers.length;i++){
     var p=peers[i]; if(!p.alive) continue;
-    if(_now-(p.joinTs||0)<3000) continue;
+    if(_now-(p.joinTs||0)<1500) continue;
     var pid=p.remoteId||'';
     var px=(p.targetX!=null)?p.targetX:p.x, py=(p.targetY!=null)?p.targetY:p.y;
     var pR=(p.headR||12)/(CAM_ZOOM||1);
@@ -4850,7 +4850,7 @@ function killCheck(){
   var _myLim=Math.min(player.segs.length,Math.max((player.length||10)*SEG_MULT,120));
   for(var ri=0;ri<peers.length;ri++){
     var rp2=peers[ri]; if(!rp2.alive) continue;
-    if(_now-(rp2.joinTs||0)<3000) continue;
+    if(_now-(rp2.joinTs||0)<1500) continue;
     var rpid=rp2.remoteId||'';
     if(_sentKillTs[rpid]&&_now-_sentKillTs[rpid]<2000) continue;
     var rpx=(rp2.targetX!=null)?rp2.targetX:rp2.x, rpy=(rp2.targetY!=null)?rp2.targetY:rp2.y;
