@@ -1,4 +1,4 @@
-<!DOCTYPE html><!-- BUILD:v420SNAKE -->
+<!DOCTYPE html><!-- BUILD:v421SKINS -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -1076,6 +1076,11 @@ canvas{display:block;width:100%;height:100%;}
         </div>
       </div>
 
+      <!-- Skin Picker -->
+      <div style="width:100%;max-width:420px;background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:6px 10px;">
+        <div style="font-family:'Orbitron',monospace;font-size:.46rem;color:var(--dim);text-transform:uppercase;letter-spacing:2px;margin-bottom:5px;">Snake Skin</div>
+        <div id="skinSwatches" style="display:flex;flex-wrap:wrap;gap:5px;"></div>
+      </div>
       <!-- Color Picker -->
       <div style="width:100%;max-width:420px;background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:5px 10px;">
         <div style="font-family:'Orbitron',monospace;font-size:.46rem;color:var(--dim);text-transform:uppercase;letter-spacing:2px;margin-bottom:3px;">🎨 Snake Color</div>
@@ -1311,6 +1316,16 @@ function _refreshTierPrices() {
 
 var PC = ['#14F195','#9945FF','#00C2FF','#FF4560','#FFD700','#FF6B35','#FF3CAC','#7FFF00','#FF1493','#00FFFF','#FF8C00','#ADFF2F','#DA70D6','#1E90FF','#FF6347','#40E0D0'];
 var _playerColor = PC[0]; // currently selected snake color (user-editable)
+var _SKINS=[
+  {id:'default', label:'Default',    col:'#9945FF'},
+  {id:'frost',   label:'Neon Frost', col:'#00d4ff'},
+  {id:'void',    label:'Void',       col:'#00ff66'},
+  {id:'inferno', label:'Inferno',    col:'#ff6600'},
+  {id:'toxic',   label:'Toxic',      col:'#39ff14'},
+  {id:'galaxy',  label:'Cosmic',     col:'#cc44ff'},
+  {id:'gold',    label:'Gold Rush',  col:'#ffd700'},
+];
+var _activeSkin=(function(){ try{ return localStorage.getItem('slither_skin')||'default'; }catch(e){ return 'default'; } })();
 var HN = ['xX_SOLkiller_Xx','wagmi_snake','ngmi_lmao','degenViber','rugged_again','alphaCoil','moonSnek','rugpuller'];
 var tierOnline = {'free':0, 1:0, 5:0, 10:0};
 
@@ -3396,6 +3411,7 @@ function _wsHandleMsg(msg, fromAbly) {
         segs: [], speed: BASE_SPEED,
         length: initLen, score: d.s||0,
         color: col, name: d.n || lobby.n || ('P_'+cid.slice(0,4)),
+        skin: d.sk || 'default',
         isMe: false, isRemote: true, alive: true,
         remoteId: cid, joinTs: _rpJoinTs,
         velX: 0, velY: 0, lastT: performance.now()
@@ -3437,6 +3453,7 @@ function _wsHandleMsg(msg, fromAbly) {
       rp.lastT = now2;
       rp.targetX = d.x; rp.targetY = d.y; rp.targetAngle = d.a||0;
       rp.score = d.s||0;
+      if(d.sk) rp.skin = d.sk;
       // Target history: actual broadcast positions (no LERP lag) used for collision detection.
       if(!rp.th) rp.th=[];
       rp.th.unshift({x:d.x,y:d.y});
@@ -3575,7 +3592,7 @@ function _wsJoin(tier) {
 
 // ── Position broadcast (50fps — feasible over direct WebSocket, not Ably) ───
 // Pre-allocated payload — avoids creating a new object literal every 20ms (GC pressure)
-var _posMsg = { type:'pos', clientId:'', data:{x:0,y:0,a:0,l:0,s:0,b:0,n:'',color:'',v:true} };
+var _posMsg = { type:'pos', clientId:'', data:{x:0,y:0,a:0,l:0,s:0,b:0,n:'',color:'',sk:'',v:true} };
 var _posSeq  = 0; // frame counter — name+color only sent every 5th update
 function _startPub() {
   clearInterval(_pubTimer); _pubTimer = null;
@@ -3911,6 +3928,23 @@ function setPlayerColor(color) {
   _playerColor = color;
   renderColorPicker();
 }
+function renderSkinPicker(){
+  var c=document.getElementById('skinSwatches'); if(!c) return;
+  c.innerHTML='';
+  _SKINS.forEach(function(sk){
+    var act=sk.id===_activeSkin;
+    var b=document.createElement('div');
+    b.style.cssText='cursor:pointer;border-radius:6px;padding:3px 9px;font-size:.55rem;font-family:"Orbitron",monospace;font-weight:700;letter-spacing:1px;border:2px solid '+(act?'#fff':sk.col)+';color:'+(act?'#fff':sk.col)+';background:'+(act?sk.col+'28':'transparent')+';transition:all .15s;white-space:nowrap;text-shadow:'+(act?'0 0 8px '+sk.col:'none')+';';
+    b.textContent=sk.label;
+    b.addEventListener('click',function(){
+      _activeSkin=sk.id;
+      try{ localStorage.setItem('slither_skin',sk.id); }catch(e){}
+      if(player) player.skin=sk.id;
+      renderSkinPicker();
+    });
+    c.appendChild(b);
+  });
+}
 
 function showStart() {
   _inGameSession=false;
@@ -3923,7 +3957,7 @@ function showStart() {
   if(!userProfile){ var ov=document.getElementById('ovLogin'); if(ov) ov.classList.remove('hidden'); }
   else {
     var ov2=document.getElementById('ovStart'); if(ov2) ov2.classList.remove('hidden');
-    refreshCards(); updateWalletDisplays(); renderColorPicker(); _startLobbyCountPoll();
+    refreshCards(); updateWalletDisplays(); renderColorPicker(); renderSkinPicker(); _startLobbyCountPoll();
     // Silently refresh on-chain balance when lobby screen opens.
     // Pass null so a timeout never shows an error toast — cached balance stays valid.
     if (W.pubkey) {
@@ -4327,6 +4361,7 @@ function spawnPlayer(){
   }
   _preRejoinAvgSegs=0; // consumed — reset so a fresh first-join isn't affected
   player=mkSnake(sx,sy,_playerColor,pn,true,_startSegs);
+  player.skin=_activeSkin;
   player.spawnTs=Date.now(); // grace period start — immune for 3s after spawn
 }
 function spawnPeers(){ /* no-op — real players only, all peers come from Ably */ }
@@ -4626,6 +4661,7 @@ function loop(){
       _pd.b = boosting ? 1 : 0;
       _pd.n     = (_posSeq % 5 === 1) ? player.name  : undefined;
       _pd.color = (_posSeq % 5 === 1) ? player.color : undefined;
+      _pd.sk    = (_posSeq % 5 === 1) ? (_activeSkin||'default') : undefined;
       _ws.send(JSON.stringify(_posMsg));
     } catch(e) {}
   }
@@ -5319,101 +5355,450 @@ function draw(){
 function drawS(s){
   if(s.segs.length<2) return;
   var Z=CAM_ZOOM, cw=gc.width/2, ch=gc.height/2;
-  // world → screen pixel conversion (matches the transform set up in draw())
   var W2SX=function(wx){ return (wx-camX)*Z+cw; };
   var W2SY=function(wy){ return (wy-camY)*Z+ch; };
 
-  // Scale with CAM_ZOOM so the snake's world-unit footprint stays constant when scrolling.
   var _sZ = CAM_ZOOM || 1;
-  var R   = Math.max(6, Math.min(30, (9 + (s.length||10) * SEG_MULT * 0.075) * _sZ)); // head radius, px
-  var BW  = R*1.9;            // body width, px
-  var STEP= Math.max(3, R*0.5); // resample spacing along the body, px
-  // Visible body length in px, scales with zoom so tail length matches the world.
+  var R   = Math.max(6, Math.min(30, (9 + (s.length||10) * SEG_MULT * 0.075) * _sZ));
+  var BW  = R*1.9;
+  var STEP= Math.max(3, R*0.5);
   var logical = Math.min((s.length||10) * SEG_MULT, 120);
-  var MAXLEN  = Math.max(30, logical * 4) * _sZ; // px of body to draw
+  var MAXLEN  = Math.max(30, logical * 4) * _sZ;
 
-  // ── Resample the world polyline into evenly-spaced SCREEN points ──
   var hx=W2SX(s.x), hy=W2SY(s.y);
   var pts=[{x:hx,y:hy}];
-  var cx=hx, cy=hy, acc=0, total=0;
+  var pcx=hx, pcy=hy, acc=0, total=0;
   for(var i=1;i<s.segs.length && total<MAXLEN;i++){
     var vx=W2SX(s.segs[i].x), vy=W2SY(s.segs[i].y);
-    var dx=vx-cx, dy=vy-cy, dd=Math.sqrt(dx*dx+dy*dy);
+    var dx=vx-pcx, dy=vy-pcy, dd=Math.sqrt(dx*dx+dy*dy);
     if(dd<1e-6){ continue; }
     var ux=dx/dd, uy=dy/dd;
     while(acc+dd>=STEP && total<MAXLEN){
       var step=STEP-acc;
-      cx+=ux*step; cy+=uy*step;
-      pts.push({x:cx,y:cy});
+      pcx+=ux*step; pcy+=uy*step;
+      pts.push({x:pcx,y:pcy});
       total+=STEP; dd-=step; acc=0;
     }
-    acc+=dd; cx=vx; cy=vy;
+    acc+=dd; pcx=vx; pcy=vy;
   }
   if(pts.length<2) pts.push({x:W2SX(s.segs[1].x),y:W2SY(s.segs[1].y)});
 
-  // Draw in pure screen space (identity transform)
   ctx.save();
   ctx.setTransform(1,0,0,1,0,0);
   ctx.lineCap='round'; ctx.lineJoin='round';
   var n=pts.length;
 
-  // Outer glow (local player only)
-  if(s.isMe){
+  var skin = s.skin || 'default';
+
+  // ── helper: trace smooth bezier path through pts ──
+  function _path(){
     ctx.beginPath(); ctx.moveTo(pts[0].x,pts[0].y);
-    for(var i=1;i<n;i++) ctx.lineTo(pts[i].x,pts[i].y);
-    ctx.strokeStyle=s.color; ctx.lineWidth=BW+10;
-    ctx.globalAlpha=0.09; ctx.stroke(); ctx.globalAlpha=1;
+    for(var j=1;j<n-1;j++){
+      var mx=(pts[j].x+pts[j+1].x)/2, my=(pts[j].y+pts[j+1].y)/2;
+      ctx.quadraticCurveTo(pts[j].x,pts[j].y,mx,my);
+    }
+    ctx.lineTo(pts[n-1].x,pts[n-1].y);
   }
 
-  // Body — smoothed
-  ctx.beginPath(); ctx.moveTo(pts[0].x,pts[0].y);
-  for(var i=1;i<n-1;i++){
-    var mx=(pts[i].x+pts[i+1].x)/2, my=(pts[i].y+pts[i+1].y)/2;
-    ctx.quadraticCurveTo(pts[i].x,pts[i].y,mx,my);
+  // ── helper: call fn(px,py,tx,ty,fade) at every `freq`-px interval along body ──
+  function _marks(freq, fn){
+    var dist=0, prev=pts[0];
+    for(var j=1;j<n;j++){
+      var ddx=pts[j].x-prev.x, ddy=pts[j].y-prev.y;
+      dist+=Math.sqrt(ddx*ddx+ddy*ddy);
+      if(dist>=freq){
+        dist=0;
+        var fade=Math.max(0, 1-(j/n)*1.1);
+        var tx=ddx/(Math.sqrt(ddx*ddx+ddy*ddy)||1);
+        var ty=ddy/(Math.sqrt(ddx*ddx+ddy*ddy)||1);
+        fn(pts[j].x, pts[j].y, tx, ty, fade);
+      }
+      prev=pts[j];
+    }
   }
-  ctx.lineTo(pts[n-1].x,pts[n-1].y);
-  ctx.strokeStyle=s.color; ctx.lineWidth=BW; ctx.stroke();
 
-  // Spine accent
-  ctx.beginPath(); ctx.moveTo(pts[0].x,pts[0].y);
-  for(var i=1;i<Math.min(n,16);i++) ctx.lineTo(pts[i].x,pts[i].y);
-  ctx.strokeStyle='rgba(0,0,0,.28)'; ctx.lineWidth=BW*.22; ctx.stroke();
+  // ══════════════════ SKIN RENDERING ══════════════════
+  if(skin==='frost'){
+    // Neon Frost — ice blue/cyan layered body, crystal diamond scales, ice-crown spikes
+    if(s.isMe){ _path(); ctx.strokeStyle='#00d4ff'; ctx.lineWidth=BW+12; ctx.globalAlpha=0.07; ctx.stroke(); ctx.globalAlpha=1; }
+    _path(); ctx.strokeStyle='#0a1a2e'; ctx.lineWidth=BW; ctx.stroke();
+    _path(); ctx.strokeStyle='#00aacc'; ctx.lineWidth=BW*0.75; ctx.stroke();
+    _path(); ctx.strokeStyle='#00eeff'; ctx.lineWidth=BW*0.35; ctx.stroke();
+    // diamond scale marks
+    _marks(R*1.4, function(px,py,tx,ty,fade){
+      if(fade<0.05) return;
+      var nx=-ty, ny=tx, hs=R*0.38*fade;
+      ctx.save(); ctx.globalAlpha=0.7*fade;
+      ctx.strokeStyle='#88eeff'; ctx.lineWidth=1.2;
+      ctx.beginPath();
+      ctx.moveTo(px+nx*hs, py+ny*hs);
+      ctx.lineTo(px+tx*hs*0.8, py+ty*hs*0.8);
+      ctx.lineTo(px-nx*hs, py-ny*hs);
+      ctx.lineTo(px-tx*hs*0.8, py-ty*hs*0.8);
+      ctx.closePath(); ctx.stroke();
+      ctx.restore();
+    });
+    // head
+    ctx.beginPath(); ctx.arc(hx,hy,R,0,Math.PI*2);
+    ctx.fillStyle='#082233'; ctx.fill();
+    ctx.strokeStyle='#00d4ff'; ctx.lineWidth=2.5; ctx.stroke();
+    // ice crown spikes
+    var ang=s.angle, sxp=Math.cos(ang+Math.PI/2), syp=Math.sin(ang+Math.PI/2);
+    var fx2=Math.cos(ang), fy2=Math.sin(ang);
+    ctx.fillStyle='#00eeff'; ctx.globalAlpha=0.85;
+    for(var sp=-1;sp<=1;sp+=2){
+      ctx.beginPath();
+      ctx.moveTo(hx+sxp*sp*R*0.55+fx2*R*0.6, hy+syp*sp*R*0.55+fy2*R*0.6);
+      ctx.lineTo(hx+sxp*sp*R*0.85, hy+syp*sp*R*0.85);
+      ctx.lineTo(hx+sxp*sp*R*0.28+fx2*R*0.35, hy+syp*sp*R*0.28+fy2*R*0.35);
+      ctx.closePath(); ctx.fill();
+    }
+    ctx.globalAlpha=1;
+    // cyan iris eyes
+    var eo=R*0.52, er=R*0.42, pr=er*0.55;
+    var ebx=hx+fx2*R*0.30, eby=hy+fy2*R*0.30;
+    var e1x=ebx+sxp*eo, e1y=eby+syp*eo;
+    var e2x=ebx-sxp*eo, e2y=eby-syp*eo;
+    ctx.fillStyle='#001a26';
+    ctx.beginPath(); ctx.arc(e1x,e1y,er,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(e2x,e2y,er,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='#00d4ff';
+    ctx.beginPath(); ctx.arc(e1x,e1y,er*0.65,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(e2x,e2y,er*0.65,0,Math.PI*2); ctx.fill();
+    var pox=fx2*er*0.38, poy=fy2*er*0.38;
+    ctx.fillStyle='#001420';
+    ctx.beginPath(); ctx.arc(e1x+pox,e1y+poy,pr,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(e2x+pox,e2y+poy,pr,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,.9)';
+    ctx.beginPath(); ctx.arc(e1x+pox-pr*0.3,e1y+poy-pr*0.3,pr*0.35,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(e2x+pox-pr*0.3,e2y+poy-pr*0.3,pr*0.35,0,Math.PI*2); ctx.fill();
 
-  // Head
-  ctx.beginPath(); ctx.arc(hx,hy,R,0,Math.PI*2);
-  ctx.fillStyle=s.color; ctx.fill();
-  ctx.strokeStyle='rgba(215,215,215,.22)'; ctx.lineWidth=1.5; ctx.stroke();
+  } else if(skin==='void'){
+    // Void — near-black body, neon green outline, hex grid marks, green visor eye
+    if(s.isMe){ _path(); ctx.strokeStyle='#00ff66'; ctx.lineWidth=BW+12; ctx.globalAlpha=0.07; ctx.stroke(); ctx.globalAlpha=1; }
+    _path(); ctx.strokeStyle='#050f07'; ctx.lineWidth=BW; ctx.stroke();
+    _path(); ctx.strokeStyle='#003a18'; ctx.lineWidth=BW*0.7; ctx.stroke();
+    _path(); ctx.strokeStyle='#00ff66'; ctx.lineWidth=1.8; ctx.stroke();
+    // hex grid marks
+    _marks(R*1.6, function(px,py,tx,ty,fade){
+      if(fade<0.08) return;
+      var s2=R*0.32*fade, nx=-ty, ny=tx;
+      ctx.save(); ctx.globalAlpha=0.55*fade;
+      ctx.strokeStyle='#00ff66'; ctx.lineWidth=0.9;
+      ctx.beginPath();
+      for(var hk=0;hk<6;hk++){
+        var ha=hk/6*Math.PI*2;
+        var hpx=px+Math.cos(ha)*s2, hpy=py+Math.sin(ha)*s2;
+        if(hk===0) ctx.moveTo(hpx,hpy); else ctx.lineTo(hpx,hpy);
+      }
+      ctx.closePath(); ctx.stroke();
+      ctx.restore();
+    });
+    // head
+    ctx.beginPath(); ctx.arc(hx,hy,R,0,Math.PI*2);
+    ctx.fillStyle='#060f08'; ctx.fill();
+    ctx.strokeStyle='#00ff66'; ctx.lineWidth=2.5; ctx.stroke();
+    // green visor line
+    var ang=s.angle, sxp=Math.cos(ang+Math.PI/2), syp=Math.sin(ang+Math.PI/2);
+    var fx2=Math.cos(ang), fy2=Math.sin(ang);
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(hx+sxp*R*0.7+fx2*R*0.15, hy+syp*R*0.7+fy2*R*0.15);
+    ctx.lineTo(hx-sxp*R*0.7+fx2*R*0.15, hy-syp*R*0.7+fy2*R*0.15);
+    ctx.strokeStyle='#00ff66'; ctx.lineWidth=R*0.28; ctx.globalAlpha=0.5; ctx.stroke();
+    ctx.restore();
+    // solid glowing green eyes
+    var eo=R*0.52, er=R*0.38, pr=er*0.50;
+    var ebx=hx+fx2*R*0.30, eby=hy+fy2*R*0.30;
+    var e1x=ebx+sxp*eo, e1y=eby+syp*eo;
+    var e2x=ebx-sxp*eo, e2y=eby-syp*eo;
+    ctx.shadowColor='#00ff66'; ctx.shadowBlur=8;
+    ctx.fillStyle='#00ff66';
+    ctx.beginPath(); ctx.arc(e1x,e1y,er,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(e2x,e2y,er,0,Math.PI*2); ctx.fill();
+    ctx.shadowBlur=0;
+    ctx.fillStyle='rgba(255,255,255,.7)';
+    ctx.beginPath(); ctx.arc(e1x-er*0.25,e1y-er*0.25,er*0.22,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(e2x-er*0.25,e2y-er*0.25,er*0.22,0,Math.PI*2); ctx.fill();
 
-  // ── Two eyes (DamnBruh style) — side by side, facing the heading ──
-  var ang=s.angle, fx=Math.cos(ang), fy=Math.sin(ang);
-  var sxp=Math.cos(ang+Math.PI/2), syp=Math.sin(ang+Math.PI/2);
-  var ebx=hx+fx*R*0.30, eby=hy+fy*R*0.30; // eye band slightly forward of center
-  var eo=R*0.52;        // sideways separation
-  var er=R*0.42;        // white radius
-  var pr=er*0.55;       // pupil radius
-  var e1x=ebx+sxp*eo, e1y=eby+syp*eo;
-  var e2x=ebx-sxp*eo, e2y=eby-syp*eo;
-  // whites
-  ctx.fillStyle='#fff';
-  ctx.beginPath(); ctx.arc(e1x,e1y,er,0,Math.PI*2); ctx.fill();
-  ctx.beginPath(); ctx.arc(e2x,e2y,er,0,Math.PI*2); ctx.fill();
-  // pupils look forward
-  var pox=fx*er*0.40, poy=fy*er*0.40;
-  ctx.fillStyle='#111';
-  ctx.beginPath(); ctx.arc(e1x+pox,e1y+poy,pr,0,Math.PI*2); ctx.fill();
-  ctx.beginPath(); ctx.arc(e2x+pox,e2y+poy,pr,0,Math.PI*2); ctx.fill();
-  // tiny catch-light
-  ctx.fillStyle='rgba(255,255,255,.85)';
-  ctx.beginPath(); ctx.arc(e1x+pox-pr*0.3,e1y+poy-pr*0.3,pr*0.35,0,Math.PI*2); ctx.fill();
-  ctx.beginPath(); ctx.arc(e2x+pox-pr*0.3,e2y+poy-pr*0.3,pr*0.35,0,Math.PI*2); ctx.fill();
+  } else if(skin==='inferno'){
+    // Inferno — dark red/orange/yellow 4-layer, flame tongue marks, fire flares, orange slit eyes
+    if(s.isMe){ _path(); ctx.strokeStyle='#ff6600'; ctx.lineWidth=BW+12; ctx.globalAlpha=0.08; ctx.stroke(); ctx.globalAlpha=1; }
+    _path(); ctx.strokeStyle='#1a0500'; ctx.lineWidth=BW; ctx.stroke();
+    _path(); ctx.strokeStyle='#8b1a00'; ctx.lineWidth=BW*0.78; ctx.stroke();
+    _path(); ctx.strokeStyle='#ff4400'; ctx.lineWidth=BW*0.45; ctx.stroke();
+    _path(); ctx.strokeStyle='#ffaa00'; ctx.lineWidth=BW*0.14; ctx.stroke();
+    // flame tongue marks
+    _marks(R*1.3, function(px,py,tx,ty,fade){
+      if(fade<0.08) return;
+      var nx=-ty, ny=tx, fh=R*0.5*fade;
+      ctx.save(); ctx.globalAlpha=0.65*fade;
+      ctx.strokeStyle='#ffcc00'; ctx.lineWidth=1.4;
+      ctx.beginPath();
+      ctx.moveTo(px-nx*fh*0.4, py-ny*fh*0.4);
+      ctx.quadraticCurveTo(px+tx*fh*0.7, py+ty*fh*0.7, px+nx*fh*0.4, py+ny*fh*0.4);
+      ctx.stroke();
+      ctx.restore();
+    });
+    // head
+    ctx.beginPath(); ctx.arc(hx,hy,R,0,Math.PI*2);
+    ctx.fillStyle='#2a0800'; ctx.fill();
+    ctx.strokeStyle='#ff4400'; ctx.lineWidth=2.5; ctx.stroke();
+    // fire flares
+    var ang=s.angle, sxp=Math.cos(ang+Math.PI/2), syp=Math.sin(ang+Math.PI/2);
+    var fx2=Math.cos(ang), fy2=Math.sin(ang);
+    ctx.globalAlpha=0.8;
+    for(var fl=-1;fl<=1;fl+=2){
+      ctx.fillStyle='#ff6600';
+      ctx.beginPath();
+      ctx.moveTo(hx+sxp*fl*R*0.5, hy+syp*fl*R*0.5);
+      ctx.quadraticCurveTo(
+        hx+sxp*fl*R*0.9+fx2*R*0.5, hy+syp*fl*R*0.9+fy2*R*0.5,
+        hx+sxp*fl*R*0.55+fx2*R*0.85, hy+syp*fl*R*0.55+fy2*R*0.85
+      );
+      ctx.quadraticCurveTo(
+        hx+sxp*fl*R*0.2+fx2*R*0.6, hy+syp*fl*R*0.2+fy2*R*0.6,
+        hx+sxp*fl*R*0.5, hy+syp*fl*R*0.5
+      );
+      ctx.fill();
+      ctx.fillStyle='#ffcc00';
+      ctx.beginPath();
+      ctx.arc(hx+sxp*fl*R*0.6+fx2*R*0.7, hy+syp*fl*R*0.6+fy2*R*0.7, R*0.14, 0, Math.PI*2);
+      ctx.fill();
+    }
+    ctx.globalAlpha=1;
+    // orange slit eyes
+    var eo=R*0.52, er=R*0.40, pr=er*0.50;
+    var ebx=hx+fx2*R*0.30, eby=hy+fy2*R*0.30;
+    var e1x=ebx+sxp*eo, e1y=eby+syp*eo;
+    var e2x=ebx-sxp*eo, e2y=eby-syp*eo;
+    ctx.fillStyle='#ff8800';
+    ctx.beginPath(); ctx.arc(e1x,e1y,er,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(e2x,e2y,er,0,Math.PI*2); ctx.fill();
+    // vertical slit pupil
+    ctx.fillStyle='#1a0000';
+    ctx.beginPath(); ctx.ellipse(e1x,e1y,pr*0.35,pr,0,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(e2x,e2y,pr*0.35,pr,0,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='rgba(255,200,100,.8)';
+    ctx.beginPath(); ctx.arc(e1x-er*0.2,e1y-er*0.2,er*0.18,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(e2x-er*0.2,e2y-er*0.2,er*0.18,0,Math.PI*2); ctx.fill();
 
-  // Name tag — fixed screen-pixel font, positioned above the head in screen px
+  } else if(skin==='toxic'){
+    // Toxic — dark green/acid green 3-layer, paired poison blob marks, toxic spots on head, yellow slit eyes
+    if(s.isMe){ _path(); ctx.strokeStyle='#39ff14'; ctx.lineWidth=BW+12; ctx.globalAlpha=0.07; ctx.stroke(); ctx.globalAlpha=1; }
+    _path(); ctx.strokeStyle='#021002'; ctx.lineWidth=BW; ctx.stroke();
+    _path(); ctx.strokeStyle='#0d3b08'; ctx.lineWidth=BW*0.76; ctx.stroke();
+    _path(); ctx.strokeStyle='#39ff14'; ctx.lineWidth=BW*0.30; ctx.stroke();
+    // paired poison blob marks
+    _marks(R*1.5, function(px,py,tx,ty,fade){
+      if(fade<0.08) return;
+      var nx=-ty, ny=tx, br=R*0.18*fade;
+      ctx.save(); ctx.globalAlpha=0.7*fade;
+      ctx.fillStyle='#80ff40';
+      ctx.beginPath(); ctx.arc(px+nx*R*0.32, py+ny*R*0.32, br, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(px-nx*R*0.32, py-ny*R*0.32, br, 0, Math.PI*2); ctx.fill();
+      ctx.restore();
+    });
+    // head
+    ctx.beginPath(); ctx.arc(hx,hy,R,0,Math.PI*2);
+    ctx.fillStyle='#051505'; ctx.fill();
+    ctx.strokeStyle='#39ff14'; ctx.lineWidth=2.5; ctx.stroke();
+    // toxic bubble spots on head
+    var ang=s.angle, sxp=Math.cos(ang+Math.PI/2), syp=Math.sin(ang+Math.PI/2);
+    var fx2=Math.cos(ang), fy2=Math.sin(ang);
+    ctx.globalAlpha=0.7;
+    var spots=[
+      {ox: 0.3, oy: 0.5, r:0.20},
+      {ox:-0.4, oy:-0.3, r:0.15},
+      {ox: 0.5, oy:-0.5, r:0.12},
+      {ox:-0.1, oy: 0.7, r:0.10}
+    ];
+    spots.forEach(function(sp){
+      var spx = hx + sxp*sp.ox*R + fx2*sp.oy*R;
+      var spy = hy + syp*sp.ox*R + fy2*sp.oy*R;
+      ctx.beginPath(); ctx.arc(spx, spy, R*sp.r, 0, Math.PI*2);
+      ctx.fillStyle='#50ff20'; ctx.fill();
+    });
+    ctx.globalAlpha=1;
+    // yellow slit eyes
+    var eo=R*0.52, er=R*0.40, pr=er*0.48;
+    var ebx=hx+fx2*R*0.30, eby=hy+fy2*R*0.30;
+    var e1x=ebx+sxp*eo, e1y=eby+syp*eo;
+    var e2x=ebx-sxp*eo, e2y=eby-syp*eo;
+    ctx.fillStyle='#ccff00';
+    ctx.beginPath(); ctx.arc(e1x,e1y,er,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(e2x,e2y,er,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='#0a1500';
+    ctx.beginPath(); ctx.ellipse(e1x,e1y,pr*0.30,pr,0,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(e2x,e2y,pr*0.30,pr,0,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='rgba(255,255,180,.85)';
+    ctx.beginPath(); ctx.arc(e1x-er*0.2,e1y-er*0.2,er*0.18,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(e2x-er*0.2,e2y-er*0.2,er*0.18,0,Math.PI*2); ctx.fill();
+
+  } else if(skin==='galaxy'){
+    // Cosmic — deep purple 3-layer, 4-point star sparkles, star-ring on head, purple iris
+    if(s.isMe){ _path(); ctx.strokeStyle='#cc44ff'; ctx.lineWidth=BW+12; ctx.globalAlpha=0.08; ctx.stroke(); ctx.globalAlpha=1; }
+    _path(); ctx.strokeStyle='#0d0018'; ctx.lineWidth=BW; ctx.stroke();
+    _path(); ctx.strokeStyle='#5500aa'; ctx.lineWidth=BW*0.72; ctx.stroke();
+    _path(); ctx.strokeStyle='#cc44ff'; ctx.lineWidth=BW*0.28; ctx.stroke();
+    // 4-point star sparkles
+    _marks(R*1.5, function(px,py,tx,ty,fade){
+      if(fade<0.08) return;
+      var sr=R*0.30*fade;
+      ctx.save(); ctx.globalAlpha=0.75*fade;
+      ctx.strokeStyle='#ee88ff'; ctx.lineWidth=1.2;
+      ctx.beginPath();
+      ctx.moveTo(px, py-sr); ctx.lineTo(px, py+sr);
+      ctx.moveTo(px-sr, py); ctx.lineTo(px+sr, py);
+      ctx.moveTo(px-sr*0.6,py-sr*0.6); ctx.lineTo(px+sr*0.6,py+sr*0.6);
+      ctx.moveTo(px+sr*0.6,py-sr*0.6); ctx.lineTo(px-sr*0.6,py+sr*0.6);
+      ctx.stroke();
+      ctx.fillStyle='#cc44ff';
+      ctx.beginPath(); ctx.arc(px,py,sr*0.22,0,Math.PI*2); ctx.fill();
+      ctx.restore();
+    });
+    // head
+    ctx.beginPath(); ctx.arc(hx,hy,R,0,Math.PI*2);
+    ctx.fillStyle='#0e0020'; ctx.fill();
+    ctx.strokeStyle='#cc44ff'; ctx.lineWidth=2.5; ctx.stroke();
+    // 6 mini-stars ring on head
+    var ang=s.angle, sxp=Math.cos(ang+Math.PI/2), syp=Math.sin(ang+Math.PI/2);
+    var fx2=Math.cos(ang), fy2=Math.sin(ang);
+    ctx.fillStyle='#dd66ff'; ctx.globalAlpha=0.85;
+    for(var si=0;si<6;si++){
+      var sa=si/6*Math.PI*2 + ang;
+      var srx=hx+Math.cos(sa)*R*0.65, sry=hy+Math.sin(sa)*R*0.65;
+      ctx.beginPath(); ctx.arc(srx,sry,R*0.10,0,Math.PI*2); ctx.fill();
+    }
+    ctx.globalAlpha=1;
+    // purple iris eyes
+    var eo=R*0.52, er=R*0.42, pr=er*0.52;
+    var ebx=hx+fx2*R*0.30, eby=hy+fy2*R*0.30;
+    var e1x=ebx+sxp*eo, e1y=eby+syp*eo;
+    var e2x=ebx-sxp*eo, e2y=eby-syp*eo;
+    ctx.fillStyle='#0d0018';
+    ctx.beginPath(); ctx.arc(e1x,e1y,er,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(e2x,e2y,er,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='#aa33ff';
+    ctx.beginPath(); ctx.arc(e1x,e1y,er*0.68,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(e2x,e2y,er*0.68,0,Math.PI*2); ctx.fill();
+    var pox=fx2*er*0.38, poy=fy2*er*0.38;
+    ctx.fillStyle='#05000f';
+    ctx.beginPath(); ctx.arc(e1x+pox,e1y+poy,pr,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(e2x+pox,e2y+poy,pr,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,.85)';
+    ctx.beginPath(); ctx.arc(e1x+pox-pr*0.3,e1y+poy-pr*0.3,pr*0.35,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(e2x+pox-pr*0.3,e2y+poy-pr*0.3,pr*0.35,0,Math.PI*2); ctx.fill();
+
+  } else if(skin==='gold'){
+    // Gold Rush — dark bronze/gold 4-layer, diamond scales with border, crown spikes, orange iris
+    if(s.isMe){ _path(); ctx.strokeStyle='#ffd700'; ctx.lineWidth=BW+12; ctx.globalAlpha=0.08; ctx.stroke(); ctx.globalAlpha=1; }
+    _path(); ctx.strokeStyle='#1a0f00'; ctx.lineWidth=BW; ctx.stroke();
+    _path(); ctx.strokeStyle='#7a4e00'; ctx.lineWidth=BW*0.76; ctx.stroke();
+    _path(); ctx.strokeStyle='#ffc400'; ctx.lineWidth=BW*0.42; ctx.stroke();
+    _path(); ctx.strokeStyle='#fff8cc'; ctx.lineWidth=BW*0.10; ctx.stroke();
+    // diamond scales with gold border
+    _marks(R*1.35, function(px,py,tx,ty,fade){
+      if(fade<0.08) return;
+      var nx=-ty, ny=tx, hs=R*0.36*fade;
+      ctx.save(); ctx.globalAlpha=fade;
+      ctx.fillStyle='#cc9900';
+      ctx.beginPath();
+      ctx.moveTo(px+nx*hs, py+ny*hs);
+      ctx.lineTo(px+tx*hs*0.75, py+ty*hs*0.75);
+      ctx.lineTo(px-nx*hs, py-ny*hs);
+      ctx.lineTo(px-tx*hs*0.75, py-ty*hs*0.75);
+      ctx.closePath(); ctx.fill();
+      ctx.strokeStyle='#ffe566'; ctx.lineWidth=1.1; ctx.stroke();
+      ctx.restore();
+    });
+    // head
+    ctx.beginPath(); ctx.arc(hx,hy,R,0,Math.PI*2);
+    ctx.fillStyle='#221400'; ctx.fill();
+    ctx.strokeStyle='#ffd700'; ctx.lineWidth=2.5; ctx.stroke();
+    // crown spikes
+    var ang=s.angle, sxp=Math.cos(ang+Math.PI/2), syp=Math.sin(ang+Math.PI/2);
+    var fx2=Math.cos(ang), fy2=Math.sin(ang);
+    var crownSpikes=[
+      {s:-1, fw:0.55, sf:0.80, h:0.95},
+      {s: 0, fw:0.90, sf:0.00, h:1.10},
+      {s: 1, fw:0.55, sf:-0.80,h:0.95}
+    ];
+    ctx.fillStyle='#ffd700'; ctx.globalAlpha=0.9;
+    crownSpikes.forEach(function(sp){
+      var bx=hx+sxp*sp.sf*R*0.55+fx2*R*0.40;
+      var by=hy+syp*sp.sf*R*0.55+fy2*R*0.40;
+      var tx2=hx+sxp*sp.sf*R*0.30+fx2*R*sp.h;
+      var ty2=hy+syp*sp.sf*R*0.30+fy2*R*sp.h;
+      ctx.beginPath();
+      ctx.moveTo(bx-sxp*R*0.12, by-syp*R*0.12);
+      ctx.lineTo(tx2, ty2);
+      ctx.lineTo(bx+sxp*R*0.12, by+syp*R*0.12);
+      ctx.closePath(); ctx.fill();
+    });
+    ctx.globalAlpha=1;
+    // orange iris eyes
+    var eo=R*0.52, er=R*0.42, pr=er*0.52;
+    var ebx=hx+fx2*R*0.30, eby=hy+fy2*R*0.30;
+    var e1x=ebx+sxp*eo, e1y=eby+syp*eo;
+    var e2x=ebx-sxp*eo, e2y=eby-syp*eo;
+    ctx.fillStyle='#1a0800';
+    ctx.beginPath(); ctx.arc(e1x,e1y,er,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(e2x,e2y,er,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='#ff8800';
+    ctx.beginPath(); ctx.arc(e1x,e1y,er*0.68,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(e2x,e2y,er*0.68,0,Math.PI*2); ctx.fill();
+    var pox=fx2*er*0.38, poy=fy2*er*0.38;
+    ctx.fillStyle='#0f0500';
+    ctx.beginPath(); ctx.arc(e1x+pox,e1y+poy,pr,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(e2x+pox,e2y+poy,pr,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='rgba(255,255,200,.85)';
+    ctx.beginPath(); ctx.arc(e1x+pox-pr*0.3,e1y+poy-pr*0.3,pr*0.35,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(e2x+pox-pr*0.3,e2y+poy-pr*0.3,pr*0.35,0,Math.PI*2); ctx.fill();
+
+  } else {
+    // DEFAULT skin (original rendering)
+    if(s.isMe){
+      ctx.beginPath(); ctx.moveTo(pts[0].x,pts[0].y);
+      for(var i=1;i<n;i++) ctx.lineTo(pts[i].x,pts[i].y);
+      ctx.strokeStyle=s.color; ctx.lineWidth=BW+10;
+      ctx.globalAlpha=0.09; ctx.stroke(); ctx.globalAlpha=1;
+    }
+    _path(); ctx.strokeStyle=s.color; ctx.lineWidth=BW; ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(pts[0].x,pts[0].y);
+    for(var i=1;i<Math.min(n,16);i++) ctx.lineTo(pts[i].x,pts[i].y);
+    ctx.strokeStyle='rgba(0,0,0,.28)'; ctx.lineWidth=BW*.22; ctx.stroke();
+    // head
+    ctx.beginPath(); ctx.arc(hx,hy,R,0,Math.PI*2);
+    ctx.fillStyle=s.color; ctx.fill();
+    ctx.strokeStyle='rgba(215,215,215,.22)'; ctx.lineWidth=1.5; ctx.stroke();
+    // eyes
+    var ang=s.angle, fx2=Math.cos(ang), fy2=Math.sin(ang);
+    var sxp=Math.cos(ang+Math.PI/2), syp=Math.sin(ang+Math.PI/2);
+    var ebx=hx+fx2*R*0.30, eby=hy+fy2*R*0.30;
+    var eo=R*0.52, er=R*0.42, pr=er*0.55;
+    var e1x=ebx+sxp*eo, e1y=eby+syp*eo;
+    var e2x=ebx-sxp*eo, e2y=eby-syp*eo;
+    ctx.fillStyle='#fff';
+    ctx.beginPath(); ctx.arc(e1x,e1y,er,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(e2x,e2y,er,0,Math.PI*2); ctx.fill();
+    var pox=fx2*er*0.40, poy=fy2*er*0.40;
+    ctx.fillStyle='#111';
+    ctx.beginPath(); ctx.arc(e1x+pox,e1y+poy,pr,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(e2x+pox,e2y+poy,pr,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,.85)';
+    ctx.beginPath(); ctx.arc(e1x+pox-pr*0.3,e1y+poy-pr*0.3,pr*0.35,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(e2x+pox-pr*0.3,e2y+poy-pr*0.3,pr*0.35,0,Math.PI*2); ctx.fill();
+  }
+
+  // ── Name tag — same for all skins ──
   var _fs=s.isMe?13:11;
   var nf='bold '+_fs+'px Share Tech Mono';
   if(s._nameCache!==s.name){ s._nameCache=s.name; ctx.font=nf; s._tw=ctx.measureText(s.name).width; }
   else { ctx.font=nf; }
   var tw=s._tw, np=5, nh=14, ny=hy-R-10;
   ctx.fillStyle=s.isMe?'rgba(20,241,149,0.18)':'rgba(0,0,0,0.72)';
+  ctx.shadowBlur=0;
   ctx.beginPath();
   var rr=5, rx=hx-tw/2-np, ry=ny-nh+2, rw=tw+np*2;
   ctx.moveTo(rx+rr,ry); ctx.lineTo(rx+rw-rr,ry); ctx.arcTo(rx+rw,ry,rx+rw,ry+rr,rr);
@@ -5422,7 +5807,7 @@ function drawS(s){
   ctx.lineTo(rx,ry+rr); ctx.arcTo(rx,ry,rx+rr,ry,rr); ctx.closePath(); ctx.fill();
   if(s.isMe){ ctx.strokeStyle='rgba(20,241,149,0.5)'; ctx.lineWidth=1; ctx.stroke(); }
   ctx.fillStyle=s.isMe?'#14F195':'#ffffff';
-  ctx.textAlign='center'; ctx.shadowBlur=0;
+  ctx.textAlign='center';
   ctx.fillText(s.name,hx,ny);
 
   ctx.restore();
