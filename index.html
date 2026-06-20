@@ -1185,7 +1185,7 @@ canvas{display:block;width:100%;height:100%;}
 // ════════════════ CONFIG ════════════════
 // ── Build stamp — bump this string on every deploy ───────────────────────────
 // Shown live on the lobby screen. Check via DevTools → Console: GAME_BUILD
-var GAME_BUILD = 'V114';
+var GAME_BUILD = 'V115';
 
 var PRIVY_APP_ID          = 'client-WY6aEf1eS4reRDrBq7ghh8arEiMaKSj1Vk37ZG8CAawEF';
 var HOUSE_WALLET_ADDRESS  = '2QnrdhxXYt8ythhGYHDz6MtTZE1z2bYvbss8z3ZGj2uJ';
@@ -4801,6 +4801,13 @@ function checkMoneyDrops(){
   }
 }
 
+// Returns 0 or 1 deterministically for any pair of IDs — same result on both clients.
+// Different pairs get different values, so outcomes feel pseudo-random (like latency-based).
+function _hoHash(a,b){
+  var s=[a,b].sort().join('|'), h=5381;
+  for(var i=0;i<s.length;i++) h=((h<<5)+h+s.charCodeAt(i))&0x7fff;
+  return h&1; // 0=smaller-ID player dies, 1=larger-ID player dies
+}
 function dstPtSeg(px,py,ax,ay,bx,by){
   var dx=bx-ax,dy=by-ay,l2=dx*dx+dy*dy;
   if(l2<0.001) return Math.sqrt((px-ax)*(px-ax)+(py-ay)*(py-ay));
@@ -4832,13 +4839,10 @@ function killCheck(){
       var _pBoost=(p.th&&p.th.length>=2&&dst(p.th[0].x,p.th[0].y,p.th[1].x,p.th[1].y)>BASE_SPEED*1.5);
       if(_myBoost&&!_pBoost){ continue; }                                              // I'm boosting — I win
       if(!_myBoost&&_pBoost){ killPlayer('Eliminated by '+p.name,p.remoteId||null); return; } // peer boosting — I lose
-      // Both or neither boosting: deterministic ID tiebreaker — exactly one dies, never both
-      var _hIds=[myId,pid].concat(peers.filter(function(q){return q.alive&&q.remoteId&&q.remoteId!==pid;}).map(function(q){return q.remoteId;}));
-      _hIds=_hIds.filter(function(id,k,a){return id&&a.indexOf(id)===k;}).sort();
-      var _hMed=Math.floor(_hIds.length/2);
-      var _myD=Math.abs(_hIds.indexOf(myId)-_hMed);
-      var _pD =Math.abs(_hIds.indexOf(pid)-_hMed);
-      if(_myD>_pD||(_myD===_pD&&myId>pid)){ killPlayer('Eliminated by '+p.name,p.remoteId||null); return; }
+      // Both or neither boosting: seeded-hash tiebreaker — feels random per player pair,
+      // same result on both clients so exactly one always dies, never both.
+      var _h=_hoHash(myId,pid); // 0=smaller-ID dies, 1=larger-ID dies
+      if((_h===0)===(myId<pid)){ killPlayer('Eliminated by '+p.name,p.remoteId||null); return; }
       continue;
     }
 
