@@ -4800,8 +4800,39 @@ function checkMoneyDrops(){
 
 function killCheck(){
   if(!player.alive) return;
+  var myId=_wsClientId||'zzz';
   var _now=Date.now();
   if(_now-(player.spawnTs||0)<3000) return;
+  var myR=player.headR||12;
+
+  for(var i=0;i<peers.length;i++){
+    var p=peers[i]; if(!p.alive) continue;
+    if(_now-(p.joinTs||0)<3000) continue;
+    var pid=p.remoteId||'';
+    var px=(p.targetX!=null)?p.targetX:p.x, py=(p.targetY!=null)?p.targetY:p.y;
+    var pR=p.headR||12;
+    var headGap=dst(player.x,player.y,px,py);
+
+    // Head-on: both head circles overlap → lower client-ID wins, higher ID dies
+    if(headGap<myR+pR){
+      if(myId>pid){ killPlayer('Eliminated by '+p.name,p.remoteId||null); return; }
+      continue;
+    }
+
+    // Body hit: did MY head enter THEIR body? → I die
+    // Use target history (actual broadcast positions, no LERP lag) when available
+    var _segs=(p.th&&p.th.length>3)?p.th:p.segs;
+    var _lim=Math.min(_segs.length, Math.max((p.length||10)*SEG_MULT, 120));
+    var _bodyR=myR+pR*0.85;
+    for(var j=1;j<_lim;j++){
+      var seg=_segs[j]; if(!seg) break;
+      if(dst(px,py,seg.x,seg.y)<pR) continue; // inside their head circle — skip
+      if(dst(player.x,player.y,seg.x,seg.y)<_bodyR){
+        killPlayer('Eliminated by '+p.name,p.remoteId||null); return;
+      }
+    }
+  }
+
   var pdx=player.x-WORLD/2, pdy=player.y-WORLD/2;
   if(Math.sqrt(pdx*pdx+pdy*pdy)>WORLD_R-10) killPlayer('Hit the boundary',null);
 }
