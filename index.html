@@ -4813,10 +4813,16 @@ function killCheck(){
     var pR=p.headR||12;
     var headGap=dst(player.x,player.y,px,py);
 
-    // Head-on: both head circles overlap → lower client-ID wins, higher ID dies
+    // Head-on: both head circles overlap → medium client-ID wins
+    // Rank all session IDs; whoever in the pair is closest to the median rank survives.
     if(headGap<myR+pR){
-      if(myId>pid){ killPlayer('Eliminated by '+p.name,p.remoteId||null); return; }
-      continue;
+      var _hIds=[myId,pid].concat(peers.filter(function(q){return q.alive&&q.remoteId&&q.remoteId!==pid;}).map(function(q){return q.remoteId;}));
+      _hIds=_hIds.filter(function(id,k,a){return id&&a.indexOf(id)===k;}).sort();
+      var _hMed=Math.floor(_hIds.length/2);
+      var _myD=Math.abs(_hIds.indexOf(myId)-_hMed);
+      var _pD =Math.abs(_hIds.indexOf(pid) -_hMed);
+      if(_myD>_pD){ killPlayer('Eliminated by '+p.name,p.remoteId||null); return; }
+      continue; // I am closer to the median rank — I win
     }
 
     // Body hit: did MY head enter THEIR body? → I die
