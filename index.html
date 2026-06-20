@@ -3304,6 +3304,32 @@ function _wsHandleMsg(msg, fromAbly) {
     }
     if (d.kill_hint) { return; }
 
+    // ── Money drop broadcast: another player died and their wager hit the floor ──
+    if (d.money_drop) {
+      var _md = d.money_drop;
+      if (_md && _md.id && !moneyDrops.find(function(m){ return m.id===_md.id; })) {
+        moneyDrops.push({id:_md.id, x:+_md.x, y:+_md.y, sol:+(_md.sol||0),
+          fromId:_md.fromId||'', fromName:_md.fromName||'Player',
+          fromPubkey:_md.fromPubkey||'', ts:Date.now()});
+      }
+      return;
+    }
+
+    // ── Money claim: someone ran over a drop — remove it and fire the TX ──────
+    if (d.money_claim) {
+      var _mc = d.money_claim;
+      if (!_mc || !_mc.id) return;
+      moneyDrops = moneyDrops.filter(function(m){ return m.id !== _mc.id; });
+      // If WE are the dead player who owns this drop → send SOL to collector
+      if (_mc.fromId === _wsClientId && _mc.claimerPubkey && !_claimedDrops[_mc.id]) {
+        _claimedDrops[_mc.id] = 'sent';
+        _doDropTransfer(_mc.claimerPubkey, +(_mc.solAmt||0));
+      }
+      // If WE are the collector (relay echo) → avoid double-crediting optimistic grant
+      if (_mc.claimerId === _wsClientId) { _claimedDrops[_mc.id] = 'collected'; }
+      return;
+    }
+
     // Kill-credit security is handled separately: die/chat events require fromAbly=true.
     // Rendering is open to all pos senders — blocking here caused players to be
     // permanently invisible whenever the Ably verification handshake had any issue.
@@ -3391,10 +3417,8 @@ function _wsHandleMsg(msg, fromAbly) {
           if (d.killed_by && _wsClientId && d.killed_by === _wsClientId && player && player.alive) {
             myKills++; boostE=Math.min(100,boostE+50); // kill refills half boost
             var _pSol = +(d.sol || 0);
-            if (_pSol > 0) {
-              killSOL += _pSol; W.balance += _pSol; saveSession(); refreshWalletUI();
-              kFeed('🗡 KILL +$' + (_pSol*SOL_USD).toFixed(2) + ' — ' + (d.n || 'a player') + ' eliminated', 'kill');
-              setTimeout(function() { if (W.pubkey) refreshBalance(null); }, 1500);
+            if (activeTier !== 'free' && TIERS[activeTier] && TIERS[activeTier].usd > 0) {
+              kFeed('🗡 KILLED ' + (d.n||'a player') + ' — $'+TIERS[activeTier].usd+' drop appeared! Grab it!', 'kill');
             } else {
               kFeed('🗡 YOU eliminated ' + (d.n || 'a player') + ' [Free Play]', 'kill');
             }
@@ -3438,13 +3462,8 @@ function _wsHandleMsg(msg, fromAbly) {
     }
     if (d.killed_by && _wsClientId && d.killed_by === _wsClientId && player && player.alive) {
       myKills++; boostE=Math.min(100,boostE+50); // kill refills half boost
-      var earnedSol = +(d.sol || 0);
-      if (earnedSol > 0) {
-        killSOL += earnedSol;
-        W.balance += earnedSol; saveSession(); refreshWalletUI();
-        kFeed('🗡 KILL +$' + (earnedSol*SOL_USD).toFixed(2) + ' — ' + _dieName + ' eliminated', 'kill');
-        // Refresh quickly to pick up the incoming on-chain kill transfer
-        setTimeout(function() { if (W.pubkey) refreshBalance(null); }, 1500);
+      if (activeTier !== 'free' && TIERS[activeTier] && TIERS[activeTier].usd > 0) {
+        kFeed('🗡 KILLED ' + _dieName + ' — $'+TIERS[activeTier].usd+' drop appeared! Grab it!', 'kill');
       } else {
         kFeed('🗡 YOU eliminated ' + _dieName + ' [Free Play]', 'kill');
       }
@@ -3929,6 +3948,8 @@ async function doJoinGame() {
 
 // ════════════════ GAME ENGINE ════════════════
 var gc,ctx,mm,mctx,gameRunning=false,player=null,peers=[],food=[],parts=[];
+var moneyDrops   = [];  // {id,x,y,sol,fromId,fromName,fromPubkey,ts}
+var _claimedDrops = {}; // id→'sent'|'collected' dedup for SOL tx and credit
 var _inGameSession=false; // true from launchGame() until showStart() — email hidden the whole time
 var _staleFrame=0; // frame counter for stale-peer eviction (runs every 60 frames)
 var _lastLoopT=0;  // last loop timestamp for delta-time calculation
@@ -4182,7 +4203,7 @@ function launchGame() {
   // Seed 35 orbs near the map center, then fill the rest randomly
   var _cx=WORLD/2, _cy=WORLD/2;
   for(var _cf=0;_cf<35;_cf++) addFood(_cx+(Math.random()-.5)*WORLD*0.22, _cy+(Math.random()-.5)*WORLD*0.22);
-  spawnFood(MAX_FOOD); gameRunning=true; _cashoutInProgress=false;
+  spawnFood(MAX_FOOD); moneyDrops=[]; _claimedDrops={}; gameRunning=true; _cashoutInProgress=false;
   _spectating=false; _specTargetId=null; var _shEl=document.getElementById('specHud'); if(_shEl) _shEl.style.display='none';
   _hideMobileBar(); // hide wallet bar during gameplay — HUD shows score/balance
   var _hee=document.getElementById('headerEmailEl'); if(_hee) _hee.style.display='none';
@@ -4689,7 +4710,7 @@ function update(_dt){
     // No AI bots — only real remote players exist in peers[]
   }
 
-  eatFood(); killCheck();
+  eatFood(); killCheck(); checkMoneyDrops();
   // Replenish food — cap at 5 spawns/frame to avoid a spike when many items are eaten at once
   var _fAdd=0; while(food.length<MAX_FOOD&&_fAdd<5){ addFood(); _fAdd++; }
   // Enforce dynamic max-length cap (based on SOL balance) — trims if balance dropped
@@ -4747,12 +4768,70 @@ function eatFood(){
   for(var ei=0;ei<eaten.length;ei++) food.splice(eaten[ei],1);
 }
 
+function checkMoneyDrops(){
+  if(!player||!player.alive||!moneyDrops.length) return;
+  var _now=Date.now();
+  for(var _mi=moneyDrops.length-1;_mi>=0;_mi--){
+    var _md=moneyDrops[_mi];
+    if(_now-_md.ts>45000){ moneyDrops.splice(_mi,1); continue; } // 45-second expiry
+    if(dst(player.x,player.y,_md.x,_md.y)<35){
+      moneyDrops.splice(_mi,1);
+      if(_claimedDrops[_md.id]) continue; // already handled (echo guard)
+      _claimedDrops[_md.id]='collected';
+      // Broadcast claim so dead player's client fires the actual SOL transfer
+      if(_ws&&_ws.readyState===WebSocket.OPEN){
+        try{_ws.send(JSON.stringify({type:'pos',clientId:_wsClientId,data:{
+          money_claim:{id:_md.id,claimerId:_wsClientId,
+            claimerPubkey:W.pubkey||'',solAmt:_md.sol,fromId:_md.fromId}
+        }}));}catch(_e){}
+      }
+      // Optimistic credit (90% after house cut) — confirmed when _doDropTransfer fires on dead client
+      if(_md.sol>0&&W.pubkey&&!W.pubkey.startsWith('guest_')){
+        var _earn=+(_md.sol*(1-HOUSE_CUT)).toFixed(6);
+        W.balance+=_earn; killSOL+=_earn; saveSession(); refreshWalletUI();
+        kFeed('💰 +$'+(_earn*SOL_USD).toFixed(2)+' — collected '+_md.fromName+"'s drop!",'kill');
+        score+=50; boostE=Math.min(100,boostE+30);
+      } else if(_md.sol>0){
+        kFeed('💰 Collected '+_md.fromName+"'s drop!",'kill');
+      }
+    }
+  }
+}
+
 function killCheck(){
   if(!player.alive) return;
   var _now=Date.now();
   if(_now-(player.spawnTs||0)<3000) return;
   var pdx=player.x-WORLD/2, pdy=player.y-WORLD/2;
   if(Math.sqrt(pdx*pdx+pdy*pdy)>WORLD_R-10) killPlayer('Hit the boundary',null);
+}
+
+function _doDropTransfer(claimerPubkey, solAmt){
+  if(!_localKeypair||!W.pubkey||!solAmt||!claimerPubkey) return;
+  if(claimerPubkey.length<32||claimerPubkey.startsWith('guest_')) return;
+  (async function(){
+    try{
+      if(typeof window.Buffer!=='undefined'&&typeof window.Buffer.from==='function'){
+        window.Buffer.Buffer=window.Buffer; try{globalThis.Buffer=window.Buffer;}catch(_){}
+      }
+      var txResult=await _getConnForTx();
+      var conn=txResult.conn, bh=txResult.bh;
+      var fromKey=new solanaWeb3.PublicKey(W.pubkey);
+      var toKey=new solanaWeb3.PublicKey(claimerPubkey);
+      var houseKey=new solanaWeb3.PublicKey(HOUSE_WALLET_ADDRESS);
+      var klam=Math.floor(solAmt*(1-HOUSE_CUT)*1e9);
+      var hlam=Math.floor(solAmt*HOUSE_CUT*1e9);
+      if(klam<50) return;
+      var tx=new solanaWeb3.Transaction();
+      tx.recentBlockhash=bh.blockhash; tx.lastValidBlockHeight=bh.lastValidBlockHeight; tx.feePayer=fromKey;
+      tx.add(solanaWeb3.SystemProgram.transfer({fromPubkey:fromKey,toPubkey:toKey,lamports:klam}));
+      if(hlam>0) tx.add(solanaWeb3.SystemProgram.transfer({fromPubkey:fromKey,toPubkey:houseKey,lamports:hlam}));
+      tx.sign(_localKeypair);
+      var sig=await conn.sendRawTransaction(tx.serialize(),{skipPreflight:true,maxRetries:4,preflightCommitment:'confirmed'});
+      console.log('[drop TX] to:'+claimerPubkey.slice(0,8)+' amt:'+(klam/1e9).toFixed(4)+' sig:'+sig.slice(0,8));
+      setTimeout(function(){ if(W.pubkey) _fetchPrivyWalletBalance(W.pubkey); }, 4000);
+    }catch(e){ console.warn('[drop TX] failed:',e.message); }
+  })();
 }
 
 function killPlayer(reason, killedBy){
@@ -4763,110 +4842,44 @@ function killPlayer(reason, killedBy){
   // The killer's 'die' subscriber checks killed_by === their own clientId and credits d.sol.
   var carriedSol = +(W.balance || 0);
 
-  // ── On-chain kill transfer ─────────────────────────────────────────────────
-  // If killed by another wallet-connected player, fire a real Solana TX:
-  // dying player's wallet → killer's wallet for the carried SOL amount.
-  // This runs async/fire-and-forget so the death UI is not delayed.
-  var _isValidKillerWallet = killedBy && killedBy.length >= 32 && !killedBy.startsWith('guest_') && activeTier !== 'free';
-  if (_isValidKillerWallet && _localKeypair && W.pubkey) {
-    (async function _killTransfer() {
-      try {
-        // Reinforce Buffer global (async IIFE re-enters scope where bare Buffer might be gone)
-        if (typeof window.Buffer !== 'undefined' && typeof window.Buffer.from === 'function') {
-          window.Buffer.Buffer = window.Buffer;
-          try { globalThis.Buffer = window.Buffer; } catch(e) {}
-        }
-        // Transfer ONLY the tier wager — never drain the player's full wallet.
-        // The kill prize is the lobby stake (e.g. $1), not everything in the wallet.
-        var _t = TIERS[activeTier] || {};
-        var _tierStake = (_t.sol && _t.sol > 0) ? _t.sol : (carriedSol || 0);
-        try {
-          var _freshKillBal = await _fetchBalanceWithFallback(W.pubkey);
-          W.onChainBalance = _freshKillBal.lamports / 1e9;
-        } catch(_kbe) { /* use cached */ }
-        var _onChain = W.onChainBalance || 0;
-        var _available = Math.max(0, _onChain - 0.000005); // reserve for TX fees
-        // If on-chain balance is readable, cap transfer at tier stake.
-        // If RPC failed and balance shows 0, fall back to tier stake directly —
-        // Solana validates the actual balance at send time, so the TX will fail
-        // on its own if the wallet is genuinely empty.
-        var _xferAmt = _available >= 0.000050
-          ? Math.min(_tierStake, _available)
-          : _tierStake;
-        if (_xferAmt < 0.000050) return;
-
-        // 90% → killer, 10% → creator Coinbase wallet
-        var killerLam = Math.floor(_xferAmt * (1 - HOUSE_CUT) * 1e9); // 90%
-        var houseLam  = Math.floor(_xferAmt * HOUSE_CUT * 1e9);        // 10%
-
-        var txResult = await _getConnForTx();
-        var conn = txResult.conn, bh = txResult.bh;
-
-        var fromKey   = new solanaWeb3.PublicKey(W.pubkey);
-        var killerKey = new solanaWeb3.PublicKey(killedBy);
-        var houseKey  = new solanaWeb3.PublicKey(HOUSE_WALLET_ADDRESS);
-
-        var tx = new solanaWeb3.Transaction();
-        tx.recentBlockhash      = bh.blockhash;
-        tx.lastValidBlockHeight = bh.lastValidBlockHeight;
-        tx.feePayer             = fromKey;
-        tx.add(solanaWeb3.SystemProgram.transfer({
-          fromPubkey: fromKey, toPubkey: killerKey, lamports: killerLam
-        }));
-        if (houseLam > 0) {
-          tx.add(solanaWeb3.SystemProgram.transfer({
-            fromPubkey: fromKey, toPubkey: houseKey, lamports: houseLam
-          }));
-        }
-
-        tx.sign(_localKeypair);
-        var sig = await conn.sendRawTransaction(tx.serialize(), {
-          skipPreflight: true, maxRetries: 4, preflightCommitment: 'confirmed'
-        });
-        console.log('[kill TX] killer:' + (killerLam/1e9).toFixed(4) + ' house:' + (houseLam/1e9).toFixed(4) + ' sig:' + sig.slice(0,8));
-      } catch(e) {
-        console.warn('[kill TX] failed (balance stays with killer via credit):', e.message);
-        // If TX fails, killer still gets W.balance credit from the WS die message — no double payment
-      }
-    })();
+  // ── Money drop: wager spawns at death location as a collectible orb ─────────
+  // SOL stays in the dead player's wallet until someone runs over the drop,
+  // at which point _doDropTransfer fires the actual Solana TX to the collector.
+  var _tierWager = (TIERS[activeTier] && TIERS[activeTier].sol > 0) ? TIERS[activeTier].sol : 0;
+  if (_tierWager > 0.000050 && W.pubkey && !W.pubkey.startsWith('guest_') && _localKeypair) {
+    var _dropX = player.x, _dropY = player.y;
+    // Boundary death: push the drop inward toward the world center so it's reachable
+    if (reason === 'Hit the boundary') {
+      var _wcx = WORLD/2, _wcy = WORLD/2;
+      var _wdx = _wcx-_dropX, _wdy = _wcy-_dropY, _wdd = Math.sqrt(_wdx*_wdx+_wdy*_wdy)||1;
+      _dropX += (_wdx/_wdd)*250; _dropY += (_wdy/_wdd)*250;
+    }
+    var _dropId = (_wsClientId||'x')+'_'+Date.now();
+    moneyDrops.push({id:_dropId, x:_dropX, y:_dropY, sol:_tierWager,
+      fromId:_wsClientId, fromName:player.name, fromPubkey:W.pubkey, ts:Date.now()});
+    // Broadcast so all clients show the drop
+    if(_ws&&_ws.readyState===WebSocket.OPEN){
+      try{_ws.send(JSON.stringify({type:'pos',clientId:_wsClientId,data:{
+        money_drop:{id:_dropId, x:+_dropX.toFixed(1), y:+_dropY.toFixed(1), sol:_tierWager,
+          fromId:_wsClientId, fromName:player.name, fromPubkey:W.pubkey}
+      }}));}catch(_de){}
+    }
   }
-
-  // Broadcast the killer's share — capped at tier wager, not full wallet balance.
-  var _estOnChain  = W.onChainBalance || carriedSol;
-  var _tierWager   = (TIERS[activeTier] && TIERS[activeTier].sol > 0) ? TIERS[activeTier].sol : (carriedSol || 0);
-  var _estAvail    = _estOnChain > 0.000005 ? Math.max(0, _estOnChain - 0.000005) : _tierWager;
-  var _estXfer     = Math.min(_tierWager, _estAvail); // cap at lobby stake
-  var _solForKiller = (_isValidKillerWallet && _estXfer >= 0.000050)
-    ? +(_estXfer * (1 - HOUSE_CUT)).toFixed(6) // 90% of tier wager
-    : carriedSol;
-  _wsSend('die', {n: player.name, killed_by: killedBy||null, sol: _solForKiller, ts: Date.now()});
-  // Belt-and-suspenders: send death as a v:false pos so the WS server (which definitely
-  // relays pos) delivers kill credit even if the die WS path isn't relayed or Ably is down.
+  _wsSend('die', {n: player.name, killed_by: killedBy||null, sol: 0, ts: Date.now()});
   if(_ws&&_ws.readyState===WebSocket.OPEN){
     try{_ws.send(JSON.stringify({type:'pos',clientId:_wsClientId,data:{
       x:+(player.x.toFixed(1)),y:+(player.y.toFixed(1)),a:+(player.angle.toFixed(3)),
       l:player.length,s:score,n:player.name,color:_currentColor||'#888',
-      v:false,killed_by:killedBy||null,sol:_solForKiller,ts:Date.now()
+      v:false,killed_by:killedBy||null,sol:0,ts:Date.now()
     }}));}catch(_kpe){}
   }
-  // Zero out carried balance — it transfers to the killer
+  // Zero optimistic balance — actual SOL moves only when drop is collected
   W.balance = 0; W.lamports = 0; saveSession();
   // Re-sync from chain after kill TX propagates (~15s) to show the true post-death balance.
   // The immediate zero is correct intent; this catches any edge cases where TX timing differs.
   setTimeout(function(){ if(W.pubkey) _fetchPrivyWalletBalance(W.pubkey); }, 5000);
   if(_elSidebar) _elSidebar.style.display=''; setTimeout(resizeC,30);
   for(var i=0;i<Math.min(player.segs.length,70);i++) addFood(player.segs[i].x+(Math.random()-.5)*18,player.segs[i].y+(Math.random()-.5)*18);
-  // Border death: scatter gold coins at the exact death spot to show where the money dropped
-  if(reason==='Hit the boundary'){
-    var _gdx=player.x, _gdy=player.y;
-    var _goldCount=Math.max(20, Math.min(Math.round(carriedSol*SOL_USD*4+20), 50));
-    for(var _gi=0;_gi<_goldCount;_gi++){
-      if(food.length<MAX_FOOD) food.push({
-        x:_gdx+(Math.random()-.5)*120, y:_gdy+(Math.random()-.5)*120,
-        r:5+Math.random()*3, color:'#FFD700', value:4
-      });
-    }
-  }
   player.segs = []; // wipe body immediately — prevents ghost rendering on any trailing draw call
   cleanupL(true); cancelCharge(); // keepAbly=true so spectating can still receive pos updates
   var t=TIERS[activeTier];
@@ -5007,6 +5020,39 @@ function draw(){
     ctx.fill();
   }
   ctx.shadowBlur=0;
+
+  // ── Money drops — glowing dollar coin at each death site ─────────────────
+  if(moneyDrops.length){
+    var _mNow=Date.now();
+    var _mPulse=0.65+0.35*Math.sin(_mNow/280);
+    var _mZ=CAM_ZOOM||1;
+    for(var _mi=moneyDrops.length-1;_mi>=0;_mi--){
+      var _mdr=moneyDrops[_mi];
+      if(_mdr.x<vx1-80||_mdr.x>vx2+80||_mdr.y<vy1-80||_mdr.y>vy2+80) continue;
+      var _mAge=(_mNow-_mdr.ts)/1000;
+      if(_mAge>45){ moneyDrops.splice(_mi,1); continue; }
+      var _mFade=_mAge>35?Math.max(0,1-(_mAge-35)/10):1;
+      var _mR=(30+6*_mPulse)/_mZ;
+      ctx.globalAlpha=_mFade;
+      // Outer glow ring
+      ctx.shadowColor='#14F195'; ctx.shadowBlur=28*_mPulse;
+      ctx.beginPath(); ctx.arc(_mdr.x,_mdr.y,_mR+5/_mZ,0,Math.PI*2);
+      ctx.strokeStyle='#14F195'; ctx.lineWidth=3/_mZ; ctx.stroke();
+      // Filled coin
+      ctx.beginPath(); ctx.arc(_mdr.x,_mdr.y,_mR,0,Math.PI*2);
+      var _mG=ctx.createRadialGradient(_mdr.x,_mdr.y,0,_mdr.x,_mdr.y,_mR);
+      _mG.addColorStop(0,'#1dffaa'); _mG.addColorStop(1,'#0b7a4e');
+      ctx.fillStyle=_mG; ctx.shadowBlur=0; ctx.fill();
+      // Dollar label
+      ctx.fillStyle='#001a0d';
+      ctx.font='bold '+Math.round(16/_mZ)+'px Orbitron,monospace';
+      ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText('$'+Math.round(_mdr.sol*SOL_USD),_mdr.x,_mdr.y);
+      ctx.globalAlpha=1;
+    }
+    ctx.textAlign='left'; ctx.textBaseline='alphabetic'; ctx.shadowBlur=0;
+  }
+
   for(var i=parts.length-1;i>=0;i--){ var p=parts[i]; p.x+=p.vx; p.y+=p.vy; p.life--; if(p.life<=0){ parts[i]=parts[parts.length-1]; parts.length--; continue; } ctx.globalAlpha=p.life/p.max; ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fillStyle=p.color; ctx.fill(); }
   ctx.globalAlpha=1;
   // Draw snakes — viewport-cull remote snakes (head off-screen + no long tail visible)
