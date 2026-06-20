@@ -1185,7 +1185,7 @@ canvas{display:block;width:100%;height:100%;}
 // ════════════════ CONFIG ════════════════
 // ── Build stamp — bump this string on every deploy ───────────────────────────
 // Shown live on the lobby screen. Check via DevTools → Console: GAME_BUILD
-var GAME_BUILD = 'V116';
+var GAME_BUILD = 'V117';
 
 var PRIVY_APP_ID          = 'client-WY6aEf1eS4reRDrBq7ghh8arEiMaKSj1Vk37ZG8CAawEF';
 var HOUSE_WALLET_ADDRESS  = '2QnrdhxXYt8ythhGYHDz6MtTZE1z2bYvbss8z3ZGj2uJ';
@@ -4216,7 +4216,7 @@ function launchGame() {
   var _ffp=document.getElementById('friendsPanel'); if(_ffp) _ffp.classList.remove('open'); panelOpen=false;
   _showMobileControls(true);
   _initJoystick(); // no-op after first call (guarded by _joyInited)
-  gc.addEventListener('mousemove',onMouse);
+  window.addEventListener('mousemove',onMouse);
   gc.addEventListener('touchmove',onTouch,{passive:false});
   window.addEventListener('keydown',onKD); window.addEventListener('keyup',onKU);
   // Boost — remove first to prevent stacking on rejoin, then re-add.
@@ -4835,14 +4835,13 @@ function killCheck(){
     var headGap=dst(player.x,player.y,px,py);
 
     // Head-on: both head circles overlap.
-    // Boosting player wins; equal boost state → deterministic tiebreaker (never both die).
+    // DamnBruhh-style: boosting player always survives; hash resolves ties.
+    // CRITICAL: never use peer's boost state to trigger a kill — stale packets from both
+    // sides stopping boost simultaneously cause both clients to call killPlayer (both-die bug).
+    // Using ONLY local `boosting` + deterministic hash guarantees exactly one client dies.
     if(headGap<myR+pR){
-      var _myBoost=boosting;
-      var _pBoost=!!p.boosting; // exact boost state from their last pos broadcast
-      if(_myBoost&&!_pBoost){ continue; }                                              // I'm boosting — I win
-      if(!_myBoost&&_pBoost){ killPlayer('Eliminated by '+p.name,p.remoteId||null); return; } // peer boosting — I lose
-      // Both or neither boosting: seeded-hash tiebreaker — feels random per player pair,
-      // same result on both clients so exactly one always dies, never both.
+      if(boosting){ continue; } // I'm boosting (local state, always reliable) → I survive
+      // Not boosting: hash picks loser — same result on both clients, always complementary.
       var _h=_hoHash(myId,pid); // 0=smaller-ID dies, 1=larger-ID dies
       if((_h===0)===(myId<pid)){ killPlayer('Eliminated by '+p.name,p.remoteId||null); return; }
       continue;
@@ -5425,7 +5424,7 @@ function updateLB(){
 
 function updatePing(){ /* real RTT shown by _wsPingLoop → _wsHandleMsg; this stub kept for cleanupL clearInterval ref */ }
 function cleanupL(keepAbly){
-  gc.removeEventListener('mousemove',onMouse);
+  window.removeEventListener('mousemove',onMouse);
   gc.removeEventListener('touchmove',onTouch);
   window.removeEventListener('keydown',onKD);
   window.removeEventListener('keyup',onKU);
