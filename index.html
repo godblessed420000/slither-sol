@@ -1185,7 +1185,7 @@ canvas{display:block;width:100%;height:100%;}
 // ════════════════ CONFIG ════════════════
 // ── Build stamp — bump this string on every deploy ───────────────────────────
 // Shown live on the lobby screen. Check via DevTools → Console: GAME_BUILD
-var GAME_BUILD = 'V113';
+var GAME_BUILD = 'V114';
 
 var PRIVY_APP_ID          = 'client-WY6aEf1eS4reRDrBq7ghh8arEiMaKSj1Vk37ZG8CAawEF';
 var HOUSE_WALLET_ADDRESS  = '2QnrdhxXYt8ythhGYHDz6MtTZE1z2bYvbss8z3ZGj2uJ';
@@ -4825,31 +4825,20 @@ function killCheck(){
     var pR=p.headR||12;
     var headGap=dst(player.x,player.y,px,py);
 
-    // Head-on: both head circles overlap
-    // The snake facing the other MORE DIRECTLY is the "attacker" and dies.
-    // Tie (within 0.08 dot-product): deterministic ID tiebreaker.
+    // Head-on: both head circles overlap.
+    // Boosting player wins; equal boost state → deterministic tiebreaker (never both die).
     if(headGap<myR+pR){
-      var _nx=(headGap>0.01)?(px-player.x)/headGap:0;
-      var _ny=(headGap>0.01)?(py-player.y)/headGap:-1;
-      // How directly am I heading toward them (1=perfect attack, -1=away)
-      var _myDot   = Math.cos(player.angle)*_nx + Math.sin(player.angle)*_ny;
-      // How directly are they heading toward me
-      var _theirDot= -(Math.cos(p.angle||0)*_nx + Math.sin(p.angle||0)*_ny);
-      if(_myDot > _theirDot + 0.08){
-        // I'm facing them more directly — I attacked, I die
-        killPlayer('Head-on with '+p.name, p.remoteId||null); return;
-      } else if(_theirDot > _myDot + 0.08){
-        // They face me more directly — they attacked, their client kills them
-        continue;
-      } else {
-        // Near-tie: deterministic ID tiebreaker
-        var _hIds=[myId,pid].concat(peers.filter(function(q){return q.alive&&q.remoteId&&q.remoteId!==pid;}).map(function(q){return q.remoteId;}));
-        _hIds=_hIds.filter(function(id,k,a){return id&&a.indexOf(id)===k;}).sort();
-        var _hMed=Math.floor(_hIds.length/2);
-        var _myD=Math.abs(_hIds.indexOf(myId)-_hMed);
-        var _pD =Math.abs(_hIds.indexOf(pid) -_hMed);
-        if(_myD>_pD){ killPlayer('Eliminated by '+p.name,p.remoteId||null); return; }
-      }
+      var _myBoost=boosting;
+      var _pBoost=(p.th&&p.th.length>=2&&dst(p.th[0].x,p.th[0].y,p.th[1].x,p.th[1].y)>BASE_SPEED*1.5);
+      if(_myBoost&&!_pBoost){ continue; }                                              // I'm boosting — I win
+      if(!_myBoost&&_pBoost){ killPlayer('Eliminated by '+p.name,p.remoteId||null); return; } // peer boosting — I lose
+      // Both or neither boosting: deterministic ID tiebreaker — exactly one dies, never both
+      var _hIds=[myId,pid].concat(peers.filter(function(q){return q.alive&&q.remoteId&&q.remoteId!==pid;}).map(function(q){return q.remoteId;}));
+      _hIds=_hIds.filter(function(id,k,a){return id&&a.indexOf(id)===k;}).sort();
+      var _hMed=Math.floor(_hIds.length/2);
+      var _myD=Math.abs(_hIds.indexOf(myId)-_hMed);
+      var _pD =Math.abs(_hIds.indexOf(pid)-_hMed);
+      if(_myD>_pD||(_myD===_pD&&myId>pid)){ killPlayer('Eliminated by '+p.name,p.remoteId||null); return; }
       continue;
     }
 
