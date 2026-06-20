@@ -1185,7 +1185,7 @@ canvas{display:block;width:100%;height:100%;}
 // ════════════════ CONFIG ════════════════
 // ── Build stamp — bump this string on every deploy ───────────────────────────
 // Shown live on the lobby screen. Check via DevTools → Console: GAME_BUILD
-var GAME_BUILD = 'V110';
+var GAME_BUILD = 'V111';
 
 var PRIVY_APP_ID          = 'client-WY6aEf1eS4reRDrBq7ghh8arEiMaKSj1Vk37ZG8CAawEF';
 var HOUSE_WALLET_ADDRESS  = '2QnrdhxXYt8ythhGYHDz6MtTZE1z2bYvbss8z3ZGj2uJ';
@@ -4814,15 +4814,16 @@ function killCheck(){
   var myId=_wsClientId||'zzz';
   var _now=Date.now();
   if(_now-(player.spawnTs||0)<1500) return;
-  // headR is in world units — use directly
-  var myR=player.headR||12;
+  // Divide by CAM_ZOOM: visual snakes render at fixed screen-px sizes; /zoom converts to world units
+  var _cz=CAM_ZOOM||1;
+  var myR=(player.headR||12)/_cz;
 
   for(var i=0;i<peers.length;i++){
     var p=peers[i]; if(!p.alive) continue;
     if(_now-(p.joinTs||0)<1500) continue;
     var pid=p.remoteId||'';
     var px=(p.targetX!=null)?p.targetX:p.x, py=(p.targetY!=null)?p.targetY:p.y;
-    var pR=p.headR||12;
+    var pR=(p.headR||12)/_cz;
     var headGap=dst(player.x,player.y,px,py);
 
     // Head-on: both head circles overlap → medium client-ID wins
@@ -4857,7 +4858,7 @@ function killCheck(){
     var rpid=rp2.remoteId||'';
     if(_sentKillTs[rpid]&&_now-_sentKillTs[rpid]<2000) continue;
     var rpx=(rp2.targetX!=null)?rp2.targetX:rp2.x, rpy=(rp2.targetY!=null)?rp2.targetY:rp2.y;
-    var rpR=rp2.headR||12;
+    var rpR=(rp2.headR||12)/_cz;
     if(dst(player.x,player.y,rpx,rpy)<myR+rpR) continue; // head-on handled above
     var _rBodyR=rpR+myR*0.85, _rAccWu=0;
     for(var rk=1;rk<player.segs.length-1;rk++){
@@ -5158,7 +5159,7 @@ function draw(){
   if(_debugHitboxes && player && player.alive){
     ctx.save();
     var _dNow=Date.now(), _dZ=CAM_ZOOM||1;
-    var _myR=player.headR||12; // world units — matches killCheck exactly
+    var _myR=(player.headR||12)/_dZ; // zoom-corrected world units — matches killCheck
 
     // My body kill zone (tube — radius = what peer's head must enter to die)
     var _mSegs=player.segs;
@@ -5166,7 +5167,7 @@ function draw(){
     var _mLim=_mSegs.length;
     if(_mLim>2 && _mSegs[1]){
       ctx.globalAlpha=0.22; ctx.strokeStyle='#14F195';
-      ctx.lineWidth=_myR*1.7; ctx.lineJoin='round'; ctx.lineCap='round';
+      ctx.lineWidth=_myR*1.9; ctx.lineJoin='round'; ctx.lineCap='round';
       ctx.beginPath(); ctx.moveTo(_mSegs[1].x,_mSegs[1].y);
       for(var _mi=2;_mi<_mLim;_mi++){
         var _ms=_mSegs[_mi], _msp=_mSegs[_mi-1]; if(!_ms||!_msp) break;
@@ -5191,7 +5192,7 @@ function draw(){
     for(var _dpi=0;_dpi<peers.length;_dpi++){
       var _dp=peers[_dpi]; if(!_dp.alive) continue;
       var _dpx=(_dp.targetX!=null)?_dp.targetX:_dp.x, _dpy=(_dp.targetY!=null)?_dp.targetY:_dp.y;
-      var _dpR=_dp.headR||12; // world units — matches killCheck exactly
+      var _dpR=(_dp.headR||12)/_dZ; // zoom-corrected world units — matches killCheck
       var _prot=_dNow-(_dp.joinTs||0)<1500;
       var _pc=_prot?'#FFD700':'#FF4040';
       var _bR=_myR+_dpR*0.85; // body collision radius (my head must be within this of their segment)
@@ -5201,7 +5202,7 @@ function draw(){
       var _dpMaxWu=Math.min((_dp.length||10)*16,480), _dpAccWu=0;
       if(_dps.length>2 && _dps[1]){
         ctx.globalAlpha=0.22; ctx.strokeStyle=_pc;
-        ctx.lineWidth=_bR*2; ctx.lineJoin='round'; ctx.lineCap='round';
+        ctx.lineWidth=_dpR*1.9; ctx.lineJoin='round'; ctx.lineCap='round';
         ctx.beginPath(); ctx.moveTo(_dps[1].x,_dps[1].y);
         for(var _dj=2;_dj<_dps.length;_dj++){
           var _dps2=_dps[_dj], _dps1=_dps[_dj-1]; if(!_dps2||!_dps1) break;
