@@ -1185,7 +1185,7 @@ canvas{display:block;width:100%;height:100%;}
 // ════════════════ CONFIG ════════════════
 // ── Build stamp — bump this string on every deploy ───────────────────────────
 // Shown live on the lobby screen. Check via DevTools → Console: GAME_BUILD
-var GAME_BUILD = 'V112';
+var GAME_BUILD = 'V113';
 
 var PRIVY_APP_ID          = 'client-WY6aEf1eS4reRDrBq7ghh8arEiMaKSj1Vk37ZG8CAawEF';
 var HOUSE_WALLET_ADDRESS  = '2QnrdhxXYt8ythhGYHDz6MtTZE1z2bYvbss8z3ZGj2uJ';
@@ -4825,14 +4825,31 @@ function killCheck(){
     var pR=p.headR||12;
     var headGap=dst(player.x,player.y,px,py);
 
-    // Head-on: both head circles overlap → medium client-ID wins
+    // Head-on: both head circles overlap
+    // The snake facing the other MORE DIRECTLY is the "attacker" and dies.
+    // Tie (within 0.08 dot-product): deterministic ID tiebreaker.
     if(headGap<myR+pR){
-      var _hIds=[myId,pid].concat(peers.filter(function(q){return q.alive&&q.remoteId&&q.remoteId!==pid;}).map(function(q){return q.remoteId;}));
-      _hIds=_hIds.filter(function(id,k,a){return id&&a.indexOf(id)===k;}).sort();
-      var _hMed=Math.floor(_hIds.length/2);
-      var _myD=Math.abs(_hIds.indexOf(myId)-_hMed);
-      var _pD =Math.abs(_hIds.indexOf(pid) -_hMed);
-      if(_myD>_pD){ killPlayer('Eliminated by '+p.name,p.remoteId||null); return; }
+      var _nx=(headGap>0.01)?(px-player.x)/headGap:0;
+      var _ny=(headGap>0.01)?(py-player.y)/headGap:-1;
+      // How directly am I heading toward them (1=perfect attack, -1=away)
+      var _myDot   = Math.cos(player.angle)*_nx + Math.sin(player.angle)*_ny;
+      // How directly are they heading toward me
+      var _theirDot= -(Math.cos(p.angle||0)*_nx + Math.sin(p.angle||0)*_ny);
+      if(_myDot > _theirDot + 0.08){
+        // I'm facing them more directly — I attacked, I die
+        killPlayer('Head-on with '+p.name, p.remoteId||null); return;
+      } else if(_theirDot > _myDot + 0.08){
+        // They face me more directly — they attacked, their client kills them
+        continue;
+      } else {
+        // Near-tie: deterministic ID tiebreaker
+        var _hIds=[myId,pid].concat(peers.filter(function(q){return q.alive&&q.remoteId&&q.remoteId!==pid;}).map(function(q){return q.remoteId;}));
+        _hIds=_hIds.filter(function(id,k,a){return id&&a.indexOf(id)===k;}).sort();
+        var _hMed=Math.floor(_hIds.length/2);
+        var _myD=Math.abs(_hIds.indexOf(myId)-_hMed);
+        var _pD =Math.abs(_hIds.indexOf(pid) -_hMed);
+        if(_myD>_pD){ killPlayer('Eliminated by '+p.name,p.remoteId||null); return; }
+      }
       continue;
     }
 
