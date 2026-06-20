@@ -4830,9 +4830,12 @@ function killCheck(){
     var _segs=(p.th&&p.th.length>3)?p.th:p.segs;
     var _lim=Math.min(_segs.length, Math.max((p.length||10)*SEG_MULT, 120));
     var _bodyR=myR+pR*0.85;
-    for(var j=1;j<_lim;j++){
+    for(var j=2;j<_lim;j++){
+      // j=0 is their head (covered by headGap check), j=1 is immediate neck — skip both.
+      // Do NOT skip by position: circling snakes bring far body segments back near
+      // the head's spatial position, and a position-based skip would let attackers
+      // pass through the coil silently.
       var seg=_segs[j]; if(!seg) break;
-      if(dst(px,py,seg.x,seg.y)<pR) continue; // inside their head circle — skip
       if(dst(player.x,player.y,seg.x,seg.y)<_bodyR){
         killPlayer('Eliminated by '+p.name,p.remoteId||null); return;
       }
