@@ -1185,7 +1185,7 @@ canvas{display:block;width:100%;height:100%;}
 // ════════════════ CONFIG ════════════════
 // ── Build stamp — bump this string on every deploy ───────────────────────────
 // Shown live on the lobby screen. Check via DevTools → Console: GAME_BUILD
-var GAME_BUILD = 'V115';
+var GAME_BUILD = 'V116';
 
 var PRIVY_APP_ID          = 'client-WY6aEf1eS4reRDrBq7ghh8arEiMaKSj1Vk37ZG8CAawEF';
 var HOUSE_WALLET_ADDRESS  = '2QnrdhxXYt8ythhGYHDz6MtTZE1z2bYvbss8z3ZGj2uJ';
@@ -3429,6 +3429,7 @@ function _wsHandleMsg(msg, fromAbly) {
         return;
       }
       if (d.l) { rp.length = d.l; rp.headR = Math.max(8, Math.min(28, 8 + rp.length * SEG_MULT * 0.08)); }
+      rp.boosting = !!d.b;
     }
     return;
   }
@@ -3533,7 +3534,7 @@ function _wsJoin(tier) {
 
 // ── Position broadcast (50fps — feasible over direct WebSocket, not Ably) ───
 // Pre-allocated payload — avoids creating a new object literal every 20ms (GC pressure)
-var _posMsg = { type:'pos', clientId:'', data:{x:0,y:0,a:0,l:0,s:0,n:'',color:'',v:true} };
+var _posMsg = { type:'pos', clientId:'', data:{x:0,y:0,a:0,l:0,s:0,b:0,n:'',color:'',v:true} };
 var _posSeq  = 0; // frame counter — name+color only sent every 5th update
 function _startPub() {
   clearInterval(_pubTimer); _pubTimer = null;
@@ -4581,6 +4582,7 @@ function loop(){
       _pd.a = +player.angle.toFixed(3);
       _pd.l = player.length;
       _pd.s = score;
+      _pd.b = boosting ? 1 : 0;
       _pd.n     = (_posSeq % 5 === 1) ? player.name  : undefined;
       _pd.color = (_posSeq % 5 === 1) ? player.color : undefined;
       _ws.send(JSON.stringify(_posMsg));
@@ -4836,7 +4838,7 @@ function killCheck(){
     // Boosting player wins; equal boost state → deterministic tiebreaker (never both die).
     if(headGap<myR+pR){
       var _myBoost=boosting;
-      var _pBoost=(p.th&&p.th.length>=2&&dst(p.th[0].x,p.th[0].y,p.th[1].x,p.th[1].y)>BASE_SPEED*1.5);
+      var _pBoost=!!p.boosting; // exact boost state from their last pos broadcast
       if(_myBoost&&!_pBoost){ continue; }                                              // I'm boosting — I win
       if(!_myBoost&&_pBoost){ killPlayer('Eliminated by '+p.name,p.remoteId||null); return; } // peer boosting — I lose
       // Both or neither boosting: seeded-hash tiebreaker — feels random per player pair,
