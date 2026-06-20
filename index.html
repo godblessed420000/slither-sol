@@ -4747,104 +4747,10 @@ function eatFood(){
   for(var ei=0;ei<eaten.length;ei++) food.splice(eaten[ei],1);
 }
 
-// Hitbox helpers — the deadly region must EXACTLY match the drawn snake.
-// The renderer (drawS) draws a fixed SCREEN-pixel body: head radius R px and
-// body length MAXLEN px, both → world units by dividing by CAM_ZOOM. We mirror
-// that here so collision == what the player actually sees (DamnBruh-style:
-// head circle vs body circles, no invisible deadly tail beyond the drawing).
-function _hbHead(s){ var R=Math.max(9,Math.min(30, 9+(s.length||10)*SEG_MULT*0.075)); return R/(CAM_ZOOM||1); } // world head radius
-function _hbVisLen(s){ var logical=Math.min((s.length||10)*SEG_MULT,120); return Math.max(60, logical*4)/(CAM_ZOOM||1); } // world body length drawn
-// Number of segments that fall within the drawn body length (walk world distance from the head).
-function _hbSegLimit(s, wlen){
-  if(s.segs.length<2) return s.segs.length;
-  var acc=0;
-  for(var j=1;j<s.segs.length;j++){
-    var a=s.segs[j-1], b=s.segs[j], dx=a.x-b.x, dy=a.y-b.y;
-    acc+=Math.sqrt(dx*dx+dy*dy);
-    if(acc>=wlen) return j+1;
-  }
-  return s.segs.length;
-}
 function killCheck(){
   if(!player.alive) return;
-  var myId=_wsClientId||'zzz';
   var _now=Date.now();
   if(_now-(player.spawnTs||0)<3000) return;
-  var myHead=_hbHead(player);
-
-  // Referee kills the non-referee: mark dead locally + relay kill_target message.
-  // Local mark prevents the non-ref from continuing to render/move on our screen.
-  function _sendKillTarget(p){
-    var _k=_remoteMap[p.remoteId];
-    if(_k&&_k.alive){
-      var _sh=_k.segs.slice(0,80);
-      _k.alive=false; _k.segs=[]; if(_k.th) _k.th=[];
-      _processedDies[p.remoteId]=true;
-      if(gameRunning) for(var _si=0;_si<_sh.length;_si++)
-        addFood(_sh[_si].x+(Math.random()-.5)*14,_sh[_si].y+(Math.random()-.5)*14);
-    }
-    if(_ws&&_ws.readyState===WebSocket.OPEN){
-      try{_ws.send(JSON.stringify({type:'pos',clientId:_wsClientId,data:{
-        x:player.x,y:player.y,a:player.angle,l:player.length||10,v:true,
-        kill_target:p.remoteId,killer:_wsClientId
-      }}));}catch(_e){}
-    }
-  }
-
-  for(var i=0;i<peers.length;i++){
-    var p=peers[i]; if(!p.alive) continue;
-    if(_now-(p.joinTs||0)<3000) continue;
-    var pHead=_hbHead(p);
-    var pid=p.remoteId||'';
-    var px=(p.targetX!=null)?p.targetX:p.x, py=(p.targetY!=null)?p.targetY:p.y;
-    var headGap=dst(player.x,player.y,px,py);
-    var _bodyR=myHead+pHead*0.95;
-
-    // ── Head-on: my center inside their head circle — lower ID wins ──
-    if(headGap<pHead){
-      if(myId>pid){ killPlayer('Eliminated by '+p.name,p.remoteId||null); return; }
-      continue;
-    }
-
-    // ── Did MY head enter THEIR body? (use target history — actual broadcast positions) ──
-    var _bsegs=(p.th&&p.th.length>3)?p.th:p.segs;
-    var _blim=_hbSegLimit({segs:_bsegs,length:p.length},_hbVisLen(p));
-    var myHitThem=false;
-    for(var j=1;j<_blim;j++){
-      var seg=_bsegs[j]; if(!seg) break;
-      if(dst(px,py,seg.x,seg.y)<pHead) continue; // inside their head circle — skip
-      if(dst(player.x,player.y,seg.x,seg.y)<_bodyR){ myHitThem=true; break; }
-    }
-
-    if(myId<pid){
-      // ── REFEREE (lower ID) — sole authority for this pair ──
-      // Also check: did THEIR head enter MY body? Use their target pos vs my exact segments.
-      var theirHitMe=false;
-      var myBlim=_hbSegLimit(player,_hbVisLen(player));
-      var pBodyR=pHead+myHead*0.95;
-      for(var k=1;k<myBlim;k++){
-        var ms=player.segs[k]; if(!ms) break;
-        if(dst(player.x,player.y,ms.x,ms.y)<myHead) continue; // inside my head circle — skip
-        if(dst(px,py,ms.x,ms.y)<pBodyR){ theirHitMe=true; break; }
-      }
-      // Referee is sole decision-maker — only one outcome possible per frame, no double deaths.
-      if(theirHitMe){
-        // They rammed me (or mutual crossing) → I win, they die.
-        _sendKillTarget(p); continue;
-      }
-      if(myHitThem){
-        // I rammed them → I die.
-        killPlayer('Eliminated by '+p.name,p.remoteId||null); return;
-      }
-    } else {
-      // ── NON-REFEREE (higher ID) — fallback self-kill on clear, unambiguous body hits only ──
-      // Near-head zone (headGap < myHead+pHead) defers entirely to the referee's kill_target.
-      // This prevents the non-ref from dying when the referee already decided the outcome.
-      if(myHitThem && headGap>=myHead+pHead){
-        killPlayer('Eliminated by '+p.name,p.remoteId||null); return;
-      }
-    }
-  }
   var pdx=player.x-WORLD/2, pdy=player.y-WORLD/2;
   if(Math.sqrt(pdx*pdx+pdy*pdy)>WORLD_R-10) killPlayer('Hit the boundary',null);
 }
