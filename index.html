@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!DOCTYPE html><!-- BUILD:v420SNAKE -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -136,41 +136,73 @@ canvas{display:block;width:100%;height:100%;}
 .overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(2,8,16,.92);backdrop-filter:blur(5px);z-index:20;gap:14px;padding:16px;overflow-y:auto;}
 .overlay.hidden{display:none;}
 /* ── Animated live-wallpaper background for the login / main menu ── */
-/* Semi-transparent menu overlays so the shared snake background shows through */
-#ovLogin,#ovStart,#ovLobby{background:rgba(2,8,16,.46)!important;backdrop-filter:blur(2px);}
-/* Login: push the account box to the left so the snake shows on the right */
+/* Overlays are semi-transparent so the snake image punches through */
+#ovLogin,#ovStart,#ovLobby{background:rgba(2,4,12,.38)!important;backdrop-filter:blur(1.5px);}
 #ovLogin{align-items:flex-start;padding-left:max(24px,7%);}
 @media(max-width:560px){#ovLogin{align-items:center;padding-left:16px;}}
-/* Shared background sits inside #canvasWrap, above the game canvas but below the overlays (z-index 20) */
 #menuBgFx{position:absolute;inset:0;z-index:15;overflow:hidden;pointer-events:none;}
-/* Image layer — slow Ken-Burns push (zoom + drift), looping. Gradient fallback shows if the image is missing. */
+
+/* ── Image layer ─────────────────────────────────────────────────────────────
+   Gradient fallback when menu-bg.webp is missing.
+   Color palette matches the neon snake reference:
+     purple #9945FF · magenta #FF14C8 · electric-blue #00C2FF · deep-violet #6B0AC9 */
 #menuBgImg{position:absolute;inset:0;background-color:#06040c;background:
-   radial-gradient(120% 90% at 50% 18%, rgba(153,69,215,.35), transparent 55%),
-   radial-gradient(120% 80% at 50% 100%, rgba(20,241,149,.18), transparent 60%),
-   linear-gradient(180deg,#0a0612 0%,#150a26 45%,#1a0a2e 70%,#06040c 100%);
+   radial-gradient(130% 90% at 50% 20%, rgba(153,69,255,.45), transparent 55%),
+   radial-gradient(100% 70% at 20% 80%, rgba(255,20,200,.30), transparent 60%),
+   radial-gradient(100% 70% at 80% 70%, rgba(0,194,255,.28), transparent 60%),
+   linear-gradient(180deg,#08041a 0%,#1a0535 45%,#21063e 70%,#06040c 100%);
    background-size:cover;background-position:center;
    animation:menuKenBurns 26s ease-in-out infinite alternate;will-change:transform;}
-/* Fit the WHOLE image (no crop). Dark letterbox fills the sides on wide screens. */
-#menuBgImg.hasimg{background-color:#06040c;background-image:var(--menu-bg-url);
-   background-size:contain;background-repeat:no-repeat;background-position:center center;}
-@keyframes menuKenBurns{
-  0%{transform:scale(1.12) translateY(0);}
-  100%{transform:scale(1.17) translateY(-1.4%);}
+
+/* When photo is loaded: full-bleed cover + neon color-grade gradient stacked on top */
+#menuBgImg.hasimg{
+   background-color:#06040c;
+   background-image:
+     linear-gradient(180deg,rgba(4,2,20,.18) 0%,transparent 30%,transparent 70%,rgba(4,2,20,.35) 100%),
+     var(--menu-bg-url);
+   background-size:cover;
+   background-repeat:no-repeat;
+   background-position:center center;
+   filter:brightness(0.92) contrast(1.10) saturate(1.20);
 }
-/* Drifting fog — two soft layers sliding in opposite directions */
-#menuBgFog{position:absolute;inset:-20%;pointer-events:none;mix-blend-mode:screen;opacity:.5;
+@keyframes menuKenBurns{
+  0%{transform:scale(1.10) translateY(0) translateX(0);}
+  50%{transform:scale(1.16) translateY(-1%) translateX(0.8%);}
+  100%{transform:scale(1.13) translateY(-2%) translateX(-0.5%);}
+}
+
+/* ── Neon fog — three drifting radial blobs matching image 2 palette ─────── */
+#menuBgFog{position:absolute;inset:-20%;pointer-events:none;mix-blend-mode:screen;opacity:.72;
   background:
-   radial-gradient(40% 30% at 25% 40%, rgba(120,90,200,.25), transparent 70%),
-   radial-gradient(45% 32% at 75% 55%, rgba(40,180,160,.18), transparent 70%);
-  filter:blur(14px);animation:menuFog 26s ease-in-out infinite alternate;}
-@keyframes menuFog{0%{transform:translateX(-4%) translateY(0);}100%{transform:translateX(4%) translateY(-3%);}}
-/* Neon vignette + slow hue pulse */
+   radial-gradient(50% 42% at 50% 48%, rgba(153,69,255,.52), transparent 68%),
+   radial-gradient(42% 36% at 18% 62%, rgba(255,20,200,.44), transparent 66%),
+   radial-gradient(42% 32% at 82% 38%, rgba(0,194,255,.38), transparent 65%),
+   radial-gradient(30% 24% at 50% 92%, rgba(200,41,255,.32), transparent 70%);
+  filter:blur(18px);animation:menuFog 22s ease-in-out infinite alternate;}
+@keyframes menuFog{
+  0%{transform:translateX(-5%) translateY(0) scale(1);}
+  100%{transform:translateX(5%) translateY(-4%) scale(1.06);}
+}
+
+/* ── Vignette with a slow neon hue pulse ───────────────────────────────────── */
 #menuBgVignette{position:absolute;inset:0;pointer-events:none;
-  background:radial-gradient(120% 100% at 50% 38%, transparent 40%, rgba(2,4,12,.55) 78%, rgba(2,4,12,.9) 100%);
-  animation:menuNeonPulse 6.5s ease-in-out infinite;}
-@keyframes menuNeonPulse{0%,100%{opacity:.85;}50%{opacity:1;}}
+  background:radial-gradient(115% 100% at 50% 38%, transparent 35%, rgba(4,1,14,.52) 72%, rgba(4,1,14,.93) 100%);
+  animation:menuNeonPulse 7s ease-in-out infinite;}
+@keyframes menuNeonPulse{
+  0%,100%{opacity:.80;filter:hue-rotate(0deg);}
+  33%{opacity:1;filter:hue-rotate(18deg);}
+  66%{opacity:.90;filter:hue-rotate(-14deg);}
+}
+
+/* ── A second chromatic aberration / color-split overlay for depth ─────────── */
+#menuBgColorSplit{position:absolute;inset:0;pointer-events:none;
+  background:
+    linear-gradient(90deg, rgba(153,69,255,.12) 0%, transparent 40%, rgba(255,20,200,.10) 60%, rgba(0,194,255,.12) 100%);
+  mix-blend-mode:screen;animation:menuColorSplit 8s ease-in-out infinite alternate;}
+@keyframes menuColorSplit{0%{opacity:.6;}100%{opacity:1;}}
+
 #menuBgEmber{position:absolute;inset:0;pointer-events:none;}
-@media(prefers-reduced-motion:reduce){#menuBgImg,#menuBgFog,#menuBgVignette{animation:none;}}
+@media(prefers-reduced-motion:reduce){#menuBgImg,#menuBgFog,#menuBgVignette,#menuBgColorSplit{animation:none;}}
 .ov-title{font-family:'Orbitron',monospace;font-size:1.9rem;font-weight:900;background:linear-gradient(90deg,var(--purple),var(--green));-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
 .ov-sub{color:var(--dim);font-size:.75rem;text-align:center;max-width:500px;line-height:1.6;}
 
@@ -867,6 +899,7 @@ canvas{display:block;width:100%;height:100%;}
     <div id="menuBgFx" aria-hidden="true" style="display:none;">
       <div id="menuBgImg"></div>
       <div id="menuBgFog"></div>
+      <div id="menuBgColorSplit"></div>
       <canvas id="menuBgEmber"></canvas>
       <div id="menuBgVignette"></div>
     </div>
@@ -1154,7 +1187,7 @@ canvas{display:block;width:100%;height:100%;}
 <div class="modal-back hidden" id="modalWith">
   <div class="modal">
     <div class="modal-title">&#8681; Withdraw Solana</div>
-    <div class="modal-note">Withdraw to your connected wallet. 10% fee applies.</div>
+    <div class="modal-note">Withdraw SOL to any Solana wallet. <strong>No fee</strong> — 100% goes to the address you enter. A destination address is required.</div>
     <div style="background:rgba(20,241,149,.06);border:1px solid rgba(20,241,149,.18);border-radius:6px;padding:10px 12px;">
       <div style="font-size:.58rem;color:var(--dim)">Available Balance</div>
       <div style="font-family:'Orbitron',monospace;font-size:1.1rem;color:var(--green)" id="withBal">0.00 SOL</div>
@@ -1166,10 +1199,10 @@ canvas{display:block;width:100%;height:100%;}
       <div style="font-size:.58rem;color:rgba(20,241,149,.5);margin-top:3px;">Enter any Solana wallet to send SOL to another player or wallet</div>
     </div>
     <div class="mft">
-      <div class="mfr"><span class="mfl">Total fee</span><span>10%</span></div>
+      <div class="mfr"><span class="mfl">Total fee</span><span style="color:var(--green)">0%</span></div>
       <hr class="mfd">
-      <div class="mfr"><span class="mfl">Creator fee (10%)</span><span style="color:var(--gold)">10%</span></div>
-      <div class="mfr"><span class="mfl">You receive</span><span style="color:var(--green)">90%</span></div>
+      <div class="mfr"><span class="mfl">Creator fee</span><span>None</span></div>
+      <div class="mfr"><span class="mfl">You receive</span><span style="color:var(--green)">100%</span></div>
     </div>
     <div class="modal-btns">
       <button class="btn-cancel" onclick="closeModal('modalWith')">Cancel</button>
@@ -1665,10 +1698,10 @@ function _fetchPrivyWalletBalance(addr) {
   if (!addr || typeof solanaWeb3 === 'undefined') return;
   _fetchBalanceWithFallback(addr).then(function(res) {
     W.onChainBalance = res.lamports / 1e9;
-    // Always sync to on-chain when not in-game — on-chain is the ground truth.
-    // (During gameplay we preserve optimistic kill credits in W.balance.)
+    // Keep the higher of optimistic balance (kill credits) vs on-chain.
+    // Using the minimum would erase kill earnings that haven't confirmed yet.
     if (!gameRunning) {
-      W.balance  = W.onChainBalance;
+      W.balance  = Math.max(W.balance || 0, W.onChainBalance);
       W.lamports = Math.floor(W.balance * 1e9);
       saveSession();
     }
@@ -2204,7 +2237,7 @@ async function mobileRefreshBalance() {
     _lastRpcEndpoint = res.endpoint;
     W.onChainBalance = res.lamports / 1e9;
     if (!gameRunning) {
-      W.balance  = W.onChainBalance;
+      W.balance  = Math.max(W.balance || 0, W.onChainBalance);
       W.lamports = Math.floor(W.balance * 1e9);
     }
     saveSession();
@@ -2371,7 +2404,7 @@ function openWithdraw() {
   if(W.pubkey){
     _fetchBalanceWithFallback(W.pubkey).then(function(r){
       W.onChainBalance = r.lamports / 1e9;
-      if(!gameRunning){ W.balance = W.onChainBalance; W.lamports = Math.floor(W.onChainBalance*1e9); saveSession(); }
+      if(!gameRunning){ W.balance = Math.max(W.balance||0, W.onChainBalance); W.lamports = Math.floor(W.balance*1e9); saveSession(); }
       var _best2=Math.max(W.balance||0, W.onChainBalance||0);
       if(wb) wb.textContent='$'+(_best2*SOL_USD).toFixed(2)+' ('+_best2.toFixed(4)+' SOL)';
     }).catch(function(){});
@@ -2664,7 +2697,11 @@ async function execCashout(gross, label, destAddr) {
     } else {
       toast('✓ Cashed out! $' + (net*SOL_USD).toFixed(2) + ' in wallet (10% fee sent) · TX: ' + sig.slice(0,8) + '…', 'info');
     }
-    setTimeout(function() { if (W.pubkey) refreshBalance(null); }, 4000);
+    // For external withdrawals, wait 20s before refreshing so the TX has time to confirm.
+    // At 4s, TX is often still pending — on-chain shows the old (pre-withdraw) balance and
+    // the Math.max logic would incorrectly restore the balance to the pre-withdraw amount.
+    var _refreshDelay = isExternal ? 20000 : 4000;
+    setTimeout(function() { if (W.pubkey) refreshBalance(null); }, _refreshDelay);
     try { localStorage.removeItem(_coLsKey); } catch(_) {}
     return { gross:gross, house:house, escrow:escrow, net:net, sig:sig };
 
@@ -2693,11 +2730,13 @@ async function doWithdraw() {
   var addrEl = document.getElementById('withAddr');
   var dest   = addrEl ? addrEl.value.trim() : '';
   if(!usdAmt||usdAmt<0.01){ toast('Min $0.01','error'); return; }
+  if(!dest){ toast('Enter a Solana wallet address to withdraw to','error'); return; }
+  if(dest.length < 32){ toast('Invalid Solana wallet address (too short)','error'); return; }
+  if(dest === W.pubkey){ toast('Cannot withdraw to the same game wallet — enter an external wallet address','error'); return; }
   // Convert USD input → SOL for balance check and transaction
   var amt = usdAmt / SOL_USD;
   var _avail = Math.max(W.balance||0, W.onChainBalance||0);
   if(amt>_avail){ toast('Insufficient balance! Available: $'+(_avail*SOL_USD).toFixed(2),'error'); return; }
-  if(dest && dest.length < 32){ toast('Invalid Solana wallet address','error'); return; }
   closeModal('modalWith');
   var r = await execCashout(amt, 'Withdraw', dest||null);
   if(r) toast('Withdraw complete: $'+(r.net*SOL_USD).toFixed(2)+' sent (no fees)','info');
@@ -3289,6 +3328,21 @@ function _wsHandleMsg(msg, fromAbly) {
 
   // ── Position updates ────────────────────────────────────────────────────
   if (type === 'pos') {
+    // money_claim must be handled even when dead — dead player's client fires _doDropTransfer
+    // to send 90% to the claimer. Without this, the guard below drops it silently.
+    if (d.money_claim && cid) {
+      var _mc = d.money_claim;
+      if (_mc && _mc.id) {
+        moneyDrops = moneyDrops.filter(function(m){ return m.id !== _mc.id; });
+        if (_mc.fromId === _wsClientId && _mc.claimerPubkey && !_claimedDrops[_mc.id]) {
+          _claimedDrops[_mc.id] = 'sent';
+          _doDropTransfer(_mc.claimerPubkey, +(_mc.solAmt||0));
+        }
+        if (_mc.claimerId === _wsClientId) { _claimedDrops[_mc.id] = 'collected'; }
+      }
+      return;
+    }
+
     if ((!gameRunning && !_spectating) || !cid) return;
 
     // kill_target: sent by the designated referee (lower-ID client) when it detects the
@@ -3317,20 +3371,7 @@ function _wsHandleMsg(msg, fromAbly) {
       return;
     }
 
-    // ── Money claim: someone ran over a drop — remove it and fire the TX ──────
-    if (d.money_claim) {
-      var _mc = d.money_claim;
-      if (!_mc || !_mc.id) return;
-      moneyDrops = moneyDrops.filter(function(m){ return m.id !== _mc.id; });
-      // If WE are the dead player who owns this drop → send SOL to collector
-      if (_mc.fromId === _wsClientId && _mc.claimerPubkey && !_claimedDrops[_mc.id]) {
-        _claimedDrops[_mc.id] = 'sent';
-        _doDropTransfer(_mc.claimerPubkey, +(_mc.solAmt||0));
-      }
-      // If WE are the collector (relay echo) → avoid double-crediting optimistic grant
-      if (_mc.claimerId === _wsClientId) { _claimedDrops[_mc.id] = 'collected'; }
-      return;
-    }
+    // money_claim is handled before the gameRunning guard above — nothing to do here.
 
     // Kill-credit security is handled separately: die/chat events require fromAbly=true.
     // Rendering is open to all pos senders — blocking here caused players to be
@@ -6477,11 +6518,12 @@ window.addEventListener('load', function() {
   // Try to load the menu background image. If it exists, swap from the gradient
   // fallback to the real photo; if it 404s, the CSS gradient stays.
   var _mbImg=new Image();
+  var _bgV='menu-bg2.webp?v=420';
   _mbImg.onload=function(){
     var el=document.getElementById('menuBgImg');
-    if(el){ el.style.setProperty('--menu-bg-url','url("menu-bg.webp")'); el.classList.add('hasimg'); }
+    if(el){ el.style.setProperty('--menu-bg-url','url("'+_bgV+'")'); el.classList.add('hasimg'); }
   };
-  _mbImg.src='menu-bg.webp';
+  _mbImg.src=_bgV;
 
   // Rising-ember particle field (matches the drifting sparks in the reference loop).
   var cv=document.getElementById('menuBgEmber'); if(!cv) return;
@@ -6489,7 +6531,7 @@ window.addEventListener('load', function() {
   function size(){ var r=cv.getBoundingClientRect(); W=cv.width=r.width||window.innerWidth; H=cv.height=r.height||window.innerHeight; }
   function mk(){ return {x:Math.random()*W, y:H+Math.random()*40, r:0.6+Math.random()*2.2,
     vy:-(0.25+Math.random()*0.85), vx:(Math.random()-0.5)*0.35, life:0, max:160+Math.random()*180,
-    col:Math.random()<0.5?'20,241,149':'153,69,215'}; }
+    col:Math.random()<0.33?'153,69,255':Math.random()<0.5?'255,20,200':'0,194,255'}; }
   function tick(){
     cx.clearRect(0,0,W,H);
     if(embers.length<70 && Math.random()<0.5) embers.push(mk());
