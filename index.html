@@ -1324,6 +1324,7 @@ var _SKINS=[
   {id:'toxic',   label:'Toxic',      col:'#39ff14'},
   {id:'galaxy',  label:'Cosmic',     col:'#cc44ff'},
   {id:'gold',    label:'Gold Rush',  col:'#ffd700'},
+  {id:'nova',    label:'Nova Cade',  col:'#ff2299'},
 ];
 var _activeSkin=(function(){ try{ return localStorage.getItem('slither_skin')||'default'; }catch(e){ return 'default'; } })();
 var _SKIN_CFG={
@@ -1333,7 +1334,8 @@ var _SKIN_CFG={
   inferno:{ boost:{cols:['#ff4400','#ff8800','#ffcc00'],   r:[14,24],  life:[22,42],spd:2.5,cnt:8,dx:0,  dy:-1.2}, idle:{cols:['#ff3300','#ff6600','#ff9900'],r:[10,18], life:[16,30],spd:1.2,cnt:3,dx:0,dy:-0.8} },
   toxic:  { boost:{cols:['#80ff40','#39ff14','#ccff00'],   r:[12,22],  life:[25,45],spd:1.5,cnt:7,dx:0,  dy:0.6},  idle:{cols:['#39ff14','#55cc00','#80ff40'],r:[8,16],  life:[16,30],spd:0.6,cnt:2,dx:0,dy:0.4} },
   galaxy: { boost:{cols:['#cc44ff','#ee88ff','#ffffff'],   r:[8,16],   life:[30,55],spd:1.8,cnt:7,dx:0,  dy:0},    idle:{cols:['#8833cc','#aa44ff','#ffffff'],r:[4,10],  life:[22,40],spd:0.5,cnt:2,dx:0,dy:0} },
-  gold:   { boost:{cols:['#ffd700','#ffee88','#ff9900'],   r:[12,20],  life:[24,42],spd:2,  cnt:7,dx:0,  dy:-0.5}, idle:{cols:['#cc9900','#ffcc00','#ffe566'],r:[8,14],  life:[16,30],spd:0.8,cnt:2,dx:0,dy:-0.3} }
+  gold:   { boost:{cols:['#ffd700','#ffee88','#ff9900'],   r:[12,20],  life:[24,42],spd:2,  cnt:7,dx:0,  dy:-0.5}, idle:{cols:['#cc9900','#ffcc00','#ffe566'],r:[8,14],  life:[16,30],spd:0.8,cnt:2,dx:0,dy:-0.3} },
+  nova:   { boost:{cols:['#ffffff','#ff2299','#00eeff','#ffff00'],r:[14,24],life:[22,44],spd:2.4,cnt:9,dx:0,dy:-0.6}, idle:{cols:['#ff2299','#ffffff','#00ccff'],r:[9,16],life:[18,34],spd:0.9,cnt:3,dx:0,dy:-0.3} }
 };
 var HN = ['xX_SOLkiller_Xx','wagmi_snake','ngmi_lmao','degenViber','rugged_again','alphaCoil','moonSnek','rugpuller'];
 var tierOnline = {'free':0, 1:0, 5:0, 10:0};
@@ -5963,6 +5965,112 @@ function drawS(s){
     ctx.fillStyle='rgba(255,255,200,.92)';
     ctx.beginPath(); ctx.arc(e1x+pox-pr3*0.38,e1y+poy-pr3*0.38,pr3*0.40,0,Math.PI*2); ctx.fill();
     ctx.beginPath(); ctx.arc(e2x+pox-pr3*0.38,e2y+poy-pr3*0.38,pr3*0.40,0,Math.PI*2); ctx.fill();
+
+  } else if(skin==='nova'){
+    // ═══ NOVA CADE: Supernova Cascade Snake ═══
+    if(isBoosting){
+      var bp=_pulse(360);
+      // Outer white solar flare
+      ctx.shadowColor='#ffffff'; ctx.shadowBlur=44;
+      _path(); ctx.strokeStyle='#ffffff'; ctx.lineWidth=BW*1.9; ctx.globalAlpha=0.20; ctx.stroke();
+      ctx.shadowBlur=0;
+      // 3 rainbow expanding rings
+      var nrc=['#ff2299','#00eeff','#ffff00'];
+      for(var ri=0;ri<3;ri++){
+        var rp2=_pulse(360+ri*90);
+        ctx.beginPath(); ctx.arc(hx,hy,R*(1.1+rp2*1.8+ri*0.45),0,Math.PI*2);
+        ctx.strokeStyle=nrc[ri]; ctx.lineWidth=3.5-ri*0.8; ctx.globalAlpha=(0.85-ri*0.22)*(1-rp2); ctx.stroke();
+      }
+      // 6 radial rainbow streak lines
+      var scol6=['#ff0088','#ff8800','#ffff00','#00ff88','#0099ff','#cc00ff'];
+      ctx.globalAlpha=0.60;
+      for(var rs=0;rs<6;rs++){
+        var ra=rs/6*Math.PI*2+ang+bp*Math.PI;
+        ctx.strokeStyle=scol6[rs]; ctx.lineWidth=2.2; ctx.shadowColor=scol6[rs]; ctx.shadowBlur=6;
+        ctx.beginPath(); ctx.moveTo(hx+Math.cos(ra)*R*0.5,hy+Math.sin(ra)*R*0.5);
+        ctx.lineTo(hx+Math.cos(ra)*R*2.9,hy+Math.sin(ra)*R*2.9); ctx.stroke();
+      }
+      ctx.globalAlpha=1; ctx.shadowBlur=0;
+    }
+    // NOVA BODY — dark core, magenta mid, white electric spine
+    ctx.shadowColor='#ff2299'; ctx.shadowBlur=24;
+    _path(); ctx.strokeStyle='#550033'; ctx.lineWidth=BW*1.15; ctx.globalAlpha=0.32; ctx.stroke();
+    ctx.shadowBlur=0;
+    _path(); ctx.strokeStyle='#0d0015'; ctx.lineWidth=BW; ctx.globalAlpha=1; ctx.stroke();
+    _path(); ctx.strokeStyle='#cc0077'; ctx.lineWidth=BW*0.70; ctx.stroke();
+    _path(); ctx.strokeStyle='#ff44bb'; ctx.lineWidth=BW*0.38; ctx.stroke();
+    _path(); ctx.strokeStyle='#ffffff'; ctx.lineWidth=BW*0.10; ctx.stroke();
+    // Cyan edge shimmer
+    ctx.shadowColor='#00eeff'; ctx.shadowBlur=10;
+    _path(); ctx.strokeStyle='#00eeff'; ctx.lineWidth=BW*0.05; ctx.globalAlpha=0.55; ctx.stroke();
+    ctx.shadowBlur=0; ctx.globalAlpha=1;
+    // STARBURST MARKS — alternating magenta/cyan 8-point bursts
+    _marks(R*1.25, function(px,py,tx,ty,fade){
+      if(fade<0.07) return;
+      var sr=R*0.50*fade;
+      ctx.save(); ctx.globalAlpha=0.88*fade;
+      var si=Math.round(fade*10)%2;
+      var sc=si===0?'#ff2299':'#00eeff';
+      ctx.strokeStyle=sc; ctx.lineWidth=2.0; ctx.shadowColor=sc; ctx.shadowBlur=7;
+      ctx.beginPath();
+      for(var sp=0;sp<8;sp++){
+        var sa=sp/8*Math.PI*2;
+        var r1=sr*(sp%2===0?1:0.55);
+        ctx.moveTo(px+Math.cos(sa)*sr*0.12,py+Math.sin(sa)*sr*0.12);
+        ctx.lineTo(px+Math.cos(sa)*r1,py+Math.sin(sa)*r1);
+      }
+      ctx.stroke();
+      ctx.fillStyle='#ffffff'; ctx.globalAlpha=0.92*fade; ctx.shadowColor='#ffffff'; ctx.shadowBlur=5;
+      ctx.beginPath(); ctx.arc(px,py,sr*0.18,0,Math.PI*2); ctx.fill();
+      ctx.restore();
+    });
+    // HEAD — bright nova orb, dark core with magenta ring
+    ctx.shadowColor='#ff2299'; ctx.shadowBlur=22;
+    ctx.beginPath(); ctx.arc(hx,hy,R,0,Math.PI*2); ctx.fillStyle='#0d0015'; ctx.fill();
+    ctx.strokeStyle='#ff2299'; ctx.lineWidth=3.8; ctx.stroke();
+    ctx.shadowBlur=0;
+    // Cyan inner ring
+    ctx.strokeStyle='#00eeff'; ctx.lineWidth=1.8; ctx.globalAlpha=0.70;
+    ctx.shadowColor='#00eeff'; ctx.shadowBlur=8;
+    ctx.beginPath(); ctx.arc(hx,hy,R*0.62,0,Math.PI*2); ctx.stroke();
+    ctx.shadowBlur=0; ctx.globalAlpha=1;
+    // SOLAR CORONA — 6 triangular spike rays
+    ctx.fillStyle='#ff44bb'; ctx.globalAlpha=0.90;
+    ctx.shadowColor='#ff2299'; ctx.shadowBlur=12;
+    for(var cs=0;cs<6;cs++){
+      var ca=cs/6*Math.PI*2+ang+Math.PI/12;
+      var cpx=hx+Math.cos(ca)*R*1.6, cpy=hy+Math.sin(ca)*R*1.6;
+      ctx.fillStyle=cs%2===0?'#ff2299':'#00eeff';
+      ctx.beginPath();
+      ctx.moveTo(hx+Math.cos(ca-0.28)*R*0.75,hy+Math.sin(ca-0.28)*R*0.75);
+      ctx.lineTo(cpx,cpy);
+      ctx.lineTo(hx+Math.cos(ca+0.28)*R*0.75,hy+Math.sin(ca+0.28)*R*0.75);
+      ctx.fill();
+    }
+    ctx.shadowBlur=0; ctx.globalAlpha=1;
+    // White nova core dot on head
+    ctx.shadowColor='#ffffff'; ctx.shadowBlur=18;
+    ctx.fillStyle='#ffffff'; ctx.globalAlpha=0.80;
+    ctx.beginPath(); ctx.arc(hx,hy,R*0.28,0,Math.PI*2); ctx.fill();
+    ctx.shadowBlur=0; ctx.globalAlpha=1;
+    // EYES: white blaze iris, tiny deep-dark pupil
+    var eo=R*0.50,er=R*0.42,npr=er*0.36,ebx=hx+fx2*R*0.32,eby=hy+fy2*R*0.32;
+    var e1x=ebx+sxp*eo,e1y=eby+syp*eo,e2x=ebx-sxp*eo,e2y=eby-syp*eo;
+    ctx.shadowColor='#ffffff'; ctx.shadowBlur=16;
+    ctx.fillStyle='#ffffff';
+    ctx.beginPath(); ctx.arc(e1x,e1y,er,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(e2x,e2y,er,0,Math.PI*2); ctx.fill();
+    ctx.shadowBlur=0;
+    ctx.strokeStyle='#ff2299'; ctx.lineWidth=1.6; ctx.globalAlpha=0.75;
+    ctx.beginPath(); ctx.arc(e1x,e1y,er*0.70,0,Math.PI*2); ctx.stroke();
+    ctx.beginPath(); ctx.arc(e2x,e2y,er*0.70,0,Math.PI*2); ctx.stroke();
+    ctx.globalAlpha=1;
+    ctx.fillStyle='#0a0012';
+    ctx.beginPath(); ctx.arc(e1x+fx2*er*0.32,e1y+fy2*er*0.32,npr,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(e2x+fx2*er*0.32,e2y+fy2*er*0.32,npr,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,.95)';
+    ctx.beginPath(); ctx.arc(e1x+fx2*er*0.32-npr*0.36,e1y+fy2*er*0.32-npr*0.36,npr*0.42,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(e2x+fx2*er*0.32-npr*0.36,e2y+fy2*er*0.32-npr*0.36,npr*0.42,0,Math.PI*2); ctx.fill();
 
   } else {
     // DEFAULT skin
