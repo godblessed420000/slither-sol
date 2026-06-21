@@ -1335,6 +1335,9 @@ var _SKINS=[
   {id:'nova',    label:'Nova Cade',  col:'#ff2299'},
   {id:'dragon',  label:'Dragon Flame',col:'#ff3300'},
   {id:'cryo',    label:'Cryo Siren', col:'#88ddff'},
+  {id:'nebula',  label:'Nebula Nomad',col:'#9933ff'},
+  {id:'leviathan',label:'Leviathan', col:'#007799'},
+  {id:'synth',   label:'Synth Wave', col:'#ff00cc'},
 ];
 var _activeSkin=(function(){ try{ return localStorage.getItem('slither_skin')||'default'; }catch(e){ return 'default'; } })();
 var _SKIN_CFG={
@@ -1347,7 +1350,10 @@ var _SKIN_CFG={
   gold:   { boost:{cols:['#ffd700','#ffee88','#ff9900'],   r:[12,20],  life:[24,42],spd:2,  cnt:7,dx:0,  dy:-0.5}, idle:{cols:['#cc9900','#ffcc00','#ffe566'],r:[8,14],  life:[16,30],spd:0.8,cnt:2,dx:0,dy:-0.3} },
   nova:   { boost:{cols:['#ffffff','#ff2299','#00eeff','#ffff00'],r:[14,24],life:[22,44],spd:2.4,cnt:9,dx:0,dy:-0.6}, idle:{cols:['#ff2299','#ffffff','#00ccff'],r:[9,16],life:[18,34],spd:0.9,cnt:3,dx:0,dy:-0.3} },
   dragon: { boost:{cols:['#ff2200','#ff7700','#ffcc00','#ffffff'],r:[14,24],life:[20,40],spd:2.8,cnt:9,dx:0,dy:-1.4}, idle:{cols:['#cc1100','#ff4400','#ff8800'],r:[10,18],life:[16,30],spd:1.4,cnt:3,dx:0,dy:-1.0} },
-  cryo:   { boost:{cols:['#ffffff','#aaeeff','#55bbee','#ddf8ff'],r:[12,22],life:[30,55],spd:1.0,cnt:8,dx:0,dy:-0.5}, idle:{cols:['#aaeeff','#ffffff','#66ccee'],r:[7,14], life:[22,40],spd:0.4,cnt:2,dx:0,dy:-0.3} }
+  cryo:   { boost:{cols:['#ffffff','#aaeeff','#55bbee','#ddf8ff'],r:[12,22],life:[30,55],spd:1.0,cnt:8,dx:0,dy:-0.5}, idle:{cols:['#aaeeff','#ffffff','#66ccee'],r:[7,14], life:[22,40],spd:0.4,cnt:2,dx:0,dy:-0.3} },
+  nebula:   { boost:{cols:['#cc44ff','#ff88dd','#ffffff','#6633cc'],r:[12,22],life:[30,55],spd:1.5,cnt:8,dx:0,dy:-0.4}, idle:{cols:['#9933ff','#cc44ff','#ff99ee'],r:[8,16],life:[22,40],spd:0.5,cnt:3,dx:0,dy:-0.2} },
+  leviathan:{ boost:{cols:['#00ffcc','#00aacc','#aaffee','#006688'],r:[14,24],life:[25,45],spd:1.8,cnt:8,dx:0,dy:0.5},  idle:{cols:['#006688','#00aacc','#00ffcc'],r:[9,16], life:[18,32],spd:0.6,cnt:3,dx:0,dy:0.4} },
+  synth:    { boost:{cols:['#ff00cc','#00ffff','#aa00ff','#ffffff'],r:[12,22],life:[22,42],spd:2.2,cnt:9,dx:0,dy:0},    idle:{cols:['#ff00cc','#00ffff','#8800ff'],r:[8,14], life:[16,30],spd:0.8,cnt:3,dx:0,dy:0} }
 };
 var HN = ['xX_SOLkiller_Xx','wagmi_snake','ngmi_lmao','degenViber','rugged_again','alphaCoil','moonSnek','rugpuller'];
 var tierOnline = {'free':0, 1:0, 5:0, 10:0};
@@ -6332,6 +6338,286 @@ function drawS(s){
     ctx.fillStyle='rgba(255,255,255,.92)';
     ctx.beginPath(); ctx.arc(e1x+pox-er*0.15,e1y+poy-er*0.15,er*0.17,0,Math.PI*2); ctx.fill();
     ctx.beginPath(); ctx.arc(e2x+pox-er*0.15,e2y+poy-er*0.15,er*0.17,0,Math.PI*2); ctx.fill();
+
+  } else if(skin==='nebula'){
+    // ═══ NEBULA NOMAD: Cosmic Cloud Wanderer ═══
+    if(isBoosting){
+      var bp=_pulse(440);
+      ctx.shadowColor='#cc44ff'; ctx.shadowBlur=38;
+      _path(); ctx.strokeStyle='#cc44ff'; ctx.lineWidth=BW*1.8; ctx.globalAlpha=0.18; ctx.stroke();
+      ctx.shadowBlur=0;
+      var nbc=['#cc44ff','#ff88dd','#9933ff'];
+      for(var ri=0;ri<3;ri++){
+        var rp2=_pulse(440+ri*100);
+        ctx.beginPath(); ctx.arc(hx,hy,R*(1.1+rp2*1.9+ri*0.4),0,Math.PI*2);
+        ctx.strokeStyle=nbc[ri]; ctx.lineWidth=3-ri*0.6; ctx.globalAlpha=(0.75-ri*0.2)*(1-rp2); ctx.stroke();
+      }
+      ctx.globalAlpha=0.80;
+      for(var ns=0;ns<8;ns++){
+        var na=ns/8*Math.PI*2+ang+bp*Math.PI;
+        var nd=R*(1.0+bp*2.0);
+        ctx.fillStyle=ns%2===0?'#ffffff':'#ff88dd'; ctx.shadowColor='#cc44ff'; ctx.shadowBlur=4;
+        ctx.beginPath(); ctx.arc(hx+Math.cos(na)*nd,hy+Math.sin(na)*nd,R*0.08,0,Math.PI*2); ctx.fill();
+      }
+      ctx.globalAlpha=1; ctx.shadowBlur=0;
+    }
+    // BODY — wispy cosmic nebula tube
+    ctx.shadowColor='#9933ff'; ctx.shadowBlur=28;
+    _path(); ctx.strokeStyle='#9933ff'; ctx.lineWidth=BW*1.15; ctx.globalAlpha=0.22; ctx.stroke();
+    ctx.shadowBlur=0;
+    _path(); ctx.strokeStyle='#0d0018'; ctx.lineWidth=BW; ctx.globalAlpha=1; ctx.stroke();
+    _path(); ctx.strokeStyle='#6622aa'; ctx.lineWidth=BW*0.72; ctx.stroke();
+    _path(); ctx.strokeStyle='#cc44ff'; ctx.lineWidth=BW*0.40; ctx.stroke();
+    ctx.shadowColor='#ff88dd'; ctx.shadowBlur=8;
+    _path(); ctx.strokeStyle='#ff88dd'; ctx.lineWidth=BW*0.14; ctx.globalAlpha=0.75; ctx.stroke();
+    ctx.shadowBlur=0; ctx.globalAlpha=1;
+    // NEBULA CLOUD PUFFS along body
+    _marks(R*1.4, function(px,py,tx,ty,fade){
+      if(fade<0.06) return;
+      var nx=-ty,ny=tx, cr=R*0.55*fade;
+      var side=(Math.round(fade*9)%2===0)?1:-1;
+      ctx.save();
+      ctx.globalAlpha=0.30*fade; ctx.shadowColor='#cc44ff'; ctx.shadowBlur=10;
+      ctx.fillStyle='#9933ff';
+      ctx.beginPath(); ctx.arc(px+nx*side*BW*0.30,py+ny*side*BW*0.30,cr,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle='#ff88dd'; ctx.globalAlpha=0.22*fade;
+      ctx.beginPath(); ctx.arc(px+nx*side*BW*0.42+tx*cr*0.4,py+ny*side*BW*0.42+ty*cr*0.4,cr*0.70,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle='#ffffff'; ctx.globalAlpha=0.14*fade;
+      ctx.beginPath(); ctx.arc(px+nx*side*BW*0.28-tx*cr*0.3,py+ny*side*BW*0.28-ty*cr*0.3,cr*0.45,0,Math.PI*2); ctx.fill();
+      ctx.restore();
+    });
+    // HEAD — deep purple nebula orb
+    ctx.shadowColor='#cc44ff'; ctx.shadowBlur=22;
+    ctx.beginPath(); ctx.arc(hx,hy,R,0,Math.PI*2); ctx.fillStyle='#0d0018'; ctx.fill();
+    ctx.strokeStyle='#9933ff'; ctx.lineWidth=3.5; ctx.stroke();
+    ctx.shadowBlur=0;
+    // Cosmic ring (tilted ellipse)
+    ctx.shadowColor='#ff88dd'; ctx.shadowBlur=10;
+    ctx.strokeStyle='#ff88dd'; ctx.lineWidth=2.0; ctx.globalAlpha=0.80;
+    ctx.save(); ctx.translate(hx,hy); ctx.rotate(ang+0.4);
+    ctx.beginPath(); ctx.ellipse(0,0,R*1.45,R*0.38,0,0,Math.PI*2); ctx.stroke();
+    ctx.restore();
+    ctx.shadowBlur=0; ctx.globalAlpha=1;
+    // TWIN ANTENNAE with glowing orb tips
+    ctx.lineCap='round'; ctx.shadowColor='#cc44ff'; ctx.shadowBlur=8;
+    for(var ai=-1;ai<=1;ai+=2){
+      ctx.strokeStyle='#9933ff'; ctx.lineWidth=R*0.14;
+      ctx.beginPath();
+      ctx.moveTo(hx+sxp*ai*R*0.38+fx2*R*0.55,hy+syp*ai*R*0.38+fy2*R*0.55);
+      ctx.quadraticCurveTo(hx+sxp*ai*R*0.65+fx2*R*1.10,hy+syp*ai*R*0.65+fy2*R*1.10,
+                           hx+sxp*ai*R*0.40+fx2*R*1.70,hy+syp*ai*R*0.40+fy2*R*1.70);
+      ctx.stroke();
+      ctx.shadowColor='#ff88dd'; ctx.shadowBlur=12;
+      ctx.fillStyle='#ff88dd'; ctx.globalAlpha=0.95;
+      ctx.beginPath(); ctx.arc(hx+sxp*ai*R*0.40+fx2*R*1.70,hy+syp*ai*R*0.40+fy2*R*1.70,R*0.17,0,Math.PI*2); ctx.fill();
+    }
+    ctx.shadowBlur=0; ctx.lineCap='butt'; ctx.globalAlpha=1;
+    // EYES: large purple-pink gradient, white center
+    var eo=R*0.50,er=R*0.46,ebx=hx+fx2*R*0.28,eby=hy+fy2*R*0.28;
+    var e1x=ebx+sxp*eo,e1y=eby+syp*eo,e2x=ebx-sxp*eo,e2y=eby-syp*eo;
+    ctx.shadowColor='#cc44ff'; ctx.shadowBlur=14;
+    ctx.fillStyle='#1a0030';
+    ctx.beginPath(); ctx.arc(e1x,e1y,er,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(e2x,e2y,er,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='#9933ff';
+    ctx.beginPath(); ctx.arc(e1x,e1y,er*0.75,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(e2x,e2y,er*0.75,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='#ff88dd';
+    ctx.beginPath(); ctx.arc(e1x,e1y,er*0.46,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(e2x,e2y,er*0.46,0,Math.PI*2); ctx.fill();
+    ctx.shadowBlur=0;
+    var pox=fx2*er*0.28,poy=fy2*er*0.28;
+    ctx.fillStyle='#ffffff'; ctx.globalAlpha=0.95;
+    ctx.beginPath(); ctx.arc(e1x+pox,e1y+poy,er*0.22,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(e2x+pox,e2y+poy,er*0.22,0,Math.PI*2); ctx.fill();
+    ctx.globalAlpha=1;
+
+  } else if(skin==='leviathan'){
+    // ═══ LEVIATHAN: Ancient Deep-Sea Serpent ═══
+    if(isBoosting){
+      var bp=_pulse(460);
+      ctx.shadowColor='#00ffcc'; ctx.shadowBlur=36;
+      _path(); ctx.strokeStyle='#00aacc'; ctx.lineWidth=BW*1.7; ctx.globalAlpha=0.20; ctx.stroke();
+      ctx.shadowBlur=0;
+      var lrc=['#00ffcc','#00aacc','#006688','#003344'];
+      for(var ri=0;ri<4;ri++){
+        var rp2=_pulse(460+ri*80);
+        ctx.beginPath(); ctx.arc(hx,hy,R*(1.0+rp2*2.0+ri*0.35),0,Math.PI*2);
+        ctx.strokeStyle=lrc[ri]; ctx.lineWidth=3.5-ri*0.6; ctx.globalAlpha=(0.80-ri*0.18)*(1-rp2); ctx.stroke();
+      }
+      ctx.globalAlpha=1; ctx.shadowBlur=0;
+    }
+    // BIOLUMINESCENT SCALE BODY
+    ctx.shadowColor='#00aacc'; ctx.shadowBlur=16;
+    for(var j=n-1;j>=0;j-=3){
+      var t2=j/n; var pr2=BW*0.55*(1-t2*0.18);
+      ctx.globalAlpha=Math.max(0.28,0.90*(1-t2*0.48));
+      ctx.beginPath(); ctx.arc(pts[j].x,pts[j].y,pr2,0,Math.PI*2);
+      ctx.fillStyle='#030c18'; ctx.fill();
+      ctx.strokeStyle='#00aacc'; ctx.lineWidth=3.0; ctx.stroke();
+      ctx.beginPath(); ctx.arc(pts[j].x-pr2*0.22,pts[j].y-pr2*0.22,pr2*0.32,0,Math.PI*2);
+      ctx.fillStyle='rgba(0,200,180,0.18)'; ctx.fill();
+    }
+    ctx.shadowBlur=0; ctx.globalAlpha=1;
+    // BIOLUMINESCENT FIN SPINES — wide alternating fins
+    _marks(R*1.2, function(px,py,tx,ty,fade){
+      if(fade<0.07) return;
+      var nx=-ty,ny=tx, fh=R*0.72*fade, fw=R*0.32*fade;
+      var side=(Math.round(fade*7)%2===0)?1:-1;
+      ctx.save(); ctx.globalAlpha=0.85*fade;
+      ctx.fillStyle='rgba(0,180,160,0.35)'; ctx.shadowColor='#00ffcc'; ctx.shadowBlur=8;
+      ctx.beginPath();
+      ctx.moveTo(px+nx*side*BW*0.36-tx*fw*0.5,py+ny*side*BW*0.36-ty*fw*0.5);
+      ctx.lineTo(px+nx*side*(BW*0.36+fh),py+ny*side*(BW*0.36+fh));
+      ctx.lineTo(px+nx*side*BW*0.36+tx*fw*0.5,py+ny*side*BW*0.36+ty*fw*0.5);
+      ctx.closePath(); ctx.fill();
+      ctx.strokeStyle='#00ffcc'; ctx.lineWidth=1.8; ctx.stroke();
+      ctx.restore();
+    });
+    // HEAD
+    ctx.shadowColor='#00aacc'; ctx.shadowBlur=22;
+    ctx.beginPath(); ctx.arc(hx,hy,R,0,Math.PI*2); ctx.fillStyle='#030c18'; ctx.fill();
+    ctx.strokeStyle='#00aacc'; ctx.lineWidth=3.5; ctx.stroke();
+    ctx.shadowBlur=0;
+    // Bioluminescent crest fin on top
+    ctx.shadowColor='#00ffcc'; ctx.shadowBlur=10;
+    ctx.fillStyle='rgba(0,180,160,0.45)'; ctx.globalAlpha=0.88;
+    ctx.beginPath();
+    ctx.moveTo(hx-sxp*R*0.35+fx2*R*0.20,hy-syp*R*0.35+fy2*R*0.20);
+    ctx.lineTo(hx+fx2*R*1.30,hy+fy2*R*1.30);
+    ctx.lineTo(hx+sxp*R*0.35+fx2*R*0.20,hy+syp*R*0.35+fy2*R*0.20);
+    ctx.fill(); ctx.strokeStyle='#00ffcc'; ctx.lineWidth=1.6; ctx.stroke();
+    ctx.shadowBlur=0; ctx.globalAlpha=1;
+    // WHISKER TENDRILS — 3 per side, curved bioluminescent
+    ctx.lineCap='round'; ctx.shadowColor='#00ffcc'; ctx.shadowBlur=6;
+    for(var wi=0;wi<3;wi++){
+      for(var ws=-1;ws<=1;ws+=2){
+        var wt=wi/3;
+        ctx.strokeStyle='#00aacc'; ctx.lineWidth=R*0.10*(1-wt*0.3); ctx.globalAlpha=0.80-wt*0.2;
+        ctx.beginPath();
+        ctx.moveTo(hx+sxp*ws*R*0.30+fx2*R*(0.30-wt*0.20),hy+syp*ws*R*0.30+fy2*R*(0.30-wt*0.20));
+        ctx.quadraticCurveTo(
+          hx+sxp*ws*R*(0.75+wi*0.15)+fx2*R*(0.60-wt*0.15),hy+syp*ws*R*(0.75+wi*0.15)+fy2*R*(0.60-wt*0.15),
+          hx+sxp*ws*R*(1.10+wi*0.20)+fx2*R*(0.55+wt*0.10),hy+syp*ws*R*(1.10+wi*0.20)+fy2*R*(0.55+wt*0.10));
+        ctx.stroke();
+        ctx.fillStyle='#00ffcc'; ctx.shadowColor='#00ffcc'; ctx.shadowBlur=8; ctx.globalAlpha=0.88-wt*0.2;
+        ctx.beginPath(); ctx.arc(hx+sxp*ws*R*(1.10+wi*0.20)+fx2*R*(0.55+wt*0.10),hy+syp*ws*R*(1.10+wi*0.20)+fy2*R*(0.55+wt*0.10),R*0.09,0,Math.PI*2); ctx.fill();
+      }
+    }
+    ctx.shadowBlur=0; ctx.lineCap='butt'; ctx.globalAlpha=1;
+    // EYES: huge bioluminescent alien eyes
+    var eo=R*0.52,er=R*0.50,ebx=hx+fx2*R*0.25,eby=hy+fy2*R*0.25;
+    var e1x=ebx+sxp*eo,e1y=eby+syp*eo,e2x=ebx-sxp*eo,e2y=eby-syp*eo;
+    ctx.shadowColor='#00ffcc'; ctx.shadowBlur=18;
+    ctx.fillStyle='#020d0d';
+    ctx.beginPath(); ctx.arc(e1x,e1y,er,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(e2x,e2y,er,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='#00aacc';
+    ctx.beginPath(); ctx.arc(e1x,e1y,er*0.72,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(e2x,e2y,er*0.72,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='#00ffcc';
+    ctx.beginPath(); ctx.arc(e1x,e1y,er*0.46,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(e2x,e2y,er*0.46,0,Math.PI*2); ctx.fill();
+    ctx.shadowBlur=0;
+    var pox=fx2*er*0.28,poy=fy2*er*0.28;
+    ctx.fillStyle='#010808';
+    ctx.beginPath(); ctx.arc(e1x+pox,e1y+poy,er*0.30,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(e2x+pox,e2y+poy,er*0.30,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,.85)';
+    ctx.beginPath(); ctx.arc(e1x+pox-er*0.14,e1y+poy-er*0.14,er*0.14,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(e2x+pox-er*0.14,e2y+poy-er*0.14,er*0.14,0,Math.PI*2); ctx.fill();
+
+  } else if(skin==='synth'){
+    // ═══ SYNTH WAVE: Retrowave Neon Grid Snake ═══
+    if(isBoosting){
+      var bp=_pulse(380);
+      ctx.shadowColor='#ff00cc'; ctx.shadowBlur=40;
+      _path(); ctx.strokeStyle='#ff00cc'; ctx.lineWidth=BW*1.8; ctx.globalAlpha=0.22; ctx.stroke();
+      ctx.shadowBlur=0;
+      var sgc=['#ff00cc','#00ffff','#aa00ff','#ff00cc','#00ffff','#aa00ff'];
+      ctx.globalAlpha=0.65;
+      for(var rs=0;rs<6;rs++){
+        var ra=rs/6*Math.PI*2+ang+bp*Math.PI;
+        ctx.strokeStyle=sgc[rs]; ctx.lineWidth=2.0; ctx.shadowColor=sgc[rs]; ctx.shadowBlur=6;
+        ctx.beginPath();
+        ctx.moveTo(hx+Math.cos(ra)*R*0.6,hy+Math.sin(ra)*R*0.6);
+        ctx.lineTo(hx+Math.cos(ra)*R*(2.4+bp*1.2),hy+Math.sin(ra)*R*(2.4+bp*1.2)); ctx.stroke();
+      }
+      ctx.globalAlpha=1; ctx.shadowBlur=0;
+      var src2=['#ff00cc','#00ffff'];
+      for(var ri=0;ri<2;ri++){
+        var rp2=_pulse(380+ri*120);
+        ctx.beginPath(); ctx.arc(hx,hy,R*(1.2+rp2*1.6+ri*0.5),0,Math.PI*2);
+        ctx.strokeStyle=src2[ri]; ctx.lineWidth=3-ri; ctx.globalAlpha=0.72*(1-rp2); ctx.stroke();
+      }
+      ctx.globalAlpha=1;
+    }
+    // SYNTH BODY — dark neon grid tube
+    ctx.shadowColor='#ff00cc'; ctx.shadowBlur=20;
+    _path(); ctx.strokeStyle='#ff00cc'; ctx.lineWidth=BW*1.10; ctx.globalAlpha=0.28; ctx.stroke();
+    ctx.shadowBlur=0;
+    _path(); ctx.strokeStyle='#08000f'; ctx.lineWidth=BW; ctx.globalAlpha=1; ctx.stroke();
+    _path(); ctx.strokeStyle='#6600aa'; ctx.lineWidth=BW*0.70; ctx.stroke();
+    ctx.shadowColor='#ff00cc'; ctx.shadowBlur=10;
+    _path(); ctx.strokeStyle='#ff00cc'; ctx.lineWidth=BW*0.16; ctx.stroke();
+    ctx.shadowBlur=0;
+    _path(); ctx.strokeStyle='#00ffff'; ctx.lineWidth=BW*0.06; ctx.globalAlpha=0.60; ctx.stroke();
+    ctx.globalAlpha=1;
+    // NEON GRID MARKS — perpendicular scanlines
+    _marks(R*1.0, function(px,py,tx,ty,fade){
+      if(fade<0.06) return;
+      var nx=-ty,ny=tx, hw=BW*0.44*fade;
+      ctx.save(); ctx.globalAlpha=0.70*fade;
+      var gc2=Math.round(fade*8)%2===0?'#ff00cc':'#00ffff';
+      ctx.strokeStyle=gc2; ctx.lineWidth=1.5; ctx.shadowColor=gc2; ctx.shadowBlur=5;
+      ctx.beginPath(); ctx.moveTo(px+nx*hw,py+ny*hw); ctx.lineTo(px-nx*hw,py-ny*hw); ctx.stroke();
+      ctx.restore();
+    });
+    // HEAD
+    ctx.shadowColor='#ff00cc'; ctx.shadowBlur=20;
+    ctx.beginPath(); ctx.arc(hx,hy,R,0,Math.PI*2); ctx.fillStyle='#08000f'; ctx.fill();
+    ctx.strokeStyle='#ff00cc'; ctx.lineWidth=3.5; ctx.stroke();
+    ctx.shadowBlur=0;
+    ctx.strokeStyle='#00ffff'; ctx.lineWidth=2.0; ctx.globalAlpha=0.65;
+    ctx.shadowColor='#00ffff'; ctx.shadowBlur=8;
+    ctx.beginPath(); ctx.arc(hx,hy,R*0.60,0,Math.PI*2); ctx.stroke();
+    ctx.shadowBlur=0; ctx.globalAlpha=1;
+    // RETRO SUN peaking above head
+    ctx.shadowColor='#ff00cc'; ctx.shadowBlur=14;
+    ctx.fillStyle='#ff00cc'; ctx.globalAlpha=0.85;
+    ctx.beginPath();
+    ctx.arc(hx+fx2*R*1.10,hy+fy2*R*1.10,R*0.48,ang+Math.PI,ang,false);
+    ctx.closePath(); ctx.fill();
+    var sunx=hx+fx2*R*1.10, suny=hy+fy2*R*1.10;
+    ctx.strokeStyle='#ff00cc'; ctx.lineWidth=2.2; ctx.globalAlpha=0.85;
+    for(var sr=0;sr<5;sr++){
+      var sa=ang+(sr-2)/4*0.55;
+      ctx.beginPath();
+      ctx.moveTo(sunx+Math.cos(sa)*R*0.50,suny+Math.sin(sa)*R*0.50);
+      ctx.lineTo(sunx+Math.cos(sa)*R*0.82,suny+Math.sin(sa)*R*0.82); ctx.stroke();
+    }
+    ctx.shadowBlur=0; ctx.globalAlpha=1;
+    // VISOR — thick dark bar across face
+    ctx.fillStyle='#08000f'; ctx.globalAlpha=0.90;
+    ctx.save(); ctx.translate(hx,hy); ctx.rotate(ang);
+    ctx.fillRect(-R*0.78,-R*0.30,R*1.56,R*0.60); ctx.restore();
+    ctx.strokeStyle='#ff00cc'; ctx.lineWidth=1.8; ctx.globalAlpha=0.90;
+    ctx.save(); ctx.translate(hx,hy); ctx.rotate(ang);
+    ctx.beginPath(); ctx.moveTo(-R*0.78,-R*0.30); ctx.lineTo(R*0.78,-R*0.30); ctx.stroke();
+    ctx.strokeStyle='#00ffff';
+    ctx.beginPath(); ctx.moveTo(-R*0.78,R*0.30); ctx.lineTo(R*0.78,R*0.30); ctx.stroke();
+    ctx.restore(); ctx.shadowBlur=0; ctx.globalAlpha=1;
+    // EYES: hot pink neon glow behind visor
+    var eo=R*0.46,er=R*0.22,ebx=hx+fx2*R*0.32,eby=hy+fy2*R*0.32;
+    var e1x=ebx+sxp*eo,e1y=eby+syp*eo,e2x=ebx-sxp*eo,e2y=eby-syp*eo;
+    ctx.shadowColor='#ff00cc'; ctx.shadowBlur=12;
+    ctx.fillStyle='#ff00cc'; ctx.globalAlpha=0.90;
+    ctx.beginPath(); ctx.arc(e1x,e1y,er,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(e2x,e2y,er,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='#ffffff'; ctx.globalAlpha=0.50;
+    ctx.beginPath(); ctx.arc(e1x,e1y,er*0.45,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(e2x,e2y,er*0.45,0,Math.PI*2); ctx.fill();
+    ctx.shadowBlur=0; ctx.globalAlpha=1;
 
   } else {
     // DEFAULT skin
