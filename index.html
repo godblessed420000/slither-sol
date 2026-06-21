@@ -3976,7 +3976,7 @@ function showStart() {
   if(!userProfile){ var ov=document.getElementById('ovLogin'); if(ov) ov.classList.remove('hidden'); }
   else {
     var ov2=document.getElementById('ovStart'); if(ov2) ov2.classList.remove('hidden');
-    refreshCards(); updateWalletDisplays(); renderColorPicker(); renderSkinPicker(); _startLobbyCountPoll();
+    refreshCards(); updateWalletDisplays(); renderColorPicker(); renderSkinPicker(); _startLobbyCountPoll(); _startNotifWatch();
     // Silently refresh on-chain balance when lobby screen opens.
     // Pass null so a timeout never shows an error toast — cached balance stays valid.
     if (W.pubkey) {
@@ -4080,7 +4080,7 @@ var lobbyTimer=null,lobbyCount=1;
 var _lobbyCountTimer=null;
 
 // ── LOBBY JOIN NOTIFICATIONS (always-on, even in-game) ──
-var _notifPrev={1:-1,5:-1};  // -1 = not yet seeded; skips first-poll false positives
+var _notifPrev={1:-1,5:-1}; // -1 = unseeded; prevents false-positive on first poll
 var _notifWatchTimer=null;
 var _notifReady=false;
 function _requestNotifPerm(){
@@ -4105,40 +4105,30 @@ function _checkLobbyNotifs(d){
     _notifPrev[t]=curr;
   });
 }
-function _notifPoll(){
-  fetch('https://ws.slither-sol.com/counts',{cache:'no-store'})
-    .then(function(r){return r.ok?r.json():null;})
-    .then(function(d){
-      if(!d) return;
-      _checkLobbyNotifs(d);
-      ['free',1,5,10].forEach(function(k){ if(d[k]!=null) tierOnline[k]=d[k]; });
-      if(!gameRunning) refreshCards();
-    }).catch(function(){});
-}
-function _startNotifWatch(){
-  _requestNotifPerm();
-  clearInterval(_notifWatchTimer);
-  _notifPoll(); // seed prev counts immediately — no notification on first call
-  _notifWatchTimer=setInterval(_notifPoll,5000);
-}
-
+// Single fetch — serves both lobby card counts AND join notifications
 function _pollLobbyCounts(){
   fetch('https://ws.slither-sol.com/counts',{cache:'no-store'})
     .then(function(r){return r.ok?r.json():null;})
     .then(function(d){
       if(!d) return;
-      ['free',1,5,10].forEach(function(k){
-        if(d[k]!=null) tierOnline[k]=d[k];
-      });
+      ['free',1,5,10].forEach(function(k){ if(d[k]!=null) tierOnline[k]=d[k]; });
+      _checkLobbyNotifs(d);
       if(!gameRunning) refreshCards();
     }).catch(function(){});
 }
+// Lobby card timer — stopped when entering a game
 function _startLobbyCountPoll(){
   _pollLobbyCounts();
   clearInterval(_lobbyCountTimer);
   _lobbyCountTimer=setInterval(_pollLobbyCounts,5000);
 }
 function _stopLobbyCountPoll(){ clearInterval(_lobbyCountTimer); _lobbyCountTimer=null; }
+// Notification timer — separate, never cleared, keeps checking even during gameplay
+function _startNotifWatch(){
+  _requestNotifPerm();
+  clearInterval(_notifWatchTimer);
+  _notifWatchTimer=setInterval(_pollLobbyCounts,5000);
+}
 
 function initCanvas(){
   gc=document.getElementById('gc'); mm=document.getElementById('minimap');
@@ -4352,6 +4342,7 @@ function launchGame() {
   // Hide friends button + close panel during active gameplay
   var _ffb=document.getElementById('friendsFloatBtn'); if(_ffb) _ffb.style.display='none';
   var _ffp=document.getElementById('friendsPanel'); if(_ffp) _ffp.classList.remove('open'); panelOpen=false;
+  _startNotifWatch(); // keep $1/$5 join notifications alive during gameplay
   _showMobileControls(true);
   _initJoystick(); // no-op after first call (guarded by _joyInited)
   window.addEventListener('mousemove',onMouse);
@@ -7467,7 +7458,6 @@ window.addEventListener('load', function() {
   var lm=document.getElementById('lbModal');     if(lm) lm.addEventListener('click',function(e){ if(e.target===lm) closeLeaderboard(); });
 
   // (ambient fake kill feed removed — real players only)
-  _startNotifWatch(); // always-on $1/$5 lobby join notifications
 });
 
 // ── Animated main-menu background: load the user's image + run rising-ember canvas ──
