@@ -7077,7 +7077,7 @@ window.addEventListener('load', function() {
     }
     _renderHeader(); updateWalletDisplays(); hideAll();
     var ov = document.getElementById('ovStart'); if (ov) ov.classList.remove('hidden');
-    refreshCards(); renderColorPicker(); autoDetectServer();
+    refreshCards(); renderColorPicker(); renderSkinPicker(); autoDetectServer();
     toast('Welcome back, ' + (userProfile ? userProfile.name : '') + '! Restoring wallet…');
     // Connect WebSocket on session restore — same as fresh login.
     // Without this the status badge stays "Offline" forever after a page reload.
