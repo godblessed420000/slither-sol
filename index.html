@@ -1325,6 +1325,8 @@ var _SKINS=[
   {id:'galaxy',  label:'Cosmic',     col:'#cc44ff'},
   {id:'gold',    label:'Gold Rush',  col:'#ffd700'},
   {id:'nova',    label:'Nova Cade',  col:'#ff2299'},
+  {id:'dragon',  label:'Dragon Flame',col:'#ff3300'},
+  {id:'cryo',    label:'Cryo Siren', col:'#88ddff'},
 ];
 var _activeSkin=(function(){ try{ return localStorage.getItem('slither_skin')||'default'; }catch(e){ return 'default'; } })();
 var _SKIN_CFG={
@@ -1335,7 +1337,9 @@ var _SKIN_CFG={
   toxic:  { boost:{cols:['#80ff40','#39ff14','#ccff00'],   r:[12,22],  life:[25,45],spd:1.5,cnt:7,dx:0,  dy:0.6},  idle:{cols:['#39ff14','#55cc00','#80ff40'],r:[8,16],  life:[16,30],spd:0.6,cnt:2,dx:0,dy:0.4} },
   galaxy: { boost:{cols:['#cc44ff','#ee88ff','#ffffff'],   r:[8,16],   life:[30,55],spd:1.8,cnt:7,dx:0,  dy:0},    idle:{cols:['#8833cc','#aa44ff','#ffffff'],r:[4,10],  life:[22,40],spd:0.5,cnt:2,dx:0,dy:0} },
   gold:   { boost:{cols:['#ffd700','#ffee88','#ff9900'],   r:[12,20],  life:[24,42],spd:2,  cnt:7,dx:0,  dy:-0.5}, idle:{cols:['#cc9900','#ffcc00','#ffe566'],r:[8,14],  life:[16,30],spd:0.8,cnt:2,dx:0,dy:-0.3} },
-  nova:   { boost:{cols:['#ffffff','#ff2299','#00eeff','#ffff00'],r:[14,24],life:[22,44],spd:2.4,cnt:9,dx:0,dy:-0.6}, idle:{cols:['#ff2299','#ffffff','#00ccff'],r:[9,16],life:[18,34],spd:0.9,cnt:3,dx:0,dy:-0.3} }
+  nova:   { boost:{cols:['#ffffff','#ff2299','#00eeff','#ffff00'],r:[14,24],life:[22,44],spd:2.4,cnt:9,dx:0,dy:-0.6}, idle:{cols:['#ff2299','#ffffff','#00ccff'],r:[9,16],life:[18,34],spd:0.9,cnt:3,dx:0,dy:-0.3} },
+  dragon: { boost:{cols:['#ff2200','#ff7700','#ffcc00','#ffffff'],r:[14,24],life:[20,40],spd:2.8,cnt:9,dx:0,dy:-1.4}, idle:{cols:['#cc1100','#ff4400','#ff8800'],r:[10,18],life:[16,30],spd:1.4,cnt:3,dx:0,dy:-1.0} },
+  cryo:   { boost:{cols:['#ffffff','#aaeeff','#55bbee','#ddf8ff'],r:[12,22],life:[30,55],spd:1.0,cnt:8,dx:0,dy:-0.5}, idle:{cols:['#aaeeff','#ffffff','#66ccee'],r:[7,14], life:[22,40],spd:0.4,cnt:2,dx:0,dy:-0.3} }
 };
 var HN = ['xX_SOLkiller_Xx','wagmi_snake','ngmi_lmao','degenViber','rugged_again','alphaCoil','moonSnek','rugpuller'];
 var tierOnline = {'free':0, 1:0, 5:0, 10:0};
@@ -6071,6 +6075,216 @@ function drawS(s){
     ctx.fillStyle='rgba(255,255,255,.95)';
     ctx.beginPath(); ctx.arc(e1x+fx2*er*0.32-npr*0.36,e1y+fy2*er*0.32-npr*0.36,npr*0.42,0,Math.PI*2); ctx.fill();
     ctx.beginPath(); ctx.arc(e2x+fx2*er*0.32-npr*0.36,e2y+fy2*er*0.32-npr*0.36,npr*0.42,0,Math.PI*2); ctx.fill();
+
+  } else if(skin==='dragon'){
+    // ═══ DRAGON FLAME: Ancient Fire Dragon ═══
+    if(isBoosting){
+      var bp=_pulse(420);
+      // Dragon breath — blue-white scorching flame shooting forward
+      ctx.lineCap='round';
+      ctx.shadowColor='#88ccff'; ctx.shadowBlur=34;
+      ctx.beginPath();
+      ctx.moveTo(hx+fx2*R*0.9,hy+fy2*R*0.9);
+      ctx.quadraticCurveTo(hx+fx2*R*2.2+sxp*R*0.2,hy+fy2*R*2.2+syp*R*0.2,hx+fx2*R*(3.6+bp*1.6),hy+fy2*R*(3.6+bp*1.6));
+      ctx.strokeStyle='#ffffff'; ctx.lineWidth=R*0.52*(1-bp*0.55); ctx.globalAlpha=0.78*(1-bp*0.65); ctx.stroke();
+      ctx.shadowColor='#4488ff'; ctx.shadowBlur=16;
+      ctx.strokeStyle='#aaddff'; ctx.lineWidth=R*0.22*(1-bp*0.4); ctx.globalAlpha=0.55*(1-bp*0.4); ctx.stroke();
+      ctx.shadowBlur=0; ctx.lineCap='butt';
+      // Fire burst rings
+      ctx.beginPath(); ctx.arc(hx,hy,R*(1.25+bp*1.5),0,Math.PI*2);
+      ctx.strokeStyle='#ff6600'; ctx.lineWidth=4; ctx.globalAlpha=0.72*(1-bp); ctx.stroke();
+      ctx.beginPath(); ctx.arc(hx,hy,R*(1.6+bp*1.0),0,Math.PI*2);
+      ctx.strokeStyle='#ffcc00'; ctx.lineWidth=2.5; ctx.globalAlpha=0.45*(1-bp*1.1); ctx.stroke();
+      ctx.globalAlpha=1;
+    }
+    // DRAGON SCALE BODY — overlapping crimson scales tail to head
+    ctx.shadowColor='#ff3300'; ctx.shadowBlur=14;
+    for(var j=n-1;j>=0;j-=3){
+      var t2=j/n; var pr2=BW*0.54*(1-t2*0.20);
+      ctx.globalAlpha=Math.max(0.30,0.92*(1-t2*0.50));
+      ctx.beginPath(); ctx.arc(pts[j].x,pts[j].y,pr2,0,Math.PI*2);
+      ctx.fillStyle='#1a0200'; ctx.fill();
+      ctx.strokeStyle='#cc2200'; ctx.lineWidth=3.2; ctx.stroke();
+      ctx.beginPath(); ctx.arc(pts[j].x-pr2*0.22,pts[j].y-pr2*0.22,pr2*0.34,0,Math.PI*2);
+      ctx.fillStyle='rgba(255,70,0,0.26)'; ctx.fill();
+    }
+    ctx.shadowBlur=0; ctx.globalAlpha=1;
+    // DORSAL RIDGE SPINES — sharp orange spines along the back
+    _marks(R*1.1, function(px,py,tx,ty,fade){
+      if(fade<0.08) return;
+      var nx=-ty,ny=tx,sh=R*0.65*fade;
+      ctx.save(); ctx.globalAlpha=0.90*fade;
+      ctx.fillStyle='#ff5500'; ctx.shadowColor='#ff3300'; ctx.shadowBlur=7;
+      ctx.beginPath();
+      ctx.moveTo(px-nx*BW*0.32,py-ny*BW*0.32);
+      ctx.lineTo(px+nx*sh,py+ny*sh);
+      ctx.lineTo(px+nx*BW*0.32+tx*R*0.20,py+ny*BW*0.32+ty*R*0.20);
+      ctx.closePath(); ctx.fill();
+      ctx.strokeStyle='#ffaa44'; ctx.lineWidth=1.2; ctx.shadowBlur=0; ctx.stroke();
+      ctx.restore();
+    });
+    // HEAD
+    ctx.shadowColor='#ff3300'; ctx.shadowBlur=20;
+    ctx.beginPath(); ctx.arc(hx,hy,R,0,Math.PI*2); ctx.fillStyle='#1a0100'; ctx.fill();
+    ctx.strokeStyle='#cc2200'; ctx.lineWidth=3.5; ctx.stroke();
+    ctx.shadowBlur=0;
+    // TWO CURVED HORNS
+    ctx.lineCap='round'; ctx.shadowColor='#ff4400'; ctx.shadowBlur=10;
+    for(var dhi=-1;dhi<=1;dhi+=2){
+      ctx.strokeStyle=dhi<0?'#ff6600':'#ff8800'; ctx.lineWidth=R*0.28;
+      ctx.beginPath();
+      ctx.moveTo(hx+sxp*dhi*R*0.42+fx2*R*0.52,hy+syp*dhi*R*0.42+fy2*R*0.52);
+      ctx.quadraticCurveTo(hx+sxp*dhi*R*0.78+fx2*R*1.05,hy+syp*dhi*R*0.78+fy2*R*1.05,
+                           hx+sxp*dhi*R*0.50+fx2*R*1.62,hy+syp*dhi*R*0.50+fy2*R*1.62);
+      ctx.stroke();
+    }
+    ctx.shadowBlur=0; ctx.lineCap='butt';
+    // Forehead ember glow
+    ctx.shadowColor='#ff8800'; ctx.shadowBlur=12;
+    ctx.fillStyle='#ff4400'; ctx.globalAlpha=0.82;
+    ctx.beginPath(); ctx.arc(hx+fx2*R*0.28,hy+fy2*R*0.28,R*0.24,0,Math.PI*2); ctx.fill();
+    ctx.shadowBlur=0; ctx.globalAlpha=1;
+    // EYES: black sclera, deep orange iris, vertical slit pupil
+    var eo=R*0.52,er=R*0.44,ebx=hx+fx2*R*0.28,eby=hy+fy2*R*0.28;
+    var e1x=ebx+sxp*eo,e1y=eby+syp*eo,e2x=ebx-sxp*eo,e2y=eby-syp*eo;
+    ctx.shadowColor='#ff6600'; ctx.shadowBlur=10;
+    ctx.fillStyle='#0a0000';
+    ctx.beginPath(); ctx.arc(e1x,e1y,er,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(e2x,e2y,er,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='#ff6600';
+    ctx.beginPath(); ctx.arc(e1x,e1y,er*0.72,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(e2x,e2y,er*0.72,0,Math.PI*2); ctx.fill();
+    ctx.shadowBlur=0;
+    var pox=fx2*er*0.28,poy=fy2*er*0.28;
+    ctx.fillStyle='#0a0000';
+    ctx.save(); ctx.translate(e1x+pox,e1y+poy); ctx.rotate(ang);
+    ctx.beginPath(); ctx.ellipse(0,0,er*0.17,er*0.50,0,0,Math.PI*2); ctx.fill(); ctx.restore();
+    ctx.save(); ctx.translate(e2x+pox,e2y+poy); ctx.rotate(ang);
+    ctx.beginPath(); ctx.ellipse(0,0,er*0.17,er*0.50,0,0,Math.PI*2); ctx.fill(); ctx.restore();
+    ctx.fillStyle='rgba(255,200,100,.82)';
+    ctx.beginPath(); ctx.arc(e1x+pox-er*0.17,e1y+poy-er*0.17,er*0.16,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(e2x+pox-er*0.17,e2y+poy-er*0.17,er*0.16,0,Math.PI*2); ctx.fill();
+
+  } else if(skin==='cryo'){
+    // ═══ CRYO SIREN: Frozen Glass Serpent ═══
+    if(isBoosting){
+      var bp=_pulse(400);
+      // Icy freeze blast aura
+      ctx.shadowColor='#aaeeff'; ctx.shadowBlur=32;
+      _path(); ctx.strokeStyle='#ddf8ff'; ctx.lineWidth=BW*1.75; ctx.globalAlpha=0.20; ctx.stroke();
+      ctx.shadowBlur=0;
+      // 4 expanding ice rings
+      var crc=['#ffffff','#aaeeff','#55bbee','#0088cc'];
+      for(var ri=0;ri<4;ri++){
+        var rp2=_pulse(400+ri*75);
+        ctx.beginPath(); ctx.arc(hx,hy,R*(1.0+rp2*2.1+ri*0.38),0,Math.PI*2);
+        ctx.strokeStyle=crc[ri]; ctx.lineWidth=3.2-ri*0.5; ctx.globalAlpha=(0.82-ri*0.18)*(1-rp2); ctx.stroke();
+      }
+      // 8 ice shard burst triangles
+      ctx.globalAlpha=0.62;
+      for(var is=0;is<8;is++){
+        var ia=is/8*Math.PI*2+ang+bp*0.6;
+        ctx.fillStyle=is%2===0?'#aaddff':'#ffffff';
+        ctx.shadowColor='#aaeeff'; ctx.shadowBlur=5;
+        ctx.beginPath();
+        ctx.moveTo(hx+Math.cos(ia)*R*(0.75+bp*0.25),hy+Math.sin(ia)*R*(0.75+bp*0.25));
+        ctx.lineTo(hx+Math.cos(ia-0.19)*R*(1.55+bp*0.85),hy+Math.sin(ia-0.19)*R*(1.55+bp*0.85));
+        ctx.lineTo(hx+Math.cos(ia+0.19)*R*(1.55+bp*0.85),hy+Math.sin(ia+0.19)*R*(1.55+bp*0.85));
+        ctx.fill();
+      }
+      ctx.globalAlpha=1; ctx.shadowBlur=0;
+    }
+    // CRYO GLASS BODY — translucent ice-crystal beads
+    ctx.shadowColor='#aaeeff'; ctx.shadowBlur=20;
+    _path(); ctx.strokeStyle='#cceeff'; ctx.lineWidth=BW*1.14; ctx.globalAlpha=0.16; ctx.stroke();
+    ctx.shadowBlur=0;
+    for(var j=n-1;j>=0;j-=3){
+      var t2=j/n; var pr2=BW*0.54*(1-t2*0.18);
+      ctx.globalAlpha=Math.max(0.22,0.86*(1-t2*0.44));
+      ctx.beginPath(); ctx.arc(pts[j].x,pts[j].y,pr2,0,Math.PI*2);
+      ctx.fillStyle='#060d18'; ctx.fill();
+      ctx.strokeStyle='#66ccee'; ctx.lineWidth=2.6; ctx.stroke();
+      // Two-layer frosted glass specular
+      ctx.beginPath(); ctx.arc(pts[j].x-pr2*0.24,pts[j].y-pr2*0.24,pr2*0.38,0,Math.PI*2);
+      ctx.fillStyle='rgba(180,235,255,0.30)'; ctx.fill();
+      ctx.beginPath(); ctx.arc(pts[j].x-pr2*0.32,pts[j].y-pr2*0.32,pr2*0.15,0,Math.PI*2);
+      ctx.fillStyle='rgba(255,255,255,0.55)'; ctx.fill();
+    }
+    ctx.globalAlpha=1;
+    // GLASS FINS — translucent ice fins alternating sides
+    _marks(R*1.3, function(px,py,tx,ty,fade){
+      if(fade<0.07) return;
+      var nx=-ty,ny=tx;
+      var fh=R*0.82*fade,fw=R*0.26*fade;
+      var side=(Math.round(fade*8)%2===0)?1:-1;
+      ctx.save(); ctx.globalAlpha=0.72*fade;
+      ctx.beginPath();
+      ctx.moveTo(px+nx*side*BW*0.36,py+ny*side*BW*0.36);
+      ctx.lineTo(px+nx*side*(BW*0.36+fh)+tx*fw,py+ny*side*(BW*0.36+fh)+ty*fw);
+      ctx.lineTo(px+nx*side*BW*0.36+tx*fw*2.2,py+ny*side*BW*0.36+ty*fw*2.2);
+      ctx.closePath();
+      ctx.fillStyle='rgba(110,210,250,0.22)'; ctx.fill();
+      ctx.strokeStyle='#aaeeff'; ctx.lineWidth=1.7; ctx.shadowColor='#aaeeff'; ctx.shadowBlur=6; ctx.stroke();
+      // inner white vein
+      ctx.globalAlpha=0.48*fade; ctx.strokeStyle='#ffffff'; ctx.lineWidth=0.9; ctx.shadowBlur=0;
+      ctx.beginPath();
+      ctx.moveTo(px+nx*side*BW*0.40,py+ny*side*BW*0.40);
+      ctx.lineTo(px+nx*side*(BW*0.38+fh*0.78)+tx*fw*0.5,py+ny*side*(BW*0.38+fh*0.78)+ty*fw*0.5);
+      ctx.stroke();
+      ctx.restore();
+    });
+    // HEAD — ice crystal orb
+    ctx.shadowColor='#aaeeff'; ctx.shadowBlur=22;
+    ctx.beginPath(); ctx.arc(hx,hy,R,0,Math.PI*2); ctx.fillStyle='#060d18'; ctx.fill();
+    ctx.strokeStyle='#66ccee'; ctx.lineWidth=3.6; ctx.stroke();
+    ctx.shadowBlur=0;
+    // Glass head specular
+    ctx.beginPath(); ctx.arc(hx-R*0.24,hy-R*0.24,R*0.44,0,Math.PI*2);
+    ctx.fillStyle='rgba(190,238,255,0.17)'; ctx.fill();
+    ctx.beginPath(); ctx.arc(hx-R*0.30,hy-R*0.30,R*0.17,0,Math.PI*2);
+    ctx.fillStyle='rgba(255,255,255,0.40)'; ctx.fill();
+    // ICE CROWN — 5 icicle spikes in arc above head
+    var crownSpikes=[{sf:-0.68,h:1.06},{sf:-0.30,h:1.34},{sf:0,h:1.58},{sf:0.30,h:1.34},{sf:0.68,h:1.06}];
+    ctx.shadowColor='#aaeeff'; ctx.shadowBlur=14;
+    crownSpikes.forEach(function(ck){
+      var bx=hx+sxp*ck.sf*R*0.58+fx2*R*0.26;
+      var by=hy+syp*ck.sf*R*0.58+fy2*R*0.26;
+      var tipx=hx+sxp*ck.sf*R*0.28+fx2*R*ck.h;
+      var tipy=hy+syp*ck.sf*R*0.28+fy2*R*ck.h;
+      ctx.beginPath();
+      ctx.moveTo(bx-sxp*R*0.11,by-syp*R*0.11);
+      ctx.lineTo(tipx,tipy);
+      ctx.lineTo(bx+sxp*R*0.11,by+syp*R*0.11);
+      ctx.closePath();
+      ctx.fillStyle='rgba(95,195,238,0.52)'; ctx.fill();
+      ctx.strokeStyle='#aaeeff'; ctx.lineWidth=1.5; ctx.stroke();
+      // inner bright highlight vein
+      ctx.strokeStyle='rgba(255,255,255,0.72)'; ctx.lineWidth=0.9; ctx.shadowBlur=0;
+      ctx.beginPath(); ctx.moveTo(bx,by); ctx.lineTo(tipx-fx2*R*0.07,tipy-fy2*R*0.07); ctx.stroke();
+      ctx.shadowColor='#aaeeff'; ctx.shadowBlur=14;
+    });
+    ctx.shadowBlur=0;
+    // EYES: deep ice blue, glowing, round pupil
+    var eo=R*0.50,er=R*0.43,ebx=hx+fx2*R*0.30,eby=hy+fy2*R*0.30;
+    var e1x=ebx+sxp*eo,e1y=eby+syp*eo,e2x=ebx-sxp*eo,e2y=eby-syp*eo;
+    ctx.shadowColor='#aaeeff'; ctx.shadowBlur=14;
+    ctx.fillStyle='#030c18';
+    ctx.beginPath(); ctx.arc(e1x,e1y,er,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(e2x,e2y,er,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='#44bbdd';
+    ctx.beginPath(); ctx.arc(e1x,e1y,er*0.70,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(e2x,e2y,er*0.70,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='#aaeeff';
+    ctx.beginPath(); ctx.arc(e1x,e1y,er*0.44,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(e2x,e2y,er*0.44,0,Math.PI*2); ctx.fill();
+    ctx.shadowBlur=0;
+    var pox=fx2*er*0.30,poy=fy2*er*0.30;
+    ctx.fillStyle='#020810';
+    ctx.beginPath(); ctx.arc(e1x+pox,e1y+poy,er*0.34,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(e2x+pox,e2y+poy,er*0.34,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,.92)';
+    ctx.beginPath(); ctx.arc(e1x+pox-er*0.15,e1y+poy-er*0.15,er*0.17,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(e2x+pox-er*0.15,e2y+poy-er*0.15,er*0.17,0,Math.PI*2); ctx.fill();
 
   } else {
     // DEFAULT skin
