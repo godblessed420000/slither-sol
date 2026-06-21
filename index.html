@@ -3970,6 +3970,7 @@ function showStart() {
   _wsLeave(); // close any lingering Ably/WS connection (spectating, death screen, etc.)
   _spectating=false; _specTargetId=null; var _shEl2=document.getElementById('specHud'); if(_shEl2) _shEl2.style.display='none';
   var _ffb3=document.getElementById('friendsFloatBtn'); if(_ffb3) _ffb3.style.display='';
+  var _db=document.getElementById('discordBtn'); if(_db) _db.style.display='';
   hideAll();
   _showMobileBar(); // restore wallet bar when returning to lobby
   var _hee2=document.getElementById('headerEmailEl'); if(_hee2) _hee2.style.display='';
@@ -4342,6 +4343,7 @@ function launchGame() {
   // Hide friends button + close panel during active gameplay
   var _ffb=document.getElementById('friendsFloatBtn'); if(_ffb) _ffb.style.display='none';
   var _ffp=document.getElementById('friendsPanel'); if(_ffp) _ffp.classList.remove('open'); panelOpen=false;
+  var _db2=document.getElementById('discordBtn'); if(_db2) _db2.style.display='none';
   _startNotifWatch(); // keep $1/$5 join notifications alive during gameplay
   _showMobileControls(true);
   _initJoystick(); // no-op after first call (guarded by _joyInited)
@@ -6429,6 +6431,7 @@ function cleanupL(keepAbly){
   _joyActive=false; _joyDX=0; _joyDY=0;
   var cw=document.getElementById('canvasWrap'); if(cw) cw.classList.remove('game-active');
   var _ffb2=document.getElementById('friendsFloatBtn'); if(_ffb2) _ffb2.style.display='';
+  var _db3=document.getElementById('discordBtn'); if(_db3) _db3.style.display='';
   if(!keepAbly) _wsLeave();
 }
 
