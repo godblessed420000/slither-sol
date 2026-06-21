@@ -293,6 +293,28 @@ canvas{display:block;width:100%;height:100%;}
 .toast-dismiss:hover{opacity:.9;}
 ::-webkit-scrollbar{width:4px;} ::-webkit-scrollbar-track{background:transparent;} ::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
 
+/* ══ SHOP BUTTON ══ */
+#shopFloatBtn{position:fixed;top:80px;right:24px;z-index:300;display:flex;align-items:center;gap:8px;background:linear-gradient(135deg,#9945FF,#14F195);border:none;border-radius:24px;padding:11px 20px;cursor:pointer;font-family:'Orbitron',monospace;font-size:.65rem;font-weight:700;color:#fff;letter-spacing:1.5px;text-decoration:none;box-shadow:0 0 22px rgba(153,69,255,.55);transition:transform .18s,box-shadow .18s;white-space:nowrap;}
+#shopFloatBtn:hover{transform:scale(1.07);box-shadow:0 0 36px rgba(153,69,255,.85);}
+/* ══ SHOP MODAL ══ */
+#shopModal{position:fixed;inset:0;background:rgba(2,4,14,.92);z-index:500;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(6px);}
+#shopModal.hidden{display:none;}
+.shop-panel{background:var(--panel);border:1px solid rgba(153,69,255,.45);border-radius:16px;width:min(820px,96vw);max-height:88vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 0 60px rgba(153,69,255,.25);}
+.shop-header{display:flex;align-items:center;justify-content:space-between;padding:16px 22px;border-bottom:1px solid rgba(153,69,255,.22);}
+.shop-title{font-family:'Orbitron',monospace;font-size:.95rem;font-weight:900;letter-spacing:2px;background:linear-gradient(90deg,#9945FF,#14F195);-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+.shop-close{background:none;border:1px solid rgba(255,255,255,.18);border-radius:8px;color:#fff;cursor:pointer;padding:5px 12px;font-size:.8rem;transition:background .15s;}
+.shop-close:hover{background:rgba(255,255,255,.10);}
+.shop-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px;padding:18px 22px;overflow-y:auto;}
+.skin-card{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.10);border-radius:12px;padding:16px 14px;display:flex;flex-direction:column;align-items:center;gap:10px;transition:border-color .18s,box-shadow .18s;cursor:default;}
+.skin-card.active{border-color:var(--green);box-shadow:0 0 18px rgba(20,241,149,.22);}
+.skin-card:hover{border-color:rgba(255,255,255,.28);}
+.skin-preview{width:56px;height:56px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.4rem;}
+.skin-name{font-family:'Orbitron',monospace;font-size:.58rem;font-weight:700;letter-spacing:1px;color:#fff;text-align:center;}
+.skin-desc{font-size:.52rem;color:var(--dim);text-align:center;line-height:1.5;}
+.skin-equip-btn{width:100%;padding:7px 0;border-radius:8px;border:none;cursor:pointer;font-family:'Orbitron',monospace;font-size:.54rem;font-weight:700;letter-spacing:1px;transition:opacity .15s;}
+.skin-equip-btn.equipped{background:var(--green);color:#000;}
+.skin-equip-btn.not-equipped{background:rgba(153,69,255,.25);border:1px solid rgba(153,69,255,.55);color:#cc88ff;}
+.skin-equip-btn.not-equipped:hover{background:rgba(153,69,255,.45);}
 /* ══ DISCORD BUTTON ══ */
 #discordBtn{position:fixed;bottom:24px;left:280px;z-index:300;display:flex;align-items:center;gap:8px;background:#5865F2;border:none;border-radius:24px;padding:10px 18px;cursor:pointer;font-family:'Orbitron',monospace;font-size:.62rem;font-weight:700;color:#fff;letter-spacing:1px;text-decoration:none;box-shadow:0 0 18px rgba(88,101,242,.55);transition:transform .18s,box-shadow .18s;white-space:nowrap;}
 #discordBtn:hover{transform:scale(1.07);box-shadow:0 0 32px rgba(88,101,242,.85);}
@@ -3975,6 +3997,64 @@ function renderSkinPicker(){
   });
 }
 
+var _SKIN_DESCS={
+  default:'Classic purple serpent.',
+  frost:'Ice bead snake with a crystal crown.',
+  void:'Neon circuit board with glowing antennae.',
+  inferno:'Flame wings and devil horns.',
+  toxic:'Slime bubbles with acid splash boost.',
+  galaxy:'Cosmic stars and a Saturn ring.',
+  gold:'Armored gold plates with a jeweled crown.',
+  nova:'Supernova cascade with rainbow burst.',
+  dragon:'Crimson scales, dorsal spines, dragon breath.',
+  cryo:'Frozen glass body with an ice crown and glass fins.',
+  nebula:'Cosmic cloud wanderer with twin antennae.',
+  leviathan:'Ancient deep-sea serpent with bioluminescent fins.',
+  synth:'Retrowave neon grid with visor and synth sun.'
+};
+function openShop(){
+  var m=document.getElementById('shopModal'); if(m) m.classList.remove('hidden');
+  renderShop();
+}
+function closeShop(){
+  var m=document.getElementById('shopModal'); if(m) m.classList.add('hidden');
+}
+function renderShop(){
+  var g=document.getElementById('shopGrid'); if(!g) return;
+  g.innerHTML='';
+  _SKINS.forEach(function(sk){
+    var act=sk.id===_activeSkin;
+    var card=document.createElement('div');
+    card.className='skin-card'+(act?' active':'');
+    var preview=document.createElement('div');
+    preview.className='skin-preview';
+    preview.style.cssText='background:radial-gradient(circle at 35% 35%,'+sk.col+'cc,'+sk.col+'44);box-shadow:0 0 18px '+sk.col+'88;';
+    preview.textContent='🐍';
+    var name=document.createElement('div');
+    name.className='skin-name';
+    name.style.color=sk.col;
+    name.textContent=sk.label;
+    var desc=document.createElement('div');
+    desc.className='skin-desc';
+    desc.textContent=_SKIN_DESCS[sk.id]||'';
+    var btn=document.createElement('button');
+    btn.className='skin-equip-btn '+(act?'equipped':'not-equipped');
+    btn.textContent=act?'✓ Equipped':'Equip';
+    btn.addEventListener('click',function(){
+      _activeSkin=sk.id;
+      try{ localStorage.setItem('slither_skin',sk.id); }catch(e){}
+      if(player) player.skin=sk.id;
+      renderSkinPicker();
+      renderShop();
+    });
+    card.appendChild(preview);
+    card.appendChild(name);
+    card.appendChild(desc);
+    card.appendChild(btn);
+    g.appendChild(card);
+  });
+}
+
 function showStart() {
   _inGameSession=false;
   _wsLeave(); // close any lingering Ably/WS connection (spectating, death screen, etc.)
@@ -3982,6 +4062,7 @@ function showStart() {
   var _ffb3=document.getElementById('friendsFloatBtn'); if(_ffb3) _ffb3.style.display='';
   var _db=document.getElementById('discordBtn'); if(_db) _db.style.display='';
   var _xb=document.getElementById('xBtn'); if(_xb) _xb.style.display='';
+  var _sb=document.getElementById('shopFloatBtn'); if(_sb) _sb.style.display='';
   hideAll();
   _showMobileBar(); // restore wallet bar when returning to lobby
   var _hee2=document.getElementById('headerEmailEl'); if(_hee2) _hee2.style.display='';
@@ -4356,6 +4437,8 @@ function launchGame() {
   var _ffp=document.getElementById('friendsPanel'); if(_ffp) _ffp.classList.remove('open'); panelOpen=false;
   var _db2=document.getElementById('discordBtn'); if(_db2) _db2.style.display='none';
   var _xb2=document.getElementById('xBtn'); if(_xb2) _xb2.style.display='none';
+  var _sb2=document.getElementById('shopFloatBtn'); if(_sb2) _sb2.style.display='none';
+  closeShop();
   _startNotifWatch(); // keep $1/$5 join notifications alive during gameplay
   _showMobileControls(true);
   _initJoystick(); // no-op after first call (guarded by _joyInited)
@@ -6725,6 +6808,7 @@ function cleanupL(keepAbly){
   var _ffb2=document.getElementById('friendsFloatBtn'); if(_ffb2) _ffb2.style.display='';
   var _db3=document.getElementById('discordBtn'); if(_db3) _db3.style.display='';
   var _xb3=document.getElementById('xBtn'); if(_xb3) _xb3.style.display='';
+  var _sb3=document.getElementById('shopFloatBtn'); if(_sb3) _sb3.style.display='';
   if(!keepAbly) _wsLeave();
 }
 
@@ -7750,6 +7834,7 @@ window.addEventListener('load', function() {
 
   refreshCards();
   document.querySelectorAll('.modal-back').forEach(function(m){ m.addEventListener('click',function(e){ if(e.target===m) m.classList.add('hidden'); }); });
+  var _sm=document.getElementById('shopModal'); if(_sm) _sm.addEventListener('click',function(e){ if(e.target===_sm) closeShop(); });
   var sm=document.getElementById('searchModal'); if(sm) sm.addEventListener('click',function(e){ if(e.target===sm) closeSearch(); });
   var lm=document.getElementById('lbModal');     if(lm) lm.addEventListener('click',function(e){ if(e.target===lm) closeLeaderboard(); });
 
@@ -7820,6 +7905,20 @@ window.addEventListener('load', function() {
 
 
 </script>
+
+<!-- ══ SHOP BUTTON ══ -->
+<button id="shopFloatBtn" onclick="openShop()" title="Skin Shop">🛒 SHOP</button>
+
+<!-- ══ SHOP MODAL ══ -->
+<div id="shopModal" class="hidden">
+  <div class="shop-panel">
+    <div class="shop-header">
+      <span class="shop-title">🛒 SKIN SHOP</span>
+      <button class="shop-close" onclick="closeShop()">✕ Close</button>
+    </div>
+    <div class="shop-grid" id="shopGrid"></div>
+  </div>
+</div>
 
 <!-- ══ DISCORD BUTTON ══ -->
 <a id="discordBtn" href="https://discord.gg/2Ez7wNRZ" target="_blank" rel="noopener" title="Join our Discord">
