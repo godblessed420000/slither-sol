@@ -4078,6 +4078,50 @@ function _cacheHudEls(){
 }
 var lobbyTimer=null,lobbyCount=1;
 var _lobbyCountTimer=null;
+
+// ── LOBBY JOIN NOTIFICATIONS (always-on, even in-game) ──
+var _notifPrev={1:-1,5:-1};  // -1 = not yet seeded; skips first-poll false positives
+var _notifWatchTimer=null;
+var _notifReady=false;
+function _requestNotifPerm(){
+  if(!('Notification' in window)) return;
+  if(Notification.permission==='granted'){ _notifReady=true; return; }
+  if(Notification.permission!=='denied'){
+    Notification.requestPermission().then(function(p){ _notifReady=(p==='granted'); });
+  }
+}
+function _checkLobbyNotifs(d){
+  [1,5].forEach(function(t){
+    var prev=_notifPrev[t];
+    var curr=(d&&d[t]!=null)?+d[t]:0;
+    if(prev>=0 && curr>prev){
+      var diff=curr-prev;
+      var body=(diff===1?'1 player':''+diff+' players')+' joined the $'+t+' lobby! ('+curr+' online)';
+      if(_notifReady){
+        try{ new Notification('🐍 SlitherSOL — $'+t+' Lobby',{body:body,icon:'/favicon.ico',tag:'lj'+t,renotify:true}); }catch(e){}
+      }
+      toast('🐍 $'+t+' Lobby: '+body);
+    }
+    _notifPrev[t]=curr;
+  });
+}
+function _notifPoll(){
+  fetch('https://ws.slither-sol.com/counts',{cache:'no-store'})
+    .then(function(r){return r.ok?r.json():null;})
+    .then(function(d){
+      if(!d) return;
+      _checkLobbyNotifs(d);
+      ['free',1,5,10].forEach(function(k){ if(d[k]!=null) tierOnline[k]=d[k]; });
+      if(!gameRunning) refreshCards();
+    }).catch(function(){});
+}
+function _startNotifWatch(){
+  _requestNotifPerm();
+  clearInterval(_notifWatchTimer);
+  _notifPoll(); // seed prev counts immediately — no notification on first call
+  _notifWatchTimer=setInterval(_notifPoll,5000);
+}
+
 function _pollLobbyCounts(){
   fetch('https://ws.slither-sol.com/counts',{cache:'no-store'})
     .then(function(r){return r.ok?r.json():null;})
@@ -7423,6 +7467,7 @@ window.addEventListener('load', function() {
   var lm=document.getElementById('lbModal');     if(lm) lm.addEventListener('click',function(e){ if(e.target===lm) closeLeaderboard(); });
 
   // (ambient fake kill feed removed — real players only)
+  _startNotifWatch(); // always-on $1/$5 lobby join notifications
 });
 
 // ── Animated main-menu background: load the user's image + run rising-ember canvas ──
