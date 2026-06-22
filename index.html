@@ -4784,42 +4784,54 @@ async function triggerCashout(){
 // Cashout value = TOTAL SOL currently carried (entry + all kill earnings accumulated this round)
 function calcVal(){ return Math.max(0, +((W.balance||0).toFixed(6))); }
 
-// ── TAB-HIDDEN FALLBACK: keep snake moving when tab is not visible ──
-// requestAnimationFrame pauses when the tab is hidden, which freezes the snake.
-// Players could exploit this to dodge fights or avoid the map border.
-// Fix: run update() on a setInterval while hidden so the snake keeps moving normally.
-var _hiddenGameTimer = null;
-document.addEventListener('visibilitychange', function(){
-  if(document.hidden){
-    if(!gameRunning && !_spectating) return;
-    clearInterval(_hiddenGameTimer);
-    _hiddenGameTimer = setInterval(function(){
-      if(!gameRunning && !_spectating){ clearInterval(_hiddenGameTimer); _hiddenGameTimer=null; return; }
-      var _hn = performance.now();
-      var _hdt = _lastLoopT ? Math.min((_hn - _lastLoopT)/16.667, 2.5) : 1.0;
-      _lastLoopT = _hn;
+// ── TAB-HIDDEN FALLBACK: Web Worker timer (not throttled by browser) ──
+// Both rAF and setInterval get throttled to ~1s in hidden tabs.
+// Web Workers have their own timer thread that browsers do NOT throttle.
+// The worker fires a message every 33ms; the main thread runs update() on each tick.
+var _bgWorker = null;
+var _bgWorkerSrc = 'var _t=null;onmessage=function(e){if(e.data==="start"){_t=setInterval(function(){postMessage(1);},33);}else if(e.data==="stop"){clearInterval(_t);_t=null;}};';
+function _startBgWorker(){
+  if(_bgWorker) return;
+  try{
+    var blob=new Blob([_bgWorkerSrc],{type:'application/javascript'});
+    _bgWorker=new Worker(URL.createObjectURL(blob));
+    _bgWorker.onmessage=function(){
+      if(!gameRunning&&!_spectating){_stopBgWorker();return;}
+      var _hn=performance.now();
+      var _hdt=_lastLoopT?Math.min((_hn-_lastLoopT)/16.667,2.5):1.0;
+      _lastLoopT=_hn;
       update(_hdt);
-      // Keep broadcasting position so peers/server see the snake still moving
-      if(gameRunning && player && player.alive && _ws && _ws.readyState===WebSocket.OPEN){
+      if(gameRunning&&player&&player.alive&&_ws&&_ws.readyState===WebSocket.OPEN){
         try{
           _posSeq++;
           _posMsg.clientId=_wsClientId;
           var _hpd=_posMsg.data;
-          _hpd.x=+player.x.toFixed(1); _hpd.y=+player.y.toFixed(1);
-          _hpd.a=+player.angle.toFixed(3); _hpd.l=player.length;
-          _hpd.s=score; _hpd.b=boosting?1:0;
+          _hpd.x=+player.x.toFixed(1);_hpd.y=+player.y.toFixed(1);
+          _hpd.a=+player.angle.toFixed(3);_hpd.l=player.length;
+          _hpd.s=score;_hpd.b=boosting?1:0;
           _hpd.n=(_posSeq%5===1)?player.name:undefined;
           _hpd.color=(_posSeq%5===1)?player.color:undefined;
           _hpd.sk=(_posSeq%5===1)?(_activeSkin||'default'):undefined;
           _ws.send(JSON.stringify(_posMsg));
         }catch(e){}
       }
-    }, 33); // ~30fps while hidden — enough to keep movement accurate
+    };
+    _bgWorker.postMessage('start');
+  }catch(e){}
+}
+function _stopBgWorker(){
+  if(!_bgWorker) return;
+  try{_bgWorker.postMessage('stop');_bgWorker.terminate();}catch(e){}
+  _bgWorker=null;
+}
+document.addEventListener('visibilitychange',function(){
+  if(document.hidden){
+    if(!gameRunning&&!_spectating) return;
+    _startBgWorker();
   } else {
-    // Tab visible again — stop fallback, reset timer, kick rAF if needed
-    clearInterval(_hiddenGameTimer); _hiddenGameTimer=null;
-    _lastLoopT = performance.now(); // prevent dt spike on resume
-    if(gameRunning || _spectating) requestAnimationFrame(loop);
+    _stopBgWorker();
+    _lastLoopT=performance.now(); // prevent dt spike on resume
+    if(gameRunning||_spectating) requestAnimationFrame(loop);
   }
 });
 
