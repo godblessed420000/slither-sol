@@ -5109,16 +5109,50 @@ function killCheck(){
     var headGap=dst(player.x,player.y,px,py);
 
     // Head-on: both head circles overlap.
-    // DamnBruhh-style: boosting player always survives; hash resolves ties.
-    // CRITICAL: never use peer's boost state to trigger a kill — stale packets from both
-    // sides stopping boost simultaneously cause both clients to call killPlayer (both-die bug).
-    // Using ONLY local `boosting` + deterministic hash guarantees exactly one client dies.
+    // Winner = whoever is "in front" — the snake being chased, not the one charging.
+    // Size has zero influence. Never both die.
+    //
+    // Step 1 — pursuit score: dot(my velocity, unit-vec toward them).
+    //   +1 = I'm heading straight at them (attacker), -1 = heading away (defender).
+    // Step 2 — if scores differ by >0.15, the higher-pursuit snake (attacker) dies.
+    // Step 3 — near-symmetric: compare who was farther from the collision midpoint last tick
+    //   (was closing in more aggressively). That snake dies.
+    // Step 4 — truly symmetric fallback: deterministic hash so exactly one client calls kill.
     if(headGap<myR+pR){
-      if(boosting){ continue; } // I'm boosting (local state, always reliable) → I survive
-      // Not boosting: hash picks loser — same result on both clients, always complementary.
-      var _h=_hoHash(myId,pid); // 0=smaller-ID dies, 1=larger-ID dies
-      if((_h===0)===(myId<pid)){ killPlayer('Eliminated by '+p.name,p.remoteId||null); return; }
-      continue;
+      var _myVx=Math.cos(player.angle), _myVy=Math.sin(player.angle);
+      var _pAng=(p.angle!=null)?p.angle:(p.targetAngle||0);
+      var _pVx=Math.cos(_pAng), _pVy=Math.sin(_pAng);
+      // Unit vector from my head to their head
+      var _hoDd=headGap||1;
+      var _hoNx=(px-player.x)/_hoDd, _hoNy=(py-player.y)/_hoDd;
+      // How much each velocity aims toward the other's head (+1 = straight at them)
+      var _myPursuit=_myVx*_hoNx+_myVy*_hoNy;
+      var _pPursuit =_pVx*(-_hoNx)+_pVy*(-_hoNy);
+      var _pdiff=_myPursuit-_pPursuit;
+      if(_pdiff>0.15){
+        // I'm clearly the attacker — I die
+        killPlayer('Eliminated by '+p.name,p.remoteId||null); return;
+      } else if(_pdiff<-0.15){
+        // They're clearly the attacker — they die on their own client
+        continue;
+      } else {
+        // Near-symmetric: whoever was farther from the collision midpoint last tick was closing in → dies
+        var _midX=(player.x+px)*0.5, _midY=(player.y+py)*0.5;
+        var _myPrev=player.segs[1]||{x:player.x,y:player.y};
+        var _pPrev=(p.th&&p.th[1])?p.th[1]:{x:px,y:py};
+        var _myPD=dst(_myPrev.x,_myPrev.y,_midX,_midY);
+        var _pPD =dst(_pPrev.x,_pPrev.y,_midX,_midY);
+        if(_myPD>_pPD+2){
+          killPlayer('Eliminated by '+p.name,p.remoteId||null); return;
+        } else if(_pPD>_myPD+2){
+          continue;
+        } else {
+          // Truly symmetric: deterministic hash — same result on both clients, exactly one dies
+          var _h=_hoHash(myId,pid);
+          if((_h===0)===(myId<pid)){ killPlayer('Eliminated by '+p.name,p.remoteId||null); return; }
+          continue;
+        }
+      }
     }
 
     // Body hit: my head vs their segs — stop at visual body length so boosting can't extend hitbox
