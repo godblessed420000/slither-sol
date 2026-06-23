@@ -1153,15 +1153,24 @@ canvas{display:block;width:100%;height:100%;}
       </div>
     </div>
 
+    <!-- DEATH BANNER — fades after 4s while spectating, no black overlay -->
+    <div id="deathBanner" style="display:none;position:absolute;top:0;left:0;right:0;z-index:115;background:linear-gradient(180deg,rgba(2,8,16,.90) 55%,transparent 100%);padding:14px 20px 32px;pointer-events:none;text-align:center;transition:opacity .8s;">
+      <div style="font-family:'Orbitron',monospace;font-size:.92rem;font-weight:900;color:#FF4560;text-shadow:0 0 14px rgba(215,69,96,.65);letter-spacing:2px;">&#128128; ELIMINATED</div>
+      <div id="dbReason" style="font-size:.63rem;color:rgba(215,215,215,.72);margin-top:4px;"></div>
+      <div id="dbStats"  style="font-size:.55rem;color:rgba(215,215,215,.38);margin-top:3px;letter-spacing:.5px;"></div>
+    </div>
+
     <!-- SPECTATING HUD -->
-    <div id="specHud" style="display:none;position:absolute;bottom:14px;left:50%;transform:translateX(-50%);z-index:120;background:rgba(0,0,0,.80);border:1px solid rgba(215,215,215,.13);border-radius:10px;padding:7px 14px;flex-direction:row;align-items:center;gap:10px;pointer-events:auto;white-space:nowrap;">
-      <span style="font-size:.46rem;color:var(--dim);letter-spacing:1.5px;text-transform:uppercase;">&#128065; Spectating</span>
-      <span id="specTargetName" style="font-family:'Orbitron',monospace;font-size:.68rem;color:var(--green);font-weight:700;"></span>
-      <div style="display:flex;gap:5px;margin-left:4px;">
-        <button class="btn" style="font-size:.52rem;padding:4px 10px;" onclick="_switchSpecTarget(-1)">&#9664;</button>
-        <button class="btn" style="font-size:.52rem;padding:4px 10px;" onclick="_switchSpecTarget(1)">&#9654;</button>
-        <button class="btn" style="font-size:.52rem;padding:4px 10px;background:linear-gradient(135deg,var(--red),#cc1133);color:#fff;" onclick="_exitSpectate()">Exit</button>
+    <div id="specHud" style="display:none;position:absolute;bottom:14px;left:50%;transform:translateX(-50%);z-index:120;background:rgba(0,0,0,.82);border:1px solid rgba(215,215,215,.13);border-radius:10px;padding:7px 14px;flex-direction:row;align-items:center;gap:8px;pointer-events:auto;white-space:nowrap;">
+      <span style="font-size:.44rem;color:var(--dim);letter-spacing:1.5px;text-transform:uppercase;">&#128065; Spectating</span>
+      <span id="specTargetName" style="font-family:'Orbitron',monospace;font-size:.66rem;color:var(--green);font-weight:700;"></span>
+      <div style="display:flex;gap:4px;">
+        <button class="btn" style="font-size:.50rem;padding:4px 8px;" onclick="_switchSpecTarget(-1)">&#9664;</button>
+        <button class="btn" style="font-size:.50rem;padding:4px 8px;" onclick="_switchSpecTarget(1)">&#9654;</button>
       </div>
+      <div style="width:1px;height:16px;background:rgba(215,215,215,.14);flex-shrink:0;"></div>
+      <button class="btn" style="font-size:.58rem;padding:5px 14px;background:linear-gradient(135deg,var(--green),#0cb87a);color:#000;font-weight:700;" onclick="quickRejoin()">&#9654; Rejoin</button>
+      <button class="btn" style="font-size:.58rem;padding:5px 12px;background:rgba(215,215,215,.07);border:1px solid rgba(215,215,215,.14);color:rgba(215,215,215,.60);" onclick="showStart()">&#8962; Home</button>
     </div>
 
     <!-- CASHOUT SUCCESS -->
@@ -4138,6 +4147,7 @@ var _claimedDrops = {}; // id→'sent'|'collected' dedup for SOL tx and credit
 var _inGameSession=false; // true from launchGame() until showStart() — email hidden the whole time
 var _staleFrame=0; // frame counter for stale-peer eviction (runs every 60 frames)
 var _lastLoopT=0;  // last loop timestamp for delta-time calculation
+var _loopActive=false; // true while a loop() rAF chain is running — guards against double-launch
 var _lastPosSend=0; // last position-publish timestamp (rAF-driven, ~60fps)
 var _preRejoinAvgSegs=0; // snapshot of peer avg segs taken just before _wsJoin() clears peers[]
 var _boostExhaustedUntil=0; // performance.now() timestamp when the 3s exhaustion penalty expires
@@ -4838,7 +4848,8 @@ document.addEventListener('visibilitychange',function(){
 });
 
 function loop(){
-  if(!gameRunning&&!_spectating) return;
+  if(!gameRunning&&!_spectating){ _loopActive=false; return; }
+  _loopActive=true;
   var _lt = performance.now();
   // Normalize to 60fps: dt=1.0 at 60fps, 0.5 at 120fps, 2.0 at 30fps.
   // Cap at 2.5 to prevent huge jumps after tab-switch or GC pause.
@@ -5295,25 +5306,30 @@ function killPlayer(reason, killedBy){
   // Re-sync from chain after kill TX propagates (~15s) to show the true post-death balance.
   // The immediate zero is correct intent; this catches any edge cases where TX timing differs.
   setTimeout(function(){ if(W.pubkey) _fetchPrivyWalletBalance(W.pubkey); }, 5000);
-  if(_elSidebar) _elSidebar.style.display=''; setTimeout(resizeC,30);
+  // Scatter body as gold food, clear segs
   for(var i=0;i<Math.min(player.segs.length,70);i++) addFood(player.segs[i].x+(Math.random()-.5)*18,player.segs[i].y+(Math.random()-.5)*18,false,true);
   player.segs = []; // wipe body immediately — prevents ghost rendering on any trailing draw call
   cleanupL(true); cancelCharge(); // keepAbly=true so spectating can still receive pos updates
   var t=TIERS[activeTier];
-  var el;
-  el=document.getElementById('dKiller'); if(el) el.textContent=reason;
-  if(myKills>0){
-    el=document.getElementById('dEarn');
-    if(el) el.textContent=(t.sol>0?'You earned +$'+(killSOL*SOL_USD).toFixed(2)+' from '+myKills+' kill'+(myKills>1?'s':'')+' this round':''+myKills+' kill'+(myKills>1?'s':'')+' (Free Play)');
-  } else {
-    el=document.getElementById('dEarn'); if(el) el.textContent='No kills this round'+(t.sol>0?' — your $'+(carriedSol*SOL_USD).toFixed(2)+' goes to your killer':'');
-  }
-  el=document.getElementById('dStats');  if(el) el.textContent=t.name+' · Score:'+score+' · Length:'+player.segs.length;
-  // Update rejoin button label with tier name
-  var rb=document.getElementById('rejoinBtnDeath');
-  if(rb) rb.textContent='▶ Rejoin '+(t.usd>0?'$'+t.usd+' Lobby':'Free Lobby');
+  // Hide in-game HUD chrome
   ['cashoutHud','pingEl','hudTierBadge','activeLobbyBadge','chatBox'].forEach(function(id){ var e2=document.getElementById(id); if(e2) e2.style.display='none'; }); _closeChat();
-  hideAll(); var ov=document.getElementById('ovDeath'); if(ov) ov.classList.remove('hidden');
+  // Show brief death banner (fades after 4s) — skip the black overlay entirely
+  var _dbEl=document.getElementById('deathBanner');
+  if(_dbEl){
+    var _dbRsn=document.getElementById('dbReason');
+    var _dbSt=document.getElementById('dbStats');
+    if(_dbRsn) _dbRsn.textContent=reason;
+    var _dbKills=myKills?' · '+myKills+' kill'+(myKills>1?'s':''):'';
+    var _dbSol=(t&&t.sol>0&&carriedSol>0)?' · $'+(carriedSol*SOL_USD).toFixed(2)+' wager lost':'';
+    if(_dbSt) _dbSt.textContent=(t?t.name:'')+' · Score '+score+_dbSol+_dbKills;
+    _dbEl.style.opacity='1'; _dbEl.style.display='block';
+    setTimeout(function(){
+      _dbEl.style.opacity='0';
+      setTimeout(function(){ _dbEl.style.display='none'; _dbEl.style.opacity=''; },800);
+    },4000);
+  }
+  // Jump straight into spectate — canvas stays visible, no black screen
+  startSpectating();
 }
 
 function killPeer(p){
@@ -5340,13 +5356,13 @@ function startSpectating(){
     _specTargetId=alivePeers[0].remoteId;
     camX=alivePeers[0].x; camY=alivePeers[0].y;
   }
-  // No peers right now — watch the empty arena; auto-follow when someone joins
   var ov=document.getElementById('ovDeath'); if(ov) ov.classList.add('hidden');
-  // Full-screen canvas: hide sidebar and resize (mirrors launchGame behaviour)
   if(_elSidebar) _elSidebar.style.display='none'; setTimeout(resizeC,30);
   var sh=document.getElementById('specHud'); if(sh) sh.style.display='flex';
   _updateSpecHud();
-  loop();
+  // Only launch a new loop if one isn't already running (e.g. called from within loop→killPlayer).
+  // If _loopActive is true the existing rAF chain picks up _spectating=true automatically.
+  if(!_loopActive) requestAnimationFrame(loop);
 }
 function _switchSpecTarget(dir){
   var alivePeers=peers.filter(function(p){return p.alive&&p.isRemote;});
@@ -5360,8 +5376,8 @@ function _switchSpecTarget(dir){
 function _exitSpectate(){
   _spectating=false; _specTargetId=null;
   var sh=document.getElementById('specHud'); if(sh) sh.style.display='none';
-  var ov=document.getElementById('ovDeath'); if(ov) ov.classList.remove('hidden');
-  if(_elSidebar) _elSidebar.style.display=''; setTimeout(resizeC,30);
+  var db=document.getElementById('deathBanner'); if(db){ db.style.display='none'; db.style.opacity=''; }
+  showStart();
 }
 function draw(){
   ctx.clearRect(0,0,gc.width,gc.height);
