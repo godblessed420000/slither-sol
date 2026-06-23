@@ -3560,6 +3560,7 @@ function _wsHandleMsg(msg, fromAbly) {
       }
       if (d.l) { rp.length = d.l; }
       if (d.wb != null) { rp.widthBonus = d.wb; }
+      if (d.pg != null) { rp.ping = d.pg; }
       rp.headR = snakeRadius(rp);
       rp.boosting = !!d.b;
     }
@@ -4907,6 +4908,7 @@ function loop(){
       _pd.color = (_posSeq % 5 === 1) ? player.color : undefined;
       _pd.sk    = (_posSeq % 5 === 1) ? (_activeSkin||'default') : undefined;
       _pd.wb    = (_posSeq % 5 === 1) ? Math.round(player.widthBonus||0) : undefined;
+      _pd.pg    = (_posSeq % 5 === 1) ? Math.round(_pingEma||0) : undefined; // ping for server-tick priority tiebreak
       _ws.send(JSON.stringify(_posMsg));
     } catch(e) {}
   }
@@ -5223,11 +5225,16 @@ function killCheck(){
       //  < 0  →  They are further in front  →  THEY WIN, I die.
       var _aFwd=(player.x-px)*Math.cos(player.angle)+(player.y-py)*Math.sin(player.angle);
 
-      if(_aFwd<0){
-        // I'm behind — I lose
+      // Server-tick priority tiebreak: when |aFwd| < 3 (true symmetric head-on),
+      // lower ping wins — mirrors "whose inputs reached the server first" on DamnBruh.
+      var _myPing=_pingEma||999, _theirPing=p.ping||999;
+      var _iWin=Math.abs(_aFwd)<3 ? (_myPing<=_theirPing) : (_aFwd>=0);
+
+      if(!_iWin){
+        // I lose
         killPlayer('Eliminated by '+p.name,pid); return;
       } else {
-        // They're behind — send kill_target so they die on their client
+        // They lose — send kill_target so they die on their client
         if(_sentKillTs[pid]&&_now-_sentKillTs[pid]<2000){ continue; }
         _sentKillTs[pid]=_now;
         var _hoRkp=_remoteMap[pid];
