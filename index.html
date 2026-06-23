@@ -3328,12 +3328,13 @@ function _wsHandleMsg(msg, fromAbly) {
   // die no longer requires Ably — it goes via WS+Ably with dedup in the die handler.
   if (type === 'chat' && !fromAbly) return;
 
-  // Round-trip ping response — update ping display
+  // Round-trip ping response — EMA smoothing eliminates GC and scheduling spikes
   if (type === 'ping') {
     var rtt = Math.round(performance.now() - (d.t || 0));
+    _pingEma = _pingEma ? Math.round(_pingEma * 0.75 + rtt * 0.25) : rtt;
     if (_elPingEl) {
-      _elPingEl.textContent = '● ' + rtt + 'ms';
-      _elPingEl.style.color = rtt < 30 ? '#14F195' : rtt < 60 ? '#FFD700' : '#FF4560';
+      _elPingEl.textContent = '● ' + _pingEma + 'ms';
+      _elPingEl.style.color = _pingEma < 30 ? '#14F195' : _pingEma < 60 ? '#FFD700' : '#FF4560';
     }
     return;
   }
@@ -3869,11 +3870,14 @@ setInterval(function() {
 }, 15000);
 
 // ── Ping display ─────────────────────────────────────────────────────────────
+var _pingIntervalId = null; // guard against duplicate intervals from multiple _wsPingLoop() calls
+var _pingEma = 0;           // exponential moving average — smooths GC and scheduling spikes
 function _wsPingLoop() {
-  setInterval(function() {
+  if (_pingIntervalId) clearInterval(_pingIntervalId);
+  _pingIntervalId = setInterval(function() {
     if (!_ws || _ws.readyState !== WebSocket.OPEN) return;
     _wsSend('ping', { t: performance.now() });
-  }, 1000); // 1s keeps display current; performance.now() gives sub-ms precision
+  }, 500); // 2×/s gives EMA more samples to stabilise the display
 }
 
 // ════════════════ SERVER + LOBBY SELECT ════════════════
@@ -5440,12 +5444,15 @@ function draw(){
   for(var i=0;i<food.length;i++){
     var f=food[i];
     if(f.x<vx1||f.x>vx2||f.y<vy1||f.y>vy2) continue;
+    if(f.r*CAM_ZOOM<1.0) continue; // sub-pixel at this zoom — invisible, skip GPU work
     if(!_fcBuckets[f.color]) _fcBuckets[f.color]=[];
     _fcBuckets[f.color].push(f);
   }
   // Sharp flash: squared sine spends most time dim then spikes bright (~700ms cycle)
   var _orbFlash = Math.pow(0.5+0.5*Math.sin(performance.now()/350), 2);
-  var _glowBlur = 3+_orbFlash*26;
+  // Skip per-item glow below zoom 0.45 — items are tiny, shadowBlur costs GPU for nothing
+  var _showGlow = CAM_ZOOM > 0.45;
+  var _glowBlur = _showGlow ? (3+_orbFlash*26) : 0;
   var _fk=Object.keys(_fcBuckets);
   for(var ci=0;ci<_fk.length;ci++){
     var col=_fk[ci]; var _fl=_fcBuckets[col]; if(!_fl.length) continue;
@@ -5454,40 +5461,43 @@ function draw(){
     for(var fi=0;fi<_fl.length;fi++){ var f=_fl[fi]; var fr=f.r*(1+_orbFlash*0.5); ctx.moveTo(f.x+fr,f.y); ctx.arc(f.x,f.y,fr,0,Math.PI*2); }
     ctx.fill();
   }
-  // White sparkle center that appears at flash peak
-  if(_orbFlash>0.45){
+  // White sparkle center — only worth drawing when glows are on and flash is peaking
+  if(_showGlow && _orbFlash>0.45){
     var _sa=((_orbFlash-0.45)/0.55*0.85).toFixed(2);
     ctx.shadowColor='#fff'; ctx.shadowBlur=14;
     ctx.fillStyle='rgba(255,255,255,'+_sa+')';
     ctx.beginPath();
     for(var _fi2=0;_fi2<food.length;_fi2++){
       var _ff=food[_fi2]; if(_ff.x<vx1||_ff.x>vx2||_ff.y<vy1||_ff.y>vy2) continue;
+      if(_ff.r*CAM_ZOOM<1.0) continue;
       var _sr=_ff.r*0.45; ctx.moveTo(_ff.x+_sr,_ff.y); ctx.arc(_ff.x,_ff.y,_sr,0,Math.PI*2);
     }
     ctx.fill();
   }
   ctx.shadowBlur=0;
 
-  // ── Death food (gold wager orbs) — prominent pulsing rings so players can't miss them ──
-  var _dfPulse=0.5+0.5*Math.sin(performance.now()/200);
-  ctx.save();
-  for(var _dfi=0;_dfi<food.length;_dfi++){
-    var _df=food[_dfi]; if(!_df.isDeath) continue;
-    if(_df.x<vx1||_df.x>vx2||_df.y<vy1||_df.y>vy2) continue;
-    var _dfr=_df.r*(1+_orbFlash*0.4);
-    // Outer glow ring — wide and bright
-    ctx.shadowColor='#FFD700'; ctx.shadowBlur=22+_dfPulse*36;
-    ctx.strokeStyle='rgba(255,215,0,'+(0.55+_dfPulse*0.45).toFixed(2)+')';
-    ctx.lineWidth=3.5;
-    ctx.beginPath(); ctx.arc(_df.x,_df.y,_dfr+8,0,Math.PI*2); ctx.stroke();
-    // Inner ring — white shimmer
-    ctx.shadowBlur=8;
-    ctx.strokeStyle='rgba(255,255,200,'+(0.3+_dfPulse*0.45).toFixed(2)+')';
-    ctx.lineWidth=1.5;
-    ctx.beginPath(); ctx.arc(_df.x,_df.y,_dfr+2,0,Math.PI*2); ctx.stroke();
+  // ── Death food rings — skip when zoom is too low for rings to be visible ──
+  if(CAM_ZOOM >= 0.32){
+    var _dfPulse=0.5+0.5*Math.sin(performance.now()/200);
+    // Ramp blur from 0→full over zoom range 0.32→0.70 so it fades in gracefully
+    var _dfBlurMul=Math.min(1,(CAM_ZOOM-0.32)/0.38);
+    ctx.save();
+    for(var _dfi=0;_dfi<food.length;_dfi++){
+      var _df=food[_dfi]; if(!_df.isDeath) continue;
+      if(_df.x<vx1||_df.x>vx2||_df.y<vy1||_df.y>vy2) continue;
+      var _dfr=_df.r*(1+_orbFlash*0.4);
+      ctx.shadowColor='#FFD700'; ctx.shadowBlur=(22+_dfPulse*36)*_dfBlurMul;
+      ctx.strokeStyle='rgba(255,215,0,'+(0.55+_dfPulse*0.45).toFixed(2)+')';
+      ctx.lineWidth=3.5;
+      ctx.beginPath(); ctx.arc(_df.x,_df.y,_dfr+8,0,Math.PI*2); ctx.stroke();
+      ctx.shadowBlur=8*_dfBlurMul;
+      ctx.strokeStyle='rgba(255,255,200,'+(0.3+_dfPulse*0.45).toFixed(2)+')';
+      ctx.lineWidth=1.5;
+      ctx.beginPath(); ctx.arc(_df.x,_df.y,_dfr+2,0,Math.PI*2); ctx.stroke();
+    }
+    ctx.restore();
+    ctx.shadowBlur=0;
   }
-  ctx.restore();
-  ctx.shadowBlur=0;
 
   // ── Money drops — glowing dollar coin at each death site ─────────────────
   if(moneyDrops.length){
