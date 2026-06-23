@@ -1319,6 +1319,7 @@ var _BASE_WORLD      = 3200; // baseline arena diameter (1 player)
 var _WORLD_PER_PLAYER = 150; // arena grows 150px diameter per extra remote player
 var WORLD      = _BASE_WORLD;
 var WORLD_R    = WORLD/2;  // radius of circular arena
+var _targetWorld = _BASE_WORLD; // arena lerps toward this gradually on join/leave
 var CAM_ZOOM   = 1.0;      // current zoom (smoothly lerped)
 var MIN_ZOOM   = 0.25;
 var MAX_ZOOM   = 1.4;
@@ -3080,13 +3081,10 @@ var _pendingVerifyTs   = {};    // cid → timestamp of last re-announce request
 // use these globals so the change takes effect on the very next frame.
 function _updateArenaSize() {
   var remotes = Object.keys(_remoteMap).length;
-  // total active players = local (1) + remotes; minimum is 1 (just us)
   var extras   = Math.max(0, remotes);
   var newWorld = _BASE_WORLD + extras * _WORLD_PER_PLAYER;
-  // clamp: no smaller than base, no larger than 3× base
   newWorld = Math.max(_BASE_WORLD, Math.min(_BASE_WORLD * 3, newWorld));
-  WORLD   = newWorld;
-  WORLD_R = newWorld / 2;
+  _targetWorld = newWorld; // lerped gradually in update() — no instant snap
 }
 
 // ── Status badge helper ──────────────────────────────────────────────────────
@@ -4404,7 +4402,7 @@ function launchGame() {
   var alb=document.getElementById('activeLobbyBadge');
   if(alb){ alb.style.display='flex'; alb.innerHTML='<div class="lobby-badge '+t.badgeCls+'">● '+t.name+' Active</div>'; }
   score=0; myKills=0; killSOL=0; boostE=100; boosting=false; cashingOut=false; qDown=false; _zoomOffset=0; CAM_ZOOM=1.0; _smoothLen=100; _autoCircle=false; _hudScoreV=''; _hudSubV=''; _hudEarnV='';
-  _updateArenaSize(); // set WORLD/WORLD_R based on how many remote players are already in the room
+  _updateArenaSize(); WORLD = _targetWorld; WORLD_R = WORLD / 2; // snap immediately at game start; later joins/leaves lerp gradually
   // Restore W.balance from on-chain if it was zeroed by a previous death or is stale.
   // refreshBalance() won't sync during gameplay (gameRunning guard), so we must do it here.
   // Kick off a live fetch now; if it resolves fast, use it — otherwise fall back to cache.
@@ -4529,10 +4527,14 @@ function spawnPeers(){ /* no-op — real players only, all peers come from Ably 
 function spawnFood(n){ for(var i=0;i<n;i++) addFood(); }
 function addFood(x,y,isBoostPebble,isDeathFood){
   var bp=!!isBoostPebble, df=!!isDeathFood;
-  // Death food gets 80 extra slots so a full arena never blocks death drops from spawning
   if(food.length >= (df ? MAX_FOOD+80 : MAX_FOOD)) return;
-  food.push({x:x!==undefined?x:Math.random()*WORLD, y:y!==undefined?y:Math.random()*WORLD,
-    // death food r 10-15 (noticeably larger than regular r 3-5 or boost r 5-7)
+  var fx = x!==undefined ? x : Math.random()*WORLD;
+  var fy = y!==undefined ? y : Math.random()*WORLD;
+  // Clamp to safe zone — keeps death food from spawning on/past the boundary wall
+  var _fcx=WORLD/2, _fcy=WORLD/2, _fdx=fx-_fcx, _fdy=fy-_fcy;
+  var _fdr=Math.sqrt(_fdx*_fdx+_fdy*_fdy), _fSafe=WORLD_R-55;
+  if(_fdr > _fSafe && _fdr > 0){ fx=_fcx+_fdx/_fdr*_fSafe; fy=_fcy+_fdy/_fdr*_fSafe; }
+  food.push({x:fx, y:fy,
     r: bp ? 5+Math.random()*2 : df ? 10+Math.random()*5 : 3+Math.random()*1.5,
     color: bp ? '#14F195' : df ? '#FFD700' : PC[Math.floor(Math.random()*PC.length)],
     value: bp ? 3 : df ? 2 : 1,
@@ -4902,6 +4904,27 @@ function update(_dt){
       }
     }
     if(_staleChanged && gameRunning) _updateArenaSize();
+  }
+
+  // ── Gradual arena resize ───────────────────────────────────────────────────
+  // Lerp WORLD toward _targetWorld at ~4%/frame (~0.7s to 95% of change).
+  // Keeps the boundary ring visibly sliding rather than snapping.
+  if(Math.abs(WORLD - _targetWorld) > 0.5){
+    WORLD += (_targetWorld - WORLD) * 0.04;
+    WORLD_R = WORLD / 2;
+  }
+  // ── Push food and money drops back from the boundary edge ──────────────────
+  // Handles (a) death food spawned near the wall and (b) items stranded by arena shrink.
+  var _bSafeR = WORLD_R - 55, _bcx = WORLD/2, _bcy = WORLD/2;
+  for(var _bfi=0; _bfi<food.length; _bfi++){
+    var _bf=food[_bfi];
+    var _bfx=_bf.x-_bcx, _bfy=_bf.y-_bcy, _bfd=Math.sqrt(_bfx*_bfx+_bfy*_bfy);
+    if(_bfd > _bSafeR && _bfd > 0){ _bf.x=_bcx+_bfx/_bfd*_bSafeR; _bf.y=_bcy+_bfy/_bfd*_bSafeR; }
+  }
+  for(var _bmi=0; _bmi<moneyDrops.length; _bmi++){
+    var _bmd=moneyDrops[_bmi];
+    var _bmx=_bmd.x-_bcx, _bmy=_bmd.y-_bcy, _bmd2=Math.sqrt(_bmx*_bmx+_bmy*_bmy);
+    if(_bmd2 > _bSafeR && _bmd2 > 0){ _bmd.x=_bcx+_bmx/_bmd2*_bSafeR; _bmd.y=_bcy+_bmy/_bmd2*_bSafeR; }
   }
 
   if(!player||!player.alive){
