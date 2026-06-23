@@ -5471,30 +5471,16 @@ function draw(){
     if(!_fcBuckets[f.color]) _fcBuckets[f.color]=[];
     _fcBuckets[f.color].push(f);
   }
-  // Sharp flash: squared sine spends most time dim then spikes bright (~700ms cycle)
+  // Smooth glow: scale 0→1 over zoom range 0.35→0.75 — no hard cutoff causing FPS cliff
   var _orbFlash = Math.pow(0.5+0.5*Math.sin(performance.now()/350), 2);
-  // Skip per-item glow below zoom 0.45 — items are tiny, shadowBlur costs GPU for nothing
-  var _showGlow = CAM_ZOOM > 0.45;
-  var _glowBlur = _showGlow ? (3+_orbFlash*26) : 0;
+  var _glowScale = Math.max(0, Math.min(1, (CAM_ZOOM - 0.35) / 0.40));
+  var _glowBlur = (1 + _orbFlash * 7) * _glowScale; // max blur 8 at full zoom (was 29)
   var _fk=Object.keys(_fcBuckets);
   for(var ci=0;ci<_fk.length;ci++){
     var col=_fk[ci]; var _fl=_fcBuckets[col]; if(!_fl.length) continue;
     ctx.shadowColor=col; ctx.shadowBlur=_glowBlur;
     ctx.fillStyle=col; ctx.beginPath();
     for(var fi=0;fi<_fl.length;fi++){ var f=_fl[fi]; var fr=f.r*(1+_orbFlash*0.5); ctx.moveTo(f.x+fr,f.y); ctx.arc(f.x,f.y,fr,0,Math.PI*2); }
-    ctx.fill();
-  }
-  // White sparkle center — only worth drawing when glows are on and flash is peaking
-  if(_showGlow && _orbFlash>0.45){
-    var _sa=((_orbFlash-0.45)/0.55*0.85).toFixed(2);
-    ctx.shadowColor='#fff'; ctx.shadowBlur=14;
-    ctx.fillStyle='rgba(255,255,255,'+_sa+')';
-    ctx.beginPath();
-    for(var _fi2=0;_fi2<food.length;_fi2++){
-      var _ff=food[_fi2]; if(_ff.x<vx1||_ff.x>vx2||_ff.y<vy1||_ff.y>vy2) continue;
-      if(_ff.r*CAM_ZOOM<1.0) continue;
-      var _sr=_ff.r*0.45; ctx.moveTo(_ff.x+_sr,_ff.y); ctx.arc(_ff.x,_ff.y,_sr,0,Math.PI*2);
-    }
     ctx.fill();
   }
   ctx.shadowBlur=0;
@@ -5536,7 +5522,7 @@ function draw(){
       var _mR=(30+6*_mPulse)/_mZ;
       ctx.globalAlpha=_mFade;
       // Outer glow ring
-      ctx.shadowColor='#14F195'; ctx.shadowBlur=28*_mPulse;
+      ctx.shadowColor='#14F195'; ctx.shadowBlur=10*_mPulse;
       ctx.beginPath(); ctx.arc(_mdr.x,_mdr.y,_mR+5/_mZ,0,Math.PI*2);
       ctx.strokeStyle='#14F195'; ctx.lineWidth=3/_mZ; ctx.stroke();
       // Filled coin
@@ -5554,7 +5540,7 @@ function draw(){
     ctx.textAlign='left'; ctx.textBaseline='alphabetic'; ctx.shadowBlur=0;
   }
 
-  for(var i=parts.length-1;i>=0;i--){ var p=parts[i]; p.x+=p.vx; p.y+=p.vy; p.life--; if(p.life<=0){ parts[i]=parts[parts.length-1]; parts.length--; continue; } ctx.globalAlpha=p.life/p.max; ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fillStyle=p.color; ctx.fill(); }
+  for(var i=parts.length-1;i>=0;i--){ var p=parts[i]; p.x+=p.vx; p.y+=p.vy; p.life--; if(p.life<=0){ parts[i]=parts[parts.length-1]; parts.length--; continue; } if(p.x<vx1-20||p.x>vx2+20||p.y<vy1-20||p.y>vy2+20) continue; ctx.globalAlpha=p.life/p.max; ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fillStyle=p.color; ctx.fill(); }
   ctx.globalAlpha=1;
   // Draw snakes — viewport-cull remote snakes (head off-screen + no long tail visible)
   for(var i=0;i<peers.length;i++){
@@ -5671,6 +5657,9 @@ function draw(){
 
 // ── Snake renderer — drawn ENTIRELY in screen pixels ──
 function _spawnTrail(s, isBoosting){
+  // Particles are sub-pixel at low zoom and flood the parts[] pool when many snakes are visible
+  if(CAM_ZOOM < 0.5) return;
+  if(parts.length > 350) return; // hard cap — prevents pool growing unbounded during busy spectate
   if(!s.segs||s.segs.length<3) return;
   var cfg=_SKIN_CFG[s.skin||'default']||_SKIN_CFG['default'];
   var trail=isBoosting?cfg.boost:cfg.idle;
