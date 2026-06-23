@@ -5190,54 +5190,77 @@ function killCheck(){
     var headGap=dst(player.x,player.y,px,py);
 
     // Head-on: both head circles overlap.
-    // Winner = whoever is "in front" — the snake being chased, not the one charging.
-    // Size has zero influence. Never both die.
-    //
-    // Step 1 — pursuit score: dot(my velocity, unit-vec toward them).
-    //   +1 = I'm heading straight at them (attacker), -1 = heading away (defender).
-    // Step 2 — if scores differ by >0.15, the higher-pursuit snake (attacker) dies.
-    // Step 3 — near-symmetric: compare who was farther from the collision midpoint last tick
-    //   (was closing in more aggressively). That snake dies.
-    // Step 4 — truly symmetric fallback: deterministic hash so exactly one client calls kill.
+    // Referee model: _hoHash picks exactly ONE client as referee — only that client fires.
+    // Attacker (higher pursuit toward other) dies; defender always survives. Never both die.
     if(headGap<myR+pR){
+      // Only the referee client resolves this head-on — non-referee does nothing.
+      var _h2=_hoHash(myId,pid);
+      var _iAmRef=(_h2===0)===(myId<pid);
+      if(!_iAmRef){ continue; }
+
       var _myVx=Math.cos(player.angle), _myVy=Math.sin(player.angle);
       var _pAng=(p.angle!=null)?p.angle:(p.targetAngle||0);
       var _pVx=Math.cos(_pAng), _pVy=Math.sin(_pAng);
-      // Unit vector from my head to their head
       var _hoDd=headGap||1;
       var _hoNx=(px-player.x)/_hoDd, _hoNy=(py-player.y)/_hoDd;
-      // How much each velocity aims toward the other's head (+1 = straight at them)
+      // Pursuit: +1 = heading straight at other, -1 = heading away
       var _myPursuit=_myVx*_hoNx+_myVy*_hoNy;
       var _pPursuit =_pVx*(-_hoNx)+_pVy*(-_hoNy);
       var _pdiff=_myPursuit-_pPursuit;
+
+      var _iAttacker; // true = I die, false = they die
       if(_pdiff>0.15){
-        // I'm clearly the attacker — I die
-        killPlayer('Eliminated by '+p.name,p.remoteId||null); return;
+        _iAttacker=true; // I'm clearly heading at them
       } else if(_pdiff<-0.15){
-        // They're clearly the attacker — they die on their own client
-        continue;
+        _iAttacker=false; // They're clearly heading at me
       } else {
-        // Near-symmetric: whoever was farther from the collision midpoint last tick was closing in → dies
+        // Near-symmetric: midpoint proximity tiebreaker
         var _midX=(player.x+px)*0.5, _midY=(player.y+py)*0.5;
         var _myPrev=player.segs[1]||{x:player.x,y:player.y};
         var _pPrev=(p.th&&p.th[1])?p.th[1]:{x:px,y:py};
         var _myPD=dst(_myPrev.x,_myPrev.y,_midX,_midY);
         var _pPD =dst(_pPrev.x,_pPrev.y,_midX,_midY);
-        if(_myPD>_pPD+2){
-          killPlayer('Eliminated by '+p.name,p.remoteId||null); return;
-        } else if(_pPD>_myPD+2){
-          continue;
+        // Bigger snake wins a symmetrical head-on; exact tie → referee dies
+        if(Math.abs(_myPD-_pPD)>2){
+          _iAttacker=(_myPD>_pPD); // whoever closed in faster was the attacker
         } else {
-          // Truly symmetric: deterministic hash — same result on both clients, exactly one dies
-          var _h=_hoHash(myId,pid);
-          if((_h===0)===(myId<pid)){ killPlayer('Eliminated by '+p.name,p.remoteId||null); return; }
-          continue;
+          _iAttacker=(player.length||10)<=(p.length||10); // smaller snake dies; exact tie referee dies
         }
+      }
+
+      if(_iAttacker){
+        killPlayer('Eliminated by '+p.name,pid); return;
+      } else {
+        // I'm the referee AND the defender — fire kill_target to tell the attacker to die.
+        if(_sentKillTs[pid]&&_now-_sentKillTs[pid]<2000){ continue; }
+        _sentKillTs[pid]=_now;
+        var _hoRkp=_remoteMap[pid];
+        if(_hoRkp&&_hoRkp.alive){
+          var _hoSegs=_hoRkp.segs.slice(), _hoLen=_hoRkp.length;
+          _hoRkp.alive=false; _hoRkp.segs=[]; if(_hoRkp.th) _hoRkp.th=[];
+          _processedDies[pid]=true; _recentLeaves[pid]=_now;
+          if(gameRunning) _scatterDeathFood(_hoSegs,_hoLen);
+          _killerScatteredFor[pid]=Date.now();
+          peers=peers.filter(function(q){return q!==_hoRkp;});
+          delete _remoteMap[pid];
+          if(gameRunning) _updateArenaSize();
+          myKills++; boostE=Math.min(100,boostE+50);
+          kFeed('🗡 '+(p.name||'Player')+' charged into you!','kill');
+        }
+        if(_ws&&_ws.readyState===WebSocket.OPEN){
+          try{_ws.send(JSON.stringify({type:'pos',clientId:_wsClientId,data:{
+            x:+(player.x.toFixed(1)),y:+(player.y.toFixed(1)),a:+(player.angle.toFixed(3)),
+            l:player.length||10,v:true,kill_target:pid,killer:_wsClientId
+          }}));}catch(_re){}
+        }
+        continue;
       }
     }
 
     // Body hit: my head vs their segs — stop at visual body length so boosting can't extend hitbox
-    var _bodyR=myR+pR*0.85;
+    // Use actual body radius (same formula as drawS) instead of headR proxy
+    var _pBodyR=Math.max(10,Math.min(45,10+(p.widthBonus||0)*0.28));
+    var _bodyR=myR+_pBodyR;
     var _maxBodyWu=Math.min((p.length||10)*16,480), _accWu=0;
     for(var j=1;j<p.segs.length-1;j++){
       var sa=p.segs[j], sb=p.segs[j+1]; if(!sa||!sb) break;
@@ -5259,7 +5282,8 @@ function killCheck(){
     var rpx=(rp2.targetX!=null)?rp2.targetX:rp2.x, rpy=(rp2.targetY!=null)?rp2.targetY:rp2.y;
     var rpR=rp2.headR||12;
     if(dst(player.x,player.y,rpx,rpy)<myR+rpR) continue; // head-on handled above
-    var _rBodyR=rpR+myR*0.85, _rAccWu=0;
+    var _myBodyR=Math.max(10,Math.min(45,10+(player.widthBonus||0)*0.28));
+    var _rBodyR=rpR+_myBodyR, _rAccWu=0;
     for(var rk=1;rk<player.segs.length-1;rk++){
       var rsa=player.segs[rk], rsb=player.segs[rk+1]; if(!rsa||!rsb) break;
       _rAccWu+=dst(rsa.x,rsa.y,rsb.x,rsb.y);
