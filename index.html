@@ -3540,7 +3540,9 @@ function _wsHandleMsg(msg, fromAbly) {
         }
         return;
       }
-      if (d.l) { rp.length = d.l; rp.headR = Math.max(8, Math.min(28, 8 + rp.length * SEG_MULT * 0.08)); }
+      if (d.l) { rp.length = d.l; }
+      if (d.wb != null) { rp.widthBonus = d.wb; }
+      rp.headR = Math.max(8, Math.min(28, 10 + (rp.widthBonus||0) * 0.18));
       rp.boosting = !!d.b;
     }
     return;
@@ -4477,14 +4479,17 @@ function mkSnake(x,y,color,name,isMe,startSegs){
   var initLen  = Math.round(initSegs/SEG_MULT);
   var _initDraw=Math.max(initSegs,120); var segs=[]; for(var i=0;i<_initDraw;i++) segs.push({x:x-i*2,y:y});
   return{x:x,y:y,segs:segs,angle:0,color:color,name:name,isMe:isMe,speed:BASE_SPEED,
-         headR:14,length:initLen,score:0,alive:true};
+         headR:14,length:initLen,widthBonus:0,score:0,alive:true};
 }
 function getMaxSegs(){ return 325; }
 function grow(s){
-  if(s.isMe && boosting) return;           // no growth while boosting — food eaten but no length added
+  // Width grows with every food item — immediate visual feedback, even while boosting
+  s.widthBonus = (s.widthBonus||0) + 1;
+  // Length only grows when not boosting, once every 3 orbs
+  if(s.isMe && boosting) return;
   if(s.isMe && s.segs.length >= getMaxSegs()) return;
   s._growAccum = (s._growAccum || 0) + 1;
-  if(s._growAccum < 3) return;            // grow 1 segment every 3 orbs
+  if(s._growAccum < 3) return;
   s._growAccum = 0;
   var l=s.segs[s.segs.length-1]; s.segs.push({x:l.x,y:l.y}); s.length++;
 }
@@ -4879,6 +4884,7 @@ function loop(){
       _pd.n     = (_posSeq % 5 === 1) ? player.name  : undefined;
       _pd.color = (_posSeq % 5 === 1) ? player.color : undefined;
       _pd.sk    = (_posSeq % 5 === 1) ? (_activeSkin||'default') : undefined;
+      _pd.wb    = (_posSeq % 5 === 1) ? Math.round(player.widthBonus||0) : undefined;
       _ws.send(JSON.stringify(_posMsg));
     } catch(e) {}
   }
@@ -4995,6 +5001,7 @@ function update(_dt){
         addFood(undefined, undefined, true);
       }
       player.length = Math.max(_minLen, player.length - 1);
+      player.widthBonus = Math.max(0, (player.widthBonus||0) - 3); // boost thins the snake
     }
   }
   // No passive recharge — boost refills only from eating orbs or getting kills
@@ -5004,7 +5011,7 @@ function update(_dt){
   var _tgt = Math.max(player.length * SEG_MULT, 120);
   while(player.segs.length > _tgt) player.segs.pop();
 
-  player.headR = Math.max(8, Math.min(28, 8 + player.length * SEG_MULT * 0.08));
+  player.headR = Math.max(8, Math.min(28, 10 + (player.widthBonus||0) * 0.18));
 
   // ── Remote players: dead reckoning + LERP toward predicted position ──
   var rNow = performance.now(); // one call per frame — shared across all remote peers
@@ -5674,7 +5681,9 @@ function drawS(s){
   var W2SY=function(wy){ return (wy-camY)*Z+ch; };
 
   var _sZ = CAM_ZOOM || 1;
-  var R   = Math.max(6, Math.min(30, (9 + (s.length||10) * SEG_MULT * 0.075) * _sZ));
+  // Width driven by widthBonus (food eaten - boost drained); fall back to length estimate for remote peers without wb yet
+  var _wB = s.widthBonus != null ? s.widthBonus : Math.max(0, ((s.length||10) - 10) * 3);
+  var R   = Math.max(10, Math.min(45, (10 + _wB * 0.28) * _sZ));
   var BW  = R*1.9;
   var STEP= Math.max(3, R*0.5);
   var logical = Math.min((s.length||10) * SEG_MULT, 120);
