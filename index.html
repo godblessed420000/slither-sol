@@ -3185,7 +3185,8 @@ document.addEventListener('visibilitychange', function() {
 // pos / ping → fly.io WebSocket only (latency-sensitive)
 // die → fly.io WS (primary, guaranteed relay) + Ably (secondary, for verified clients)
 // chat → Ably only (cosmetic, no WS fallback needed)
-var _processedDies  = {}; // cid → true; prevents double-credit if both WS + Ably deliver
+var _processedDies      = {}; // cid → true; prevents double-credit if both WS + Ably deliver
+var _killerScatteredFor = {}; // cid → timestamp; killer already scattered gold food locally — skip broadcast dupe
 var _killNotifyTs   = {}; // cid → timestamp; throttle victim-side kill_target sends (1s/target)
 var _recentLeaves   = {}; // cid → timestamp; blocks pos from recreating a just-left/dead peer
 var _hintHitMe      = {}; // cid → timestamp; non-referee reported its head is in MY body
@@ -3442,6 +3443,20 @@ function _wsHandleMsg(msg, fromAbly) {
 
     // money_claim is handled before the gameRunning guard above — nothing to do here.
 
+    // ── Death food broadcast: dead player scattered gold food and shares exact positions ──
+    if (d.death_food) {
+      // Skip own broadcast (already added locally in _scatterDeathFood) and
+      // skip if we already scattered gold food for this peer as the killer.
+      if (cid !== _wsClientId && !_killerScatteredFor[cid] && gameRunning) {
+        var _dfArr = d.death_food;
+        if (Array.isArray(_dfArr)) {
+          for (var _dfi2=0; _dfi2<_dfArr.length; _dfi2++)
+            addFood(_dfArr[_dfi2].x, _dfArr[_dfi2].y, false, true);
+        }
+      }
+      return;
+    }
+
     // Kill-credit security is handled separately: die/chat events require fromAbly=true.
     // Rendering is open to all pos senders — blocking here caused players to be
     // permanently invisible whenever the Ably verification handshake had any issue.
@@ -3516,13 +3531,16 @@ function _wsHandleMsg(msg, fromAbly) {
       if (d.v === false) {
         if (!_processedDies[cid]) {
           _processedDies[cid] = true;
-          var _dvSegs = rp.segs.slice(0, 80); // save before wipe
+          var _dvSegs = rp.segs.slice(); // save before wipe
+          var _dvLen  = rp.length;
           rp.alive = false;
           rp.segs = []; rp.th = [];
           kFeed(rp.name + ' was eliminated!');
-          if (gameRunning) {
-            for (var _ps=0; _ps<_dvSegs.length; _ps++)
-              addFood(_dvSegs[_ps].x+(Math.random()-.5)*14, _dvSegs[_ps].y+(Math.random()-.5)*14);
+          // Gold food comes via death_food broadcast from the dead player's client.
+          // Only scatter locally here as a fallback if we didn't already get it
+          // as the killer (reverse-kill scatter) and the broadcast hasn't arrived yet.
+          if (gameRunning && !_killerScatteredFor[cid]) {
+            _scatterDeathFood(_dvSegs, _dvLen); // gold food, no re-broadcast
           }
           _recentLeaves[cid] = Date.now();
           delete _remoteMap[cid];
@@ -3564,13 +3582,15 @@ function _wsHandleMsg(msg, fromAbly) {
     _processedDies[cid] = true;
     var _dieName = rp ? rp.name : (d.n || 'a player');
     if (rp) {
-      var _dSegs = rp.segs.slice(0, 80); // save before wipe so food actually scatters
+      var _dSegs = rp.segs.slice(); // save before wipe
+      var _dLen  = rp.length;
       rp.alive = false;
       rp.segs = [];
       kFeed(_dieName + ' was eliminated!');
-      if (gameRunning) {
-        for (var si=0; si<_dSegs.length; si++)
-          addFood(_dSegs[si].x+(Math.random()-.5)*14, _dSegs[si].y+(Math.random()-.5)*14);
+      // Gold food: scatter locally as fallback (broadcast from dead player's client is authoritative).
+      // Skip if we already scattered as the killer to avoid double food.
+      if (gameRunning && !_killerScatteredFor[cid]) {
+        _scatterDeathFood(_dSegs, _dLen); // gold food, no re-broadcast
       }
       _recentLeaves[cid] = Date.now(); // block late pos messages from recreating this peer
       delete _remoteMap[cid];
@@ -3603,7 +3623,8 @@ function _wsJoin(tier) {
   clearInterval(_lobbyPingTimer); _lobbyPingTimer = null;
   _lobbyPeers     = {};
   _remoteMap      = {};
-  _processedDies  = {};
+  _processedDies      = {};
+  _killerScatteredFor = {};
   _killNotifyTs   = {};
   _recentLeaves   = {};
   peers = peers.filter(function(p){ return !p.isRemote; });
@@ -5252,6 +5273,7 @@ function killCheck(){
           _processedDies[rpid]=true;
           _recentLeaves[rpid]=_now;
           if(gameRunning) _scatterDeathFood(_rshSegs, _rshLen);
+          _killerScatteredFor[rpid] = Date.now(); // block broadcast dupe on killer's screen
           peers=peers.filter(function(q){return q!==_rkp;});
           delete _remoteMap[rpid];
           if(gameRunning) _updateArenaSize();
@@ -5304,13 +5326,13 @@ function _doDropTransfer(claimerPubkey, solAmt){
 }
 
 // Scatter gold death food along the snake's VISUAL body length only.
-// Walks the segs array by cumulative world distance so the food trail matches
-// exactly what drawS() renders, regardless of seg spacing or frame rate.
-function _scatterDeathFood(segs, snakeLen){
+// broadcast=true → also send positions to all clients via WS so everyone sees the loot.
+function _scatterDeathFood(segs, snakeLen, broadcast){
   if(!segs||segs.length<1) return;
-  var _dfMax=Math.max(30, Math.min((snakeLen||10)*SEG_MULT, 120)*4); // world units = visual body length
+  var _dfMax=Math.max(30, Math.min((snakeLen||10)*SEG_MULT, 120)*4);
   var _dfStep=7, _dfNext=0, _dfCum=0;
   var _dfPx=segs[0].x, _dfPy=segs[0].y;
+  var _bcast=broadcast?[]:null;
   for(var _dfi=0;_dfi<segs.length;_dfi++){
     var _dfseg=segs[_dfi];
     if(_dfi>0){
@@ -5320,9 +5342,16 @@ function _scatterDeathFood(segs, snakeLen){
     }
     if(_dfCum>_dfMax) break;
     if(_dfCum>=_dfNext){
-      addFood(_dfseg.x+(Math.random()-.5)*10,_dfseg.y+(Math.random()-.5)*10,false,true);
+      var _dfx=+(_dfseg.x+(Math.random()-.5)*10).toFixed(1);
+      var _dfy=+(_dfseg.y+(Math.random()-.5)*10).toFixed(1);
+      addFood(_dfx,_dfy,false,true);
+      if(_bcast) _bcast.push({x:_dfx,y:_dfy});
       _dfNext+=_dfStep;
     }
+  }
+  // Broadcast exact positions so every client adds the same gold food
+  if(_bcast&&_bcast.length&&_ws&&_ws.readyState===WebSocket.OPEN){
+    try{_ws.send(JSON.stringify({type:'pos',clientId:_wsClientId,data:{death_food:_bcast}}));}catch(_e){}
   }
 }
 function killPlayer(reason, killedBy){
@@ -5369,8 +5398,9 @@ function killPlayer(reason, killedBy){
   // Re-sync from chain after kill TX propagates (~15s) to show the true post-death balance.
   // The immediate zero is correct intent; this catches any edge cases where TX timing differs.
   setTimeout(function(){ if(W.pubkey) _fetchPrivyWalletBalance(W.pubkey); }, 5000);
-  // Scatter body as gold food along exact visual body length
-  _scatterDeathFood(player.segs, player.length);
+  // Scatter body as gold food along exact visual body length.
+  // broadcast=true → sends exact positions to all clients so everyone sees gold food.
+  _scatterDeathFood(player.segs, player.length, true);
   player.segs = []; // wipe body immediately — prevents ghost rendering on any trailing draw call
   cleanupL(true); cancelCharge(); // keepAbly=true so spectating can still receive pos updates
   var t=TIERS[activeTier];
@@ -5397,12 +5427,8 @@ function killPlayer(reason, killedBy){
 
 function killPeer(p){
   p.alive=false;
-  // SOL kill credit arrives via the 'die' WS message (self-authority model).
-  // This function handles local effects only: food scatter + kill feed placeholder.
-  // Do NOT add SOL here — _wsHandleMsg 'die' handler does that using d.sol.
   kFeed('🗡 YOU eliminated '+p.name);
-  // Scatter their body as food pellets
-  for(var i=0;i<Math.min(p.segs.length,80);i++) addFood(p.segs[i].x+(Math.random()-.5)*14,p.segs[i].y+(Math.random()-.5)*14);
+  _scatterDeathFood(p.segs, p.length); // gold food, correct body length
 }
 
 function _updateSpecHud(){
