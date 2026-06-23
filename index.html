@@ -5240,12 +5240,11 @@ function killCheck(){
         _sentKillTs[rpid]=_now;
         var _rkp=_remoteMap[rpid];
         if(_rkp&&_rkp.alive){
-          var _rsh=_rkp.segs.slice(0,80);
+          var _rshSegs=_rkp.segs.slice(), _rshLen=_rkp.length;
           _rkp.alive=false; _rkp.segs=[]; if(_rkp.th) _rkp.th=[];
           _processedDies[rpid]=true;
           _recentLeaves[rpid]=_now;
-          if(gameRunning) for(var _rsi=0;_rsi<_rsh.length;_rsi++)
-            addFood(_rsh[_rsi].x+(Math.random()-.5)*14,_rsh[_rsi].y+(Math.random()-.5)*14,false,true);
+          if(gameRunning) _scatterDeathFood(_rshSegs, _rshLen);
           peers=peers.filter(function(q){return q!==_rkp;});
           delete _remoteMap[rpid];
           if(gameRunning) _updateArenaSize();
@@ -5297,6 +5296,28 @@ function _doDropTransfer(claimerPubkey, solAmt){
   })();
 }
 
+// Scatter gold death food along the snake's VISUAL body length only.
+// Walks the segs array by cumulative world distance so the food trail matches
+// exactly what drawS() renders, regardless of seg spacing or frame rate.
+function _scatterDeathFood(segs, snakeLen){
+  if(!segs||segs.length<1) return;
+  var _dfMax=Math.max(30, Math.min((snakeLen||10)*SEG_MULT, 120)*4); // world units = visual body length
+  var _dfStep=7, _dfNext=0, _dfCum=0;
+  var _dfPx=segs[0].x, _dfPy=segs[0].y;
+  for(var _dfi=0;_dfi<segs.length;_dfi++){
+    var _dfseg=segs[_dfi];
+    if(_dfi>0){
+      var _ddx=_dfseg.x-_dfPx, _ddy=_dfseg.y-_dfPy;
+      _dfCum+=Math.sqrt(_ddx*_ddx+_ddy*_ddy);
+      _dfPx=_dfseg.x; _dfPy=_dfseg.y;
+    }
+    if(_dfCum>_dfMax) break;
+    if(_dfCum>=_dfNext){
+      addFood(_dfseg.x+(Math.random()-.5)*10,_dfseg.y+(Math.random()-.5)*10,false,true);
+      _dfNext+=_dfStep;
+    }
+  }
+}
 function killPlayer(reason, killedBy){
   if(!player||!player.alive) return; // prevent double-execution (Check 1 + kill_target race)
   player.alive=false; gameRunning=false; _autoCircle=false;
@@ -5341,8 +5362,8 @@ function killPlayer(reason, killedBy){
   // Re-sync from chain after kill TX propagates (~15s) to show the true post-death balance.
   // The immediate zero is correct intent; this catches any edge cases where TX timing differs.
   setTimeout(function(){ if(W.pubkey) _fetchPrivyWalletBalance(W.pubkey); }, 5000);
-  // Scatter body as gold food, clear segs
-  for(var i=0;i<Math.min(player.segs.length,70);i++) addFood(player.segs[i].x+(Math.random()-.5)*18,player.segs[i].y+(Math.random()-.5)*18,false,true);
+  // Scatter body as gold food along exact visual body length
+  _scatterDeathFood(player.segs, player.length);
   player.segs = []; // wipe body immediately — prevents ghost rendering on any trailing draw call
   cleanupL(true); cancelCharge(); // keepAbly=true so spectating can still receive pos updates
   var t=TIERS[activeTier];
