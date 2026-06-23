@@ -3485,7 +3485,7 @@ function _wsHandleMsg(msg, fromAbly) {
         remoteId: cid, joinTs: _rpJoinTs,
         velX: 0, velY: 0, lastT: performance.now()
       };
-      rp.headR = Math.max(8, Math.min(28, 8 + (initLen * SEG_MULT) * 0.08));
+      rp.headR = snakeRadius(rp);
       var initSegs = Math.max(Math.min(initLen * SEG_MULT, 120), 120);
       // Spread segments backward along the peer's angle so the snake looks full-size immediately
       var _ia = d.a || 0;
@@ -3560,7 +3560,7 @@ function _wsHandleMsg(msg, fromAbly) {
       }
       if (d.l) { rp.length = d.l; }
       if (d.wb != null) { rp.widthBonus = d.wb; }
-      rp.headR = Math.max(8, Math.min(28, 10 + (rp.widthBonus||0) * 0.18));
+      rp.headR = snakeRadius(rp);
       rp.boosting = !!d.b;
     }
     return;
@@ -4499,8 +4499,9 @@ function mkSnake(x,y,color,name,isMe,startSegs){
   var initSegs = startSegs || 40;                // default 40 raw segments; mid-match spawn passes peer average
   var initLen  = Math.round(initSegs/SEG_MULT);
   var _initDraw=Math.max(initSegs,120); var segs=[]; for(var i=0;i<_initDraw;i++) segs.push({x:x-i*2,y:y});
+  var _initHeadR=8+Math.pow(initLen*5,0.6)*0.8;
   return{x:x,y:y,segs:segs,angle:0,color:color,name:name,isMe:isMe,speed:BASE_SPEED,
-         headR:14,length:initLen,widthBonus:0,score:0,alive:true};
+         headR:_initHeadR,length:initLen,widthBonus:0,score:0,alive:true};
 }
 function getMaxSegs(){ return 325; }
 function grow(s){
@@ -5032,7 +5033,7 @@ function update(_dt){
   var _tgt = Math.max(player.length * SEG_MULT, 120);
   while(player.segs.length > _tgt) player.segs.pop();
 
-  player.headR = Math.max(8, Math.min(28, 10 + (player.widthBonus||0) * 0.18));
+  player.headR = snakeRadius(player); // unified radius: matches hitbox and body visual
 
   // ── Remote players: dead reckoning + LERP toward predicted position ──
   var rNow = performance.now(); // one call per frame — shared across all remote peers
@@ -5159,18 +5160,34 @@ function checkMoneyDrops(){
 }
 
 // Returns 0 or 1 deterministically for any pair of IDs — same result on both clients.
-// Different pairs get different values, so outcomes feel pseudo-random (like latency-based).
 function _hoHash(a,b){
   var s=[a,b].sort().join('|'), h=5381;
   for(var i=0;i<s.length;i++) h=((h<<5)+h+s.charCodeAt(i))&0x7fff;
-  return h&1; // 0=smaller-ID player dies, 1=larger-ID player dies
+  return h&1;
 }
-function dstPtSeg(px,py,ax,ay,bx,by){
-  var dx=bx-ax,dy=by-ay,l2=dx*dx+dy*dy;
-  if(l2<0.001) return Math.sqrt((px-ax)*(px-ax)+(py-ay)*(py-ay));
-  var t=Math.max(0,Math.min(1,((px-ax)*dx+(py-ay)*dy)/l2));
-  var qx=ax+t*dx,qy=ay+t*dy;
-  return Math.sqrt((px-qx)*(px-qx)+(py-qy)*(py-qy));
+
+// damnbruh.com exact radius formula (ported from reference game):
+// BASE_RADIUS + size^RADIUS_GROWTH * RADIUS_SCALE  where size = length * SIZE_PER_SEGMENT
+// Used for BOTH head and body hitboxes so they are always the same size.
+function snakeRadius(s){
+  var sz=(s.length||10)*5;
+  return 8+Math.pow(sz,0.6)*0.8;
+}
+
+// Swept segment→circle hit test: did segment p1→p2 pass through circle (c, radius r)?
+// Exact port from reference game — catches boosting head-on tunnels.
+function segHitsCircle(p1,p2,c,r){
+  var ex=p2.x-p1.x,ey=p2.y-p1.y;
+  var fx=p1.x-c.x,fy=p1.y-c.y;
+  var a=ex*ex+ey*ey;
+  if(a<0.001)return fx*fx+fy*fy<r*r;
+  var b=2*(fx*ex+fy*ey);
+  var cc=fx*fx+fy*fy-r*r;
+  var disc=b*b-4*a*cc;
+  if(disc<0)return false;
+  var sq=Math.sqrt(disc);
+  var t1=(-b-sq)/(2*a),t2=(-b+sq)/(2*a);
+  return(t1>=0&&t1<=1)||(t2>=0&&t2<=1)||(t1<=0&&t2>=1);
 }
 
 function killCheck(){
@@ -5178,60 +5195,39 @@ function killCheck(){
   var myId=_wsClientId||'zzz';
   var _now=Date.now();
   if(_now-(player.spawnTs||0)<1500) return;
-  // headR is in world units; drawS now scales visually with zoom, so these match directly
-  var myR=player.headR||12;
+  // Unified radius from reference game: same formula drives head circle, body circles, and hitboxes
+  var myR=snakeRadius(player);
 
   for(var i=0;i<peers.length;i++){
     var p=peers[i]; if(!p.alive) continue;
     if(_now-(p.joinTs||0)<1500) continue;
     var pid=p.remoteId||'';
     var px=(p.targetX!=null)?p.targetX:p.x, py=(p.targetY!=null)?p.targetY:p.y;
-    var pR=p.headR||12;
+    var pR=snakeRadius(p);
+    var combR=myR+pR, combR2=combR*combR;
     var headGap=dst(player.x,player.y,px,py);
 
-    // Head-on: both head circles overlap.
-    // Referee model: _hoHash picks exactly ONE client as referee — only that client fires.
-    // Attacker (higher pursuit toward other) dies; defender always survives. Never both die.
-    if(headGap<myR+pR){
-      // Only the referee client resolves this head-on — non-referee does nothing.
+    // ── Head-to-head ──────────────────────────────────────────────────────────
+    // Static overlap OR swept test (catches fast/boosting tunnels) — port of reference game.
+    // Referee model: _hoHash designates exactly ONE client to resolve each pair → never both die.
+    var aPrev=player.segs[0]||{x:player.x,y:player.y};
+    var _headHit=(headGap<combR)||segHitsCircle(aPrev,{x:player.x,y:player.y},{x:px,y:py},combR);
+    if(_headHit){
       var _h2=_hoHash(myId,pid);
       var _iAmRef=(_h2===0)===(myId<pid);
-      if(!_iAmRef){ continue; }
+      if(!_iAmRef){ continue; } // non-referee: wait for kill_target from the referee
 
-      var _myVx=Math.cos(player.angle), _myVy=Math.sin(player.angle);
-      var _pAng=(p.angle!=null)?p.angle:(p.targetAngle||0);
-      var _pVx=Math.cos(_pAng), _pVy=Math.sin(_pAng);
-      var _hoDd=headGap||1;
-      var _hoNx=(px-player.x)/_hoDd, _hoNy=(py-player.y)/_hoDd;
-      // Pursuit: +1 = heading straight at other, -1 = heading away
-      var _myPursuit=_myVx*_hoNx+_myVy*_hoNy;
-      var _pPursuit =_pVx*(-_hoNx)+_pVy*(-_hoNy);
-      var _pdiff=_myPursuit-_pPursuit;
+      // Forward-progress winner — EXACT port of reference game aFwdProgress logic:
+      // Project (myHead − theirHead) onto my travel direction.
+      // >= 0  →  I am further in front  →  I WIN, they die.
+      //  < 0  →  They are further in front  →  THEY WIN, I die.
+      var _aFwd=(player.x-px)*Math.cos(player.angle)+(player.y-py)*Math.sin(player.angle);
 
-      var _iAttacker; // true = I die, false = they die
-      if(_pdiff>0.15){
-        _iAttacker=true; // I'm clearly heading at them
-      } else if(_pdiff<-0.15){
-        _iAttacker=false; // They're clearly heading at me
-      } else {
-        // Near-symmetric: midpoint proximity tiebreaker
-        var _midX=(player.x+px)*0.5, _midY=(player.y+py)*0.5;
-        var _myPrev=player.segs[1]||{x:player.x,y:player.y};
-        var _pPrev=(p.th&&p.th[1])?p.th[1]:{x:px,y:py};
-        var _myPD=dst(_myPrev.x,_myPrev.y,_midX,_midY);
-        var _pPD =dst(_pPrev.x,_pPrev.y,_midX,_midY);
-        // Bigger snake wins a symmetrical head-on; exact tie → referee dies
-        if(Math.abs(_myPD-_pPD)>2){
-          _iAttacker=(_myPD>_pPD); // whoever closed in faster was the attacker
-        } else {
-          _iAttacker=(player.length||10)<=(p.length||10); // smaller snake dies; exact tie referee dies
-        }
-      }
-
-      if(_iAttacker){
+      if(_aFwd<0){
+        // I'm behind — I lose
         killPlayer('Eliminated by '+p.name,pid); return;
       } else {
-        // I'm the referee AND the defender — fire kill_target to tell the attacker to die.
+        // They're behind — send kill_target so they die on their client
         if(_sentKillTs[pid]&&_now-_sentKillTs[pid]<2000){ continue; }
         _sentKillTs[pid]=_now;
         var _hoRkp=_remoteMap[pid];
@@ -5257,22 +5253,23 @@ function killCheck(){
       }
     }
 
-    // Body hit: my head vs their segs — stop at visual body length so boosting can't extend hitbox
-    // Use actual body radius (same formula as drawS) instead of headR proxy
-    var _pBodyR=Math.max(10,Math.min(45,10+(p.widthBonus||0)*0.28));
-    var _bodyR=myR+_pBodyR;
+    // ── Head vs body: circle-to-circle check per body segment (reference game model) ──
+    // combR = myR + pR — same unified radius used for both snakes on all circles.
     var _maxBodyWu=Math.min((p.length||10)*16,480), _accWu=0;
-    for(var j=1;j<p.segs.length-1;j++){
-      var sa=p.segs[j], sb=p.segs[j+1]; if(!sa||!sb) break;
-      _accWu+=dst(sa.x,sa.y,sb.x,sb.y);
-      if(_accWu>_maxBodyWu) break;
-      if(dstPtSeg(player.x,player.y,sa.x,sa.y,sb.x,sb.y)<_bodyR){
-        killPlayer('Eliminated by '+p.name,p.remoteId||null); return;
+    for(var j=1;j<p.segs.length;j++){
+      var bs=p.segs[j]; if(!bs) break;
+      if(j>1){
+        _accWu+=dst(p.segs[j-1].x,p.segs[j-1].y,bs.x,bs.y);
+        if(_accWu>_maxBodyWu) break;
+      }
+      var _dx=player.x-bs.x, _dy=player.y-bs.y;
+      if(_dx*_dx+_dy*_dy<combR2){
+        killPlayer('Eliminated by '+p.name,pid); return;
       }
     }
   }
 
-  // Reverse check: did anyone's head enter MY body? → send kill_target
+  // ── Reverse check: their head vs MY body → send kill_target ──────────────
   var _myMaxWu=Math.min((player.length||10)*16,480);
   for(var ri=0;ri<peers.length;ri++){
     var rp2=peers[ri]; if(!rp2.alive) continue;
@@ -5280,15 +5277,18 @@ function killCheck(){
     var rpid=rp2.remoteId||'';
     if(_sentKillTs[rpid]&&_now-_sentKillTs[rpid]<2000) continue;
     var rpx=(rp2.targetX!=null)?rp2.targetX:rp2.x, rpy=(rp2.targetY!=null)?rp2.targetY:rp2.y;
-    var rpR=rp2.headR||12;
-    if(dst(player.x,player.y,rpx,rpy)<myR+rpR) continue; // head-on handled above
-    var _myBodyR=Math.max(10,Math.min(45,10+(player.widthBonus||0)*0.28));
-    var _rBodyR=rpR+_myBodyR, _rAccWu=0;
-    for(var rk=1;rk<player.segs.length-1;rk++){
-      var rsa=player.segs[rk], rsb=player.segs[rk+1]; if(!rsa||!rsb) break;
-      _rAccWu+=dst(rsa.x,rsa.y,rsb.x,rsb.y);
-      if(_rAccWu>_myMaxWu) break;
-      if(dstPtSeg(rpx,rpy,rsa.x,rsa.y,rsb.x,rsb.y)<_rBodyR){
+    var rpR=snakeRadius(rp2);
+    var rCombR=rpR+myR, rCombR2=rCombR*rCombR;
+    if(dst(player.x,player.y,rpx,rpy)<rCombR) continue; // head-on handled above
+    var _rAccWu=0;
+    for(var rk=1;rk<player.segs.length;rk++){
+      var rsa=player.segs[rk]; if(!rsa) break;
+      if(rk>1){
+        _rAccWu+=dst(player.segs[rk-1].x,player.segs[rk-1].y,rsa.x,rsa.y);
+        if(_rAccWu>_myMaxWu) break;
+      }
+      var _rdx=rpx-rsa.x, _rdy=rpy-rsa.y;
+      if(_rdx*_rdx+_rdy*_rdy<rCombR2){
         _sentKillTs[rpid]=_now;
         var _rkp=_remoteMap[rpid];
         if(_rkp&&_rkp.alive){
@@ -5297,7 +5297,7 @@ function killCheck(){
           _processedDies[rpid]=true;
           _recentLeaves[rpid]=_now;
           if(gameRunning) _scatterDeathFood(_rshSegs, _rshLen);
-          _killerScatteredFor[rpid] = Date.now(); // block broadcast dupe on killer's screen
+          _killerScatteredFor[rpid] = Date.now();
           peers=peers.filter(function(q){return q!==_rkp;});
           delete _remoteMap[rpid];
           if(gameRunning) _updateArenaSize();
