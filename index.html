@@ -4513,14 +4513,15 @@ function spawnPlayer(){
 function spawnPeers(){ /* no-op — real players only, all peers come from Ably */ }
 
 function spawnFood(n){ for(var i=0;i<n;i++) addFood(); }
-function addFood(x,y,isBoostPebble){
+function addFood(x,y,isBoostPebble,isDeathFood){
   if(food.length >= MAX_FOOD) return; // hard cap — never let the list blow up
-  var bp=!!isBoostPebble;
-  // Boost pebbles are larger (r 5-7) and worth 3 growth segments — regular food r 3-5, worth 1
+  var bp=!!isBoostPebble, df=!!isDeathFood;
+  // boost pebbles r 5-7 (green), death food r 5-8 (gold), regular r 3-5 (random color)
   food.push({x:x!==undefined?x:Math.random()*WORLD, y:y!==undefined?y:Math.random()*WORLD,
-    r: bp ? 5+Math.random()*2 : 3+Math.random()*1.5,
-    color: bp ? '#14F195' : PC[Math.floor(Math.random()*PC.length)], // boost pebbles are green
-    value: bp ? 3 : 1});
+    r: bp ? 5+Math.random()*2 : df ? 5+Math.random()*3 : 3+Math.random()*1.5,
+    color: bp ? '#14F195' : df ? '#FFD700' : PC[Math.floor(Math.random()*PC.length)],
+    value: bp ? 3 : df ? 2 : 1,
+    isDeath: df||undefined});
 }
 
 function onMouse(e){
@@ -4947,7 +4948,12 @@ function update(_dt){
     var _minLen = Math.round(15 / SEG_MULT);
     if(player.segs.length > 15 && Math.floor(prevBoostE / 2.0) > Math.floor(boostE / 2.0)){
       var tl=player.segs[player.segs.length-1];
-      addFood(tl.x+(Math.random()-.5)*10, tl.y+(Math.random()-.5)*10, true);
+      // 50% trail behind (visual pebble), 50% respawn randomly on map
+      if(Math.random()<0.5){
+        addFood(tl.x+(Math.random()-.5)*10, tl.y+(Math.random()-.5)*10, true);
+      } else {
+        addFood(undefined, undefined, true);
+      }
       player.length = Math.max(_minLen, player.length - 1);
     }
   }
@@ -5192,7 +5198,7 @@ function killCheck(){
           _processedDies[rpid]=true;
           _recentLeaves[rpid]=_now;
           if(gameRunning) for(var _rsi=0;_rsi<_rsh.length;_rsi++)
-            addFood(_rsh[_rsi].x+(Math.random()-.5)*14,_rsh[_rsi].y+(Math.random()-.5)*14);
+            addFood(_rsh[_rsi].x+(Math.random()-.5)*14,_rsh[_rsi].y+(Math.random()-.5)*14,false,true);
           peers=peers.filter(function(q){return q!==_rkp;});
           delete _remoteMap[rpid];
           if(gameRunning) _updateArenaSize();
@@ -5289,7 +5295,7 @@ function killPlayer(reason, killedBy){
   // The immediate zero is correct intent; this catches any edge cases where TX timing differs.
   setTimeout(function(){ if(W.pubkey) _fetchPrivyWalletBalance(W.pubkey); }, 5000);
   if(_elSidebar) _elSidebar.style.display=''; setTimeout(resizeC,30);
-  for(var i=0;i<Math.min(player.segs.length,70);i++) addFood(player.segs[i].x+(Math.random()-.5)*18,player.segs[i].y+(Math.random()-.5)*18);
+  for(var i=0;i<Math.min(player.segs.length,70);i++) addFood(player.segs[i].x+(Math.random()-.5)*18,player.segs[i].y+(Math.random()-.5)*18,false,true);
   player.segs = []; // wipe body immediately — prevents ghost rendering on any trailing draw call
   cleanupL(true); cancelCharge(); // keepAbly=true so spectating can still receive pos updates
   var t=TIERS[activeTier];
@@ -5429,6 +5435,21 @@ function draw(){
     }
     ctx.fill();
   }
+  ctx.shadowBlur=0;
+
+  // ── Death food (gold wager orbs) — outer pulsing ring to distinguish from regular food ──
+  var _dfPulse=0.5+0.5*Math.sin(performance.now()/220);
+  ctx.save();
+  ctx.lineWidth=2;
+  for(var _dfi=0;_dfi<food.length;_dfi++){
+    var _df=food[_dfi]; if(!_df.isDeath) continue;
+    if(_df.x<vx1||_df.x>vx2||_df.y<vy1||_df.y>vy2) continue;
+    var _dfr=_df.r*(1+_orbFlash*0.5);
+    ctx.shadowColor='#FFD700'; ctx.shadowBlur=10+_dfPulse*18;
+    ctx.strokeStyle='rgba(255,230,50,'+(0.4+_dfPulse*0.55).toFixed(2)+')';
+    ctx.beginPath(); ctx.arc(_df.x,_df.y,_dfr+3,0,Math.PI*2); ctx.stroke();
+  }
+  ctx.restore();
   ctx.shadowBlur=0;
 
   // ── Money drops — glowing dollar coin at each death site ─────────────────
