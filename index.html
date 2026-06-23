@@ -4831,8 +4831,9 @@ document.addEventListener('visibilitychange',function(){
     _startBgWorker();
   } else {
     _stopBgWorker();
-    _lastLoopT=performance.now(); // prevent dt spike on resume
-    if(gameRunning||_spectating) requestAnimationFrame(loop);
+    _lastLoopT=performance.now(); // reset dt so first visible frame doesn't spike
+    // The rAF loop is still running (throttled to ~1fps while hidden) — it resumes
+    // at full speed automatically. Do NOT call rAF(loop) here or we get two loops.
   }
 });
 
