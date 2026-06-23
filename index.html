@@ -5327,12 +5327,6 @@ function killPlayer(reason, killedBy){
           fromId:_wsClientId, fromName:player.name, fromPubkey:W.pubkey}
       }}));}catch(_de){}
     }
-  } else {
-    // Free lobby: spawn a practice wager orb — same visuals, no real SOL
-    var _practSol = +(0.005 + Math.random()*0.010).toFixed(4); // simulated ~$1-3
-    var _pDropId = (_wsClientId||'x')+'_prac_'+Date.now();
-    moneyDrops.push({id:_pDropId, x:player.x, y:player.y, sol:_practSol,
-      fromId:_wsClientId, fromName:player.name, fromPubkey:'', ts:Date.now(), practice:true});
   }
   _wsSend('die', {n: player.name, killed_by: killedBy||null, sol: 0, ts: Date.now()});
   if(_ws&&_ws.readyState===WebSocket.OPEN){
@@ -5508,37 +5502,7 @@ function draw(){
     ctx.shadowBlur=0;
   }
 
-  // ── Money drops — glowing dollar coin at each death site ─────────────────
-  if(moneyDrops.length){
-    var _mNow=Date.now();
-    var _mPulse=0.65+0.35*Math.sin(_mNow/280);
-    var _mZ=CAM_ZOOM||1;
-    for(var _mi=moneyDrops.length-1;_mi>=0;_mi--){
-      var _mdr=moneyDrops[_mi];
-      if(_mdr.x<vx1-80||_mdr.x>vx2+80||_mdr.y<vy1-80||_mdr.y>vy2+80) continue;
-      var _mAge=(_mNow-_mdr.ts)/1000;
-      if(_mAge>45){ moneyDrops.splice(_mi,1); continue; }
-      var _mFade=_mAge>35?Math.max(0,1-(_mAge-35)/10):1;
-      var _mR=(30+6*_mPulse)/_mZ;
-      ctx.globalAlpha=_mFade;
-      // Outer glow ring
-      ctx.shadowColor='#14F195'; ctx.shadowBlur=10*_mPulse;
-      ctx.beginPath(); ctx.arc(_mdr.x,_mdr.y,_mR+5/_mZ,0,Math.PI*2);
-      ctx.strokeStyle='#14F195'; ctx.lineWidth=3/_mZ; ctx.stroke();
-      // Filled coin
-      ctx.beginPath(); ctx.arc(_mdr.x,_mdr.y,_mR,0,Math.PI*2);
-      var _mG=ctx.createRadialGradient(_mdr.x,_mdr.y,0,_mdr.x,_mdr.y,_mR);
-      _mG.addColorStop(0,'#1dffaa'); _mG.addColorStop(1,'#0b7a4e');
-      ctx.fillStyle=_mG; ctx.shadowBlur=0; ctx.fill();
-      // Dollar label
-      ctx.fillStyle='#001a0d';
-      ctx.font='bold '+Math.round(16/_mZ)+'px Orbitron,monospace';
-      ctx.textAlign='center'; ctx.textBaseline='middle';
-      ctx.fillText('$'+Math.round(_mdr.sol*SOL_USD),_mdr.x,_mdr.y);
-      ctx.globalAlpha=1;
-    }
-    ctx.textAlign='left'; ctx.textBaseline='alphabetic'; ctx.shadowBlur=0;
-  }
+  // Money drop coins removed — collection still handled by checkMoneyDrops() for real SOL tiers
 
   for(var i=parts.length-1;i>=0;i--){ var p=parts[i]; p.x+=p.vx; p.y+=p.vy; p.life--; if(p.life<=0){ parts[i]=parts[parts.length-1]; parts.length--; continue; } if(p.x<vx1-20||p.x>vx2+20||p.y<vy1-20||p.y>vy2+20) continue; ctx.globalAlpha=p.life/p.max; ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fillStyle=p.color; ctx.fill(); }
   ctx.globalAlpha=1;
