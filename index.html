@@ -1321,7 +1321,7 @@ var WORLD      = _BASE_WORLD;
 var WORLD_R    = WORLD/2;  // radius of circular arena
 var _targetWorld = _BASE_WORLD; // arena lerps toward this gradually on join/leave
 var CAM_ZOOM   = 1.0;      // current zoom (smoothly lerped)
-var MIN_ZOOM   = 0.10;
+var MIN_ZOOM   = 0.20;
 var MAX_ZOOM   = 3.0;
 var _zoomOffset = 0;       // user's manual scroll offset on top of auto-zoom
 var _smoothLen  = 100;     // exponentially-smoothed snake length used for zoom (avoids per-frame jitter)
@@ -4261,7 +4261,7 @@ function initCanvas(){
   gc.addEventListener('wheel', function(e){
     e.preventDefault();
     _zoomOffset -= e.deltaY * 0.003;
-    _zoomOffset = Math.max(-0.82, Math.min(2.08, _zoomOffset)); // full range: 0.10–3.0
+    _zoomOffset = Math.max(-0.72, Math.min(2.08, _zoomOffset)); // full range: 0.20–3.0
   }, {passive:false});
 }
 function resizeC(){
@@ -5518,7 +5518,7 @@ function draw(){
   ctx.fillStyle='#0f0f0f';
   ctx.fillRect(vx1,vy1,vx2-vx1,vy2-vy1);
   // ── Hexagonal honeycomb grid — skipped at low zoom (sub-pixel = wasted GPU) ─
-  if(CAM_ZOOM >= 0.45){
+  if(CAM_ZOOM >= 0.60){
     var _hR=35, _hH=_hR*Math.sqrt(3), _hCS=_hR*1.5;
     ctx.fillStyle='#1a1a1a'; ctx.strokeStyle='#0a0a0a'; ctx.lineWidth=1.5;
     ctx.beginPath();
@@ -5570,7 +5570,7 @@ function draw(){
   if(CAM_ZOOM >= 0.32){
     var _dfPulse=0.5+0.5*Math.sin(performance.now()/200);
     // Ramp blur from 0→full over zoom range 0.32→0.70 so it fades in gracefully
-    var _dfBlurMul=Math.min(1,(CAM_ZOOM-0.32)/0.38);
+    var _dfBlurMul=CAM_ZOOM>=0.55?Math.min(1,(CAM_ZOOM-0.32)/0.38):0; // no GPU shadow below LOD threshold
     ctx.save();
     for(var _dfi=0;_dfi<food.length;_dfi++){
       var _df=food[_dfi]; if(!_df.isDeath) continue;
@@ -5767,7 +5767,7 @@ function drawS(s){
   if(pts.length<2) pts.push({x:W2SX(s.segs[1].x),y:W2SY(s.segs[1].y)});
 
   // ── LOD: skip all skin effects at low zoom — plain body line + head dot ──
-  if(CAM_ZOOM < 0.35){
+  if(CAM_ZOOM < 0.55){
     var _n0=pts.length, _lc=s.color||'#14F195';
     ctx.save(); ctx.setTransform(1,0,0,1,0,0);
     ctx.lineCap='round'; ctx.lineJoin='round';
