@@ -4267,7 +4267,8 @@ function initCanvas(){
   resizeC(); window.addEventListener('resize',resizeC);
   gc.addEventListener('wheel', function(e){
     e.preventDefault();
-    _zoomOffset -= e.deltaY * 0.0018;
+    var _dz = e.deltaY * 0.0018;
+    _zoomOffset -= Math.max(-0.07, Math.min(0.07, _dz)); // cap per-event delta — prevents large jumps
     _zoomOffset = Math.max(-0.34, Math.min(2.08, _zoomOffset)); // gameplay out: 0.58, spectate out: 0.45
     boosting=false; _scrollLock=true; clearTimeout(_scrollLockTO); _scrollLockTO=setTimeout(function(){_scrollLock=false;},350);
   }, {passive:false});
@@ -4971,7 +4972,7 @@ function update(_dt){
       // Spectate: same formula as gameplay (0.92 base); _zoomOffset pre-set to -0.30 on entry → opens at 0.62
       // Max zoom-out = 0.92 + (-0.34) = 0.58, same as gameplay — scroll behavior is identical
       var _spTargetZ=Math.max(MIN_ZOOM,Math.min(MAX_ZOOM,0.92+_zoomOffset));
-      CAM_ZOOM+=(_spTargetZ-CAM_ZOOM)*0.05;
+      CAM_ZOOM+=(_spTargetZ-CAM_ZOOM)*0.02;
       var _sNow=performance.now(),_sExtCap=BASE_SPEED*BOOST_MULT*60;
       var _st=_specTargetId?peers.find(function(p){return p.remoteId===_specTargetId;}):null;
       if(_st&&_st.alive){
@@ -5091,7 +5092,7 @@ function update(_dt){
 
   var len=player.length; // used by HUD below (logical length unit, not raw seg count)
   var _tgtZ=Math.max(MIN_ZOOM,Math.min(MAX_ZOOM,0.92+_zoomOffset));
-  CAM_ZOOM+=(_tgtZ-CAM_ZOOM)*0.08; // lerp — prevents snap-zoom lurching
+  CAM_ZOOM+=(_tgtZ-CAM_ZOOM)*0.02; // lerp — slow for smooth body transitions
 
   camX=player.x; camY=player.y;
   var isFreeGame=(activeTier==='free');
@@ -5781,9 +5782,11 @@ function drawS(s){
 
   // Width driven by widthBonus (food eaten - boost drained); fall back to length estimate for remote peers without wb yet
   var _wB = s.widthBonus != null ? s.widthBonus : Math.max(0, ((s.length||10) - 10) * 3);
-  var R   = Math.max(10, Math.min(45, 10 + _wB * 0.14)); // fixed screen-px size — no zoom multiplier
+  var _baseR = Math.max(10, Math.min(45, 10 + _wB * 0.14)); // base radius at Z=1
+  var _zF = Math.max(0.45, Math.min(2.0, Z));               // zoom factor clamped so snake scales with world
+  var R   = Math.max(6, Math.min(52, _baseR * _zF));        // screen-px radius — proportional to zoom
   var BW  = R*1.9;
-  var STEP   = Math.max(3, R*0.5);
+  var STEP   = Math.max(3, R*0.4);
   var STEP_W = STEP / Z;                              // world-unit spacing between pts
   var logical = Math.min((s.length||10) * SEG_MULT, 120);
   var MAXLEN_W = Math.max(30/Z, (logical * 4) / Z);   // world units — constant screen-pixel tail at every zoom
