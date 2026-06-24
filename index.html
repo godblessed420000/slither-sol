@@ -5015,7 +5015,7 @@ function update(_dt){
   if(boosting && boostE>0){
     spd *= BOOST_MULT;
     var prevBoostE = boostE;
-    boostE = Math.max(0, boostE - 0.15 * _dt); // drain while boosting (slower = more forgiving)
+    boostE = Math.max(0, boostE - 0.07 * _dt); // drain while boosting
     // boostE exhausted — speed/shrink block above won't fire; boost resumes automatically when orbs refill energy
     var _minLen = Math.round(15 / SEG_MULT);
     if(player.segs.length > 15 && Math.floor(prevBoostE / 3.5) > Math.floor(boostE / 3.5)){
