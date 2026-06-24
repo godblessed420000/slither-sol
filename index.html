@@ -5625,17 +5625,18 @@ function draw(){
   if(_debugHitboxes && player && player.alive){
     ctx.save();
     ctx.setTransform(1,0,0,1,0,0); // screen space — no world transform influence
-    var _dNow=Date.now(), _dZ=CAM_ZOOM||1;
+    var _dNow=Date.now();
     var _dcw=gc.width/2, _dch=gc.height/2;
-    var _dW2X=function(wx){return(wx-camX)*_dZ+_dcw;};
-    var _dW2Y=function(wy){return(wy-camY)*_dZ+_dch;};
-    var _myRw=snakeRadius(player);          // collision radius, world units
-    var _myRs=_myRw*_dZ;                   // collision radius, screen pixels
-    var _hx=_dW2X(player.x), _hy=_dW2Y(player.y);
+    // 1:1 world→screen (same as drawS body) so hitbox overlay aligns perfectly at any zoom
+    var _dW2X=function(wx){return(wx-player.x)+_dcw;};
+    var _dW2Y=function(wy){return(wy-player.y)+_dch;};
+    var _myRw=snakeRadius(player);          // collision radius, world units = screen px at 1:1
+    var _myRs=_myRw;                        // no zoom mult — 1:1 space
+    var _hx=_dcw, _hy=_dch;               // head always at screen center in 1:1
 
-    // Max world-unit coverage = same as visual tail so tube matches visual body
+    // Max world-unit coverage = same as visual tail
     var _myLogical=Math.min((player.length||10)*SEG_MULT,120);
-    var _mMaxWu=(_myLogical*4)/_dZ;
+    var _mMaxWu=Math.max(300,_myLogical*4);
 
     // My body kill zone tube
     var _mSegs=player.segs, _mAccWu=0;
@@ -5666,12 +5667,12 @@ function draw(){
     for(var _dpi=0;_dpi<peers.length;_dpi++){
       var _dp=peers[_dpi]; if(!_dp.alive) continue;
       var _dpx=(_dp.targetX!=null)?_dp.targetX:_dp.x, _dpy=(_dp.targetY!=null)?_dp.targetY:_dp.y;
-      var _dpRw=snakeRadius(_dp), _dpRs=_dpRw*_dZ;
+      var _dpRw=snakeRadius(_dp), _dpRs=_dpRw;  // no zoom mult — 1:1 space
       var _prot=_dNow-(_dp.joinTs||0)<1500;
       var _pc=_prot?'#FFD700':'#FF4040';
       var _phx=_dW2X(_dpx), _phy=_dW2Y(_dpy);
       var _dpLogical=Math.min((_dp.length||10)*SEG_MULT,120);
-      var _dpMaxWu=(_dpLogical*4)/_dZ;
+      var _dpMaxWu=Math.max(300,_dpLogical*4);
 
       // Peer body kill zone tube
       var _dps=_dp.segs, _dpAccWu=0;
@@ -5690,7 +5691,7 @@ function draw(){
       // Head-on threshold ring
       ctx.globalAlpha=0.3; ctx.strokeStyle='#FF8800'; ctx.lineWidth=1;
       ctx.setLineDash([5,3]);
-      ctx.beginPath(); ctx.arc(_phx,_phy,(_myRw+_dpRw)*_dZ,0,Math.PI*2); ctx.stroke();
+      ctx.beginPath(); ctx.arc(_phx,_phy,(_myRw+_dpRw),0,Math.PI*2); ctx.stroke();
       ctx.setLineDash([]);
       // Peer head circle
       ctx.globalAlpha=0.85; ctx.strokeStyle=_pc; ctx.lineWidth=2;
@@ -5777,7 +5778,7 @@ function drawS(s){
   var STEP   = Math.max(3, R*0.5);
   var STEP_W = STEP;                                  // 1:1 world-units = screen-px (no Z)
   var logical = Math.min((s.length||10) * SEG_MULT, 120);
-  var MAXLEN_W = Math.max(30, logical * 4);           // world units = screen pixels at 1:1
+  var MAXLEN_W = Math.max(300, logical * 4);          // ≥300 ensures auto-circle always closes (circumference≈290wu)
   var pts=[{x:hx,y:hy}];
   var pcx_w=s.x, pcy_w=s.y, acc=0, total_w=0;
   for(var i=1;i<s.segs.length && total_w<MAXLEN_W;i++){
