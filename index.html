@@ -5745,25 +5745,26 @@ function drawS(s){
   var _wB = s.widthBonus != null ? s.widthBonus : Math.max(0, ((s.length||10) - 10) * 3);
   var R   = Math.max(10, Math.min(45, 10 + _wB * 0.28)); // fixed screen-px size — no zoom multiplier
   var BW  = R*1.9;
-  var STEP= Math.max(3, R*0.5);
+  var STEP   = Math.max(3, R*0.5);
+  var STEP_W = STEP / Z;                              // world-unit spacing between pts
   var logical = Math.min((s.length||10) * SEG_MULT, 120);
-  var MAXLEN  = Math.max(30, logical * 4); // fixed screen-px length — no zoom multiplier
+  var MAXLEN_W = Math.max(30/Z, logical * 4);         // world units — constant tail coverage at every zoom
 
   var hx=W2SX(s.x), hy=W2SY(s.y);
   var pts=[{x:hx,y:hy}];
-  var pcx=hx, pcy=hy, acc=0, total=0;
-  for(var i=1;i<s.segs.length && total<MAXLEN;i++){
-    var vx=W2SX(s.segs[i].x), vy=W2SY(s.segs[i].y);
-    var dx=vx-pcx, dy=vy-pcy, dd=Math.sqrt(dx*dx+dy*dy);
+  var pcx_w=s.x, pcy_w=s.y, acc=0, total_w=0;
+  for(var i=1;i<s.segs.length && total_w<MAXLEN_W;i++){
+    var sx_w=s.segs[i].x, sy_w=s.segs[i].y;
+    var dx=sx_w-pcx_w, dy=sy_w-pcy_w, dd=Math.sqrt(dx*dx+dy*dy);
     if(dd<1e-6){ continue; }
     var ux=dx/dd, uy=dy/dd;
-    while(acc+dd>=STEP && total<MAXLEN){
-      var step=STEP-acc;
-      pcx+=ux*step; pcy+=uy*step;
-      pts.push({x:pcx,y:pcy});
-      total+=STEP; dd-=step; acc=0;
+    while(acc+dd>=STEP_W && total_w<MAXLEN_W){
+      var step=STEP_W-acc;
+      pcx_w+=ux*step; pcy_w+=uy*step;
+      pts.push({x:W2SX(pcx_w),y:W2SY(pcy_w)});
+      total_w+=STEP_W; dd-=step; acc=0;
     }
-    acc+=dd; pcx=vx; pcy=vy;
+    acc+=dd; pcx_w=sx_w; pcy_w=sy_w;
   }
   if(pts.length<2) pts.push({x:W2SX(s.segs[1].x),y:W2SY(s.segs[1].y)});
 
