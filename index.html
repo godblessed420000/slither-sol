@@ -5748,7 +5748,7 @@ function drawS(s){
   var STEP   = Math.max(3, R*0.5);
   var STEP_W = STEP / Z;                              // world-unit spacing between pts
   var logical = Math.min((s.length||10) * SEG_MULT, 120);
-  var MAXLEN_W = Math.max(30/Z, logical * 4);         // world units — constant tail coverage at every zoom
+  var MAXLEN_W = Math.max(30/Z, (logical * 4) / Z);   // world units — constant screen-pixel tail at every zoom
 
   var hx=W2SX(s.x), hy=W2SY(s.y);
   var pts=[{x:hx,y:hy}];
