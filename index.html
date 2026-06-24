@@ -5217,22 +5217,32 @@ function killCheck(){
     var _headContact=(headGap<combR)||segHitsCircle(aPrev,{x:player.x,y:player.y},{x:px,y:py},combR);
     if(_headContact){
       var _pCos=Math.cos(p.angle), _pSin=Math.sin(p.angle);
-      // Front-face check: dot(targetHead - sourceHead, sourceForward) > 0
-      // means the OTHER head is in front of YOUR face = you're heading INTO them.
+      // Front-face: dot(otherHead − myHead, myForward) > 0  →  I am heading INTO them.
       var _iFaceThem=(px-player.x)*_myCos+(py-player.y)*_mySin > 0;
       var _theyFaceMe=(player.x-px)*_pCos+(player.y-py)*_pSin > 0;
 
-      if(_iFaceThem && _theyFaceMe){
-        // ── TRUE H2H: both front faces meeting simultaneously ─────────────────
-        // Spec: larger snake (more width/length) wins. Tie → lower ping.
-        // Referee model prevents both clients sending kills simultaneously.
+      // Engage referee whenever at least one head faces the other.
+      // This is critical: WITHOUT a single referee both clients resolve the same collision
+      // independently from slightly stale angle/position data and BOTH call killPlayer.
+      if(_iFaceThem || _theyFaceMe){
         var _h2=_hoHash(myId,pid);
         var _iAmRef=(_h2===0)===(myId<pid);
-        if(!_iAmRef){ continue; } // non-ref waits for kill_target from ref
+        if(!_iAmRef){ continue; } // non-ref ALWAYS waits — prevents double-kill
 
-        var _iWin=myR>pR ? true : myR<pR ? false : ((_pingEma||999)<=((p.ping||999)));
+        // Ref applies front-face rule:
+        // • Both facing  →  true H2H  →  larger snake wins
+        // • Only I face  →  I ran into their space  →  I lose
+        // • Only they face →  they ran into my space  →  I win
+        var _iWin;
+        if(_iFaceThem && _theyFaceMe){
+          _iWin=myR>pR ? true : myR<pR ? false : ((_pingEma||999)<=((p.ping||999)));
+        } else {
+          _iWin=!_iFaceThem; // I face them → I lose; they face me → I win
+        }
+
         if(!_iWin){
-          killPlayer('Eliminated by '+p.name+' (H2H — larger snake wins)',pid); return;
+          var _msg=(_iFaceThem&&_theyFaceMe)?'Eliminated by '+p.name+' (H2H — larger snake wins)':'Eliminated by '+p.name;
+          killPlayer(_msg,pid); return;
         } else {
           if(_sentKillTs[pid]&&_now-_sentKillTs[pid]<2000){ continue; }
           _sentKillTs[pid]=_now;
@@ -5247,7 +5257,8 @@ function killCheck(){
             delete _remoteMap[pid];
             if(gameRunning)_updateArenaSize();
             myKills++; boostE=Math.min(100,boostE+50);
-            kFeed('🗡 '+(p.name||'Player')+' — outgunned in H2H!','kill');
+            var _kMsg=(_iFaceThem&&_theyFaceMe)?'🗡 '+(p.name||'Player')+' — outgunned in H2H!':'🗡 '+(p.name||'Player')+' ran into you!';
+            kFeed(_kMsg,'kill');
           }
           if(_ws&&_ws.readyState===WebSocket.OPEN){
             try{_ws.send(JSON.stringify({type:'pos',clientId:_wsClientId,data:{
@@ -5257,39 +5268,8 @@ function killCheck(){
           }
           continue;
         }
-
-      } else if(_iFaceThem){
-        // ── I am facing into them, they are turned away — I die ───────────────
-        // My front face entered their space; they effectively have a body segment there.
-        killPlayer('Eliminated by '+p.name,pid); return;
-
-      } else if(_theyFaceMe){
-        // ── They are facing into me, I am turned away — they die ──────────────
-        // Their front face entered my space; send kill so they die on their client.
-        if(_sentKillTs[pid]&&_now-_sentKillTs[pid]<2000){ continue; }
-        _sentKillTs[pid]=_now;
-        var _rkpF=_remoteMap[pid];
-        if(_rkpF&&_rkpF.alive){
-          var _rkpFSegs=_rkpF.segs.slice(),_rkpFLen=_rkpF.length;
-          _rkpF.alive=false; _rkpF.segs=[]; if(_rkpF.th)_rkpF.th=[];
-          _processedDies[pid]=true; _recentLeaves[pid]=_now;
-          if(gameRunning)_scatterDeathFood(_rkpFSegs,_rkpFLen);
-          _killerScatteredFor[pid]=Date.now();
-          peers=peers.filter(function(q){return q!==_rkpF;});
-          delete _remoteMap[pid];
-          if(gameRunning)_updateArenaSize();
-          myKills++; boostE=Math.min(100,boostE+50);
-          kFeed('🗡 '+(p.name||'Player')+' ran head-first into you!','kill');
-        }
-        if(_ws&&_ws.readyState===WebSocket.OPEN){
-          try{_ws.send(JSON.stringify({type:'pos',clientId:_wsClientId,data:{
-            x:+(player.x.toFixed(1)),y:+(player.y.toFixed(1)),a:+(player.angle.toFixed(3)),
-            l:player.length||10,v:true,kill_target:pid,killer:_wsClientId
-          }}));}catch(_re){}
-        }
-        continue;
       }
-      // Neither facing (tangential/side graze) — fall through to body check below
+      // Neither facing (tangential side-graze) — fall through to body check
     }
 
     // ── My head vs their body ─────────────────────────────────────────────────
