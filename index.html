@@ -4989,7 +4989,7 @@ function update(_dt){
       var _spPeer=_specTargetId?peers.find(function(p){return p.remoteId===_specTargetId&&p.alive;}):null;
       var _shs=_spPeer?'SCORE: '+(_spPeer.score||0):'SPECTATING';
       if(_elHudScore&&_shs!==_hudScoreV){_elHudScore.textContent=_shs;_hudScoreV=_shs;}
-      var _shsu=_spPeer?'Length: '+(_spPeer.segs?_spPeer.segs.length:0):'';
+      var _shsu=_spPeer?'Length: '+(_spPeer.length||0):'';
       if(_elHudSub&&_shsu!==_hudSubV){_elHudSub.textContent=_shsu;_hudSubV=_shsu;}
     }
     return;
@@ -5080,7 +5080,7 @@ function update(_dt){
     }
   }
 
-  var len=player.segs.length; // used by HUD below
+  var len=player.length; // used by HUD below (logical length unit, not raw seg count)
   CAM_ZOOM = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, 0.92 + _zoomOffset));
 
   camX=player.x; camY=player.y;
