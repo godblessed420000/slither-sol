@@ -899,7 +899,7 @@ canvas{display:block;width:100%;height:100%;}
     <div id="cashoutFlash"></div>
     <div class="hud-top">
       <div class="hud-score" id="hudScore" style="display:none">SCORE: 0</div>
-      <div class="hud-sub" id="hudSub">Length: 5 &middot; Hold [Q] to cashout</div>
+      <div class="hud-sub" id="hudSub">Size: 5 &middot; Hold [Q] to cashout</div>
     </div>
     <div id="hudTierBadge" class="lobby-badge"></div>
     <div id="cashoutHud">
@@ -4765,7 +4765,7 @@ async function triggerCashout(){
     var flash=document.getElementById('cashoutFlash'); if(flash){ flash.style.opacity='1'; setTimeout(function(){ flash.style.opacity='0'; },400); }
     cleanupL();
     ['cashoutHud','pingEl','hudTierBadge','activeLobbyBadge','chatBox'].forEach(function(id){ var el=document.getElementById(id); if(el) el.style.display='none'; }); _closeChat();
-    var coMsg=document.getElementById('coMsg'); if(coMsg) coMsg.textContent='Free Play · Score:'+score+' · Length:'+player.segs.length+' · Kills:'+myKills;
+    var coMsg=document.getElementById('coMsg'); if(coMsg) coMsg.textContent='Free Play · Score:'+score+' · Size:'+player.segs.length+' · Kills:'+myKills;
     var coAmt=document.getElementById('coAmt'); if(coAmt) coAmt.textContent='Practice round — no SOL wagered';
     var coFees=document.getElementById('coFees'); if(coFees) coFees.innerHTML='<div class="pf-row" style="justify-content:center;color:var(--dim)">Enter a paid lobby to earn real SOL</div>';
     hideAll(); var ov=document.getElementById('ovCashout'); if(ov) ov.classList.remove('hidden');
@@ -4808,7 +4808,7 @@ async function triggerCashout(){
   if(W.pubkey){ setTimeout(function(){ refreshBalance(null); }, 1500); }
   cleanupL();
   ['cashoutHud','pingEl','hudTierBadge','activeLobbyBadge','chatBox'].forEach(function(id){ var el=document.getElementById(id); if(el) el.style.display='none'; }); _closeChat();
-  var coMsg=document.getElementById('coMsg'); if(coMsg) coMsg.textContent=t.name+' · Kills:'+myKills+' · Score:'+score+' · Length:'+player.segs.length;
+  var coMsg=document.getElementById('coMsg'); if(coMsg) coMsg.textContent=t.name+' · Kills:'+myKills+' · Score:'+score+' · Size:'+player.segs.length;
   var coAmt=document.getElementById('coAmt');
   var _entrySOL = t.sol || 0;
   var _killEarn = killSOL || 0;
@@ -4999,7 +4999,7 @@ function update(_dt){
       var _spPeer=_specTargetId?peers.find(function(p){return p.remoteId===_specTargetId&&p.alive;}):null;
       var _shs=_spPeer?'SCORE: '+(_spPeer.score||0):'SPECTATING';
       if(_elHudScore&&_shs!==_hudScoreV){_elHudScore.textContent=_shs;_hudScoreV=_shs;}
-      var _shsu=_spPeer?'Length: '+(_spPeer.length||0):'';
+      var _shsu=_spPeer?'Size: '+(_spPeer.length||0):'';
       if(_elHudSub&&_shsu!==_hudSubV){_elHudSub.textContent=_shsu;_hudSubV=_shsu;}
     }
     return;
@@ -5088,11 +5088,11 @@ function update(_dt){
   if(_elHudSub){
     var _hsu;
     if(isFreeGame){
-      _hsu='Length: '+len+' · Free Play · Hold [Q] 1s to exit';
+      _hsu='Size: '+len+' · Free Play · Hold [Q] 1s to exit';
     } else {
       var hudCarry=(W.balance>0)?'Carrying: $'+((W.balance||0)*SOL_USD).toFixed(2)+' · ':'';
       var hudCircle=_autoCircle?'AUTO-CIRCLE · ':'';
-      _hsu='Length: '+len+' · '+hudCarry+hudCircle+'Hold [Q] 1s to cashout';
+      _hsu='Size: '+len+' · '+hudCarry+hudCircle+'Hold [Q] 1s to cashout';
     }
     if(_hsu!==_hudSubV){ _elHudSub.textContent=_hsu; _hudSubV=_hsu; }
   }
