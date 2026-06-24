@@ -5777,19 +5777,20 @@ function _spawnTrail(s, isBoosting){
 function drawS(s){
   if(s.segs.length<2) return;
   var Z=CAM_ZOOM, cw=gc.width/2, ch=gc.height/2;
-  var W2SX=function(wx){ return (wx-camX)*Z+cw; };
-  var W2SY=function(wy){ return (wy-camY)*Z+ch; };
+  // Head placed at its correct world-zoom position; body uses fixed 1:1 offset
+  // from the head so the snake is the same screen size at any zoom level.
+  var hx=(s.x-camX)*Z+cw, hy=(s.y-camY)*Z+ch;
+  var W2SX=function(wx){ return (wx-s.x)+hx; };
+  var W2SY=function(wy){ return (wy-s.y)+hy; };
 
   // Width driven by widthBonus (food eaten - boost drained); fall back to length estimate for remote peers without wb yet
   var _wB = s.widthBonus != null ? s.widthBonus : Math.max(0, ((s.length||10) - 10) * 3);
   var R   = Math.max(10, Math.min(45, 10 + _wB * 0.09)); // fixed screen-px size — no zoom multiplier
   var BW  = R*1.9;
   var STEP   = Math.max(3, R*0.5);
-  var STEP_W = STEP / Z;                              // world-unit spacing between pts
+  var STEP_W = STEP;                                  // 1:1 world-units = screen-px (no Z)
   var logical = Math.min((s.length||10) * SEG_MULT, 120);
-  var MAXLEN_W = Math.max(30/Z, (logical * 4) / Z);   // world units — constant screen-pixel tail at every zoom
-
-  var hx=W2SX(s.x), hy=W2SY(s.y);
+  var MAXLEN_W = Math.max(30, logical * 4);           // world units = screen pixels at 1:1
   var pts=[{x:hx,y:hy}];
   var pcx_w=s.x, pcy_w=s.y, acc=0, total_w=0;
   for(var i=1;i<s.segs.length && total_w<MAXLEN_W;i++){
