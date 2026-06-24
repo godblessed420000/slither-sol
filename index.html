@@ -4182,7 +4182,7 @@ var _fcBuckets={}; // reused food-color-bucket dict — avoids {} alloc + GC eve
 var camX=0,camY=0,mouseX=400,mouseY=300,boosting=false,boostE=100;
 var _spectating=false,_specTargetId=null;
 // Named boost handlers — defined once so removeEventListener actually works
-function _boostOn(e){ if(e && e.button!=null && e.button!==0) return; if(!player||player.length<=17) return; boosting=true; }
+function _boostOn(e){ if(e && e.button!=null && e.button!==0) return; if(!player||player.length<=8) return; boosting=true; }
 function _boostOff(e){ if(e && e.button!=null && e.button!==0) return; boosting=false; }
 var score=0,myKills=0,killSOL=0,pingInt,lbInt;
 var qDown=false,qStart=0,cashingOut=false,cashoutAnimId=null;
@@ -4592,7 +4592,7 @@ function onTouch(e){
 }
 function onKD(e){
   if(_chatOpen) return; // all keys go to chat input while chat is open
-  if(e.code==='Space'&&gameRunning){ e.preventDefault(); if(player&&player.length>17) boosting=true; return; }
+  if(e.code==='Space'&&gameRunning){ e.preventDefault(); if(player&&player.length>8) boosting=true; return; }
   if(e.key.toLowerCase()==='q'&&!qDown&&gameRunning&&player&&player.alive){ qDown=true; qStart=performance.now(); startCharge(); }
   if(e.key.toLowerCase()==='t'&&gameRunning&&player&&player.alive){ e.preventDefault(); _openChat(); }
   if(e.key.toLowerCase()==='y'&&gameRunning&&player&&player.alive){ e.preventDefault(); _autoCircle=!_autoCircle; toast(_autoCircle?'🔄 Auto-circle ON':'⬛ Auto-circle OFF','info'); }
@@ -4661,7 +4661,7 @@ function _initJoystick(){
   // ── Boost ─────────────────────────────────────
   bBtn.addEventListener('touchstart',function(e){
     e.preventDefault(); bBtn.classList.add('active');
-    if(player&&player.length>17) boosting=true;
+    if(player&&player.length>8) boosting=true;
   },{passive:false});
   bBtn.addEventListener('touchend',function(e){
     e.preventDefault(); bBtn.classList.remove('active'); boosting=false;
@@ -5010,7 +5010,7 @@ function update(_dt){
   }
 
   // ── Speed + boost ──
-  if(boosting && player.length <= 17) boosting = false;
+  if(boosting && player.length <= 8) boosting = false;
   var spd = BASE_SPEED * _dt;
   if(boosting && boostE>0){
     spd *= BOOST_MULT;
