@@ -5199,8 +5199,9 @@ function killCheck(){
   var myId=_wsClientId||'zzz';
   var _now=Date.now();
   if(_now-(player.spawnTs||0)<1500) return;
-  // Unified radius from reference game: same formula drives head circle, body circles, and hitboxes
   var myR=snakeRadius(player);
+  // My forward unit vector — used for front-face hurtbox checks throughout
+  var _myCos=Math.cos(player.angle), _mySin=Math.sin(player.angle);
 
   for(var i=0;i<peers.length;i++){
     var p=peers[i]; if(!p.alive) continue;
@@ -5211,46 +5212,74 @@ function killCheck(){
     var combR=myR+pR, combR2=combR*combR;
     var headGap=dst(player.x,player.y,px,py);
 
-    // ── Head-to-head ──────────────────────────────────────────────────────────
-    // Static overlap OR swept test (catches fast/boosting tunnels) — port of reference game.
-    // Referee model: _hoHash designates exactly ONE client to resolve each pair → never both die.
+    // ── Head proximity: static overlap OR swept (catches boosting tunnels) ───
     var aPrev=player.segs[0]||{x:player.x,y:player.y};
-    var _headHit=(headGap<combR)||segHitsCircle(aPrev,{x:player.x,y:player.y},{x:px,y:py},combR);
-    if(_headHit){
-      var _h2=_hoHash(myId,pid);
-      var _iAmRef=(_h2===0)===(myId<pid);
-      if(!_iAmRef){ continue; } // non-referee: wait for kill_target from the referee
+    var _headContact=(headGap<combR)||segHitsCircle(aPrev,{x:player.x,y:player.y},{x:px,y:py},combR);
+    if(_headContact){
+      var _pCos=Math.cos(p.angle), _pSin=Math.sin(p.angle);
+      // Front-face check: dot(targetHead - sourceHead, sourceForward) > 0
+      // means the OTHER head is in front of YOUR face = you're heading INTO them.
+      var _iFaceThem=(px-player.x)*_myCos+(py-player.y)*_mySin > 0;
+      var _theyFaceMe=(player.x-px)*_pCos+(player.y-py)*_pSin > 0;
 
-      // Forward-progress winner — EXACT port of reference game aFwdProgress logic:
-      // Project (myHead − theirHead) onto my travel direction.
-      // >= 0  →  I am further in front  →  I WIN, they die.
-      //  < 0  →  They are further in front  →  THEY WIN, I die.
-      var _aFwd=(player.x-px)*Math.cos(player.angle)+(player.y-py)*Math.sin(player.angle);
+      if(_iFaceThem && _theyFaceMe){
+        // ── TRUE H2H: both front faces meeting simultaneously ─────────────────
+        // Spec: larger snake (more width/length) wins. Tie → lower ping.
+        // Referee model prevents both clients sending kills simultaneously.
+        var _h2=_hoHash(myId,pid);
+        var _iAmRef=(_h2===0)===(myId<pid);
+        if(!_iAmRef){ continue; } // non-ref waits for kill_target from ref
 
-      // Server-tick priority tiebreak: when |aFwd| < 3 (true symmetric head-on),
-      // lower ping wins — mirrors "whose inputs reached the server first" on DamnBruh.
-      var _myPing=_pingEma||999, _theirPing=p.ping||999;
-      var _iWin=Math.abs(_aFwd)<3 ? (_myPing<=_theirPing) : (_aFwd>=0);
+        var _iWin=myR>pR ? true : myR<pR ? false : ((_pingEma||999)<=((p.ping||999)));
+        if(!_iWin){
+          killPlayer('Eliminated by '+p.name+' (H2H — larger snake wins)',pid); return;
+        } else {
+          if(_sentKillTs[pid]&&_now-_sentKillTs[pid]<2000){ continue; }
+          _sentKillTs[pid]=_now;
+          var _hoRkp=_remoteMap[pid];
+          if(_hoRkp&&_hoRkp.alive){
+            var _hoSegs=_hoRkp.segs.slice(),_hoLen=_hoRkp.length;
+            _hoRkp.alive=false; _hoRkp.segs=[]; if(_hoRkp.th)_hoRkp.th=[];
+            _processedDies[pid]=true; _recentLeaves[pid]=_now;
+            if(gameRunning)_scatterDeathFood(_hoSegs,_hoLen);
+            _killerScatteredFor[pid]=Date.now();
+            peers=peers.filter(function(q){return q!==_hoRkp;});
+            delete _remoteMap[pid];
+            if(gameRunning)_updateArenaSize();
+            myKills++; boostE=Math.min(100,boostE+50);
+            kFeed('🗡 '+(p.name||'Player')+' — outgunned in H2H!','kill');
+          }
+          if(_ws&&_ws.readyState===WebSocket.OPEN){
+            try{_ws.send(JSON.stringify({type:'pos',clientId:_wsClientId,data:{
+              x:+(player.x.toFixed(1)),y:+(player.y.toFixed(1)),a:+(player.angle.toFixed(3)),
+              l:player.length||10,v:true,kill_target:pid,killer:_wsClientId
+            }}));}catch(_re){}
+          }
+          continue;
+        }
 
-      if(!_iWin){
-        // I lose
+      } else if(_iFaceThem){
+        // ── I am facing into them, they are turned away — I die ───────────────
+        // My front face entered their space; they effectively have a body segment there.
         killPlayer('Eliminated by '+p.name,pid); return;
-      } else {
-        // They lose — send kill_target so they die on their client
+
+      } else if(_theyFaceMe){
+        // ── They are facing into me, I am turned away — they die ──────────────
+        // Their front face entered my space; send kill so they die on their client.
         if(_sentKillTs[pid]&&_now-_sentKillTs[pid]<2000){ continue; }
         _sentKillTs[pid]=_now;
-        var _hoRkp=_remoteMap[pid];
-        if(_hoRkp&&_hoRkp.alive){
-          var _hoSegs=_hoRkp.segs.slice(), _hoLen=_hoRkp.length;
-          _hoRkp.alive=false; _hoRkp.segs=[]; if(_hoRkp.th) _hoRkp.th=[];
+        var _rkpF=_remoteMap[pid];
+        if(_rkpF&&_rkpF.alive){
+          var _rkpFSegs=_rkpF.segs.slice(),_rkpFLen=_rkpF.length;
+          _rkpF.alive=false; _rkpF.segs=[]; if(_rkpF.th)_rkpF.th=[];
           _processedDies[pid]=true; _recentLeaves[pid]=_now;
-          if(gameRunning) _scatterDeathFood(_hoSegs,_hoLen);
+          if(gameRunning)_scatterDeathFood(_rkpFSegs,_rkpFLen);
           _killerScatteredFor[pid]=Date.now();
-          peers=peers.filter(function(q){return q!==_hoRkp;});
+          peers=peers.filter(function(q){return q!==_rkpF;});
           delete _remoteMap[pid];
-          if(gameRunning) _updateArenaSize();
+          if(gameRunning)_updateArenaSize();
           myKills++; boostE=Math.min(100,boostE+50);
-          kFeed('🗡 '+(p.name||'Player')+' charged into you!','kill');
+          kFeed('🗡 '+(p.name||'Player')+' ran head-first into you!','kill');
         }
         if(_ws&&_ws.readyState===WebSocket.OPEN){
           try{_ws.send(JSON.stringify({type:'pos',clientId:_wsClientId,data:{
@@ -5260,10 +5289,11 @@ function killCheck(){
         }
         continue;
       }
+      // Neither facing (tangential/side graze) — fall through to body check below
     }
 
-    // ── Head vs body: circle-to-circle check per body segment (reference game model) ──
-    // combR = myR + pR — same unified radius used for both snakes on all circles.
+    // ── My head vs their body ─────────────────────────────────────────────────
+    // You only die if the body segment is in FRONT of your own face (you are heading into it).
     var _maxBodyWu=Math.min((p.length||10)*16,480), _accWu=0;
     for(var j=1;j<p.segs.length;j++){
       var bs=p.segs[j]; if(!bs) break;
@@ -5272,13 +5302,17 @@ function killCheck(){
         if(_accWu>_maxBodyWu) break;
       }
       var _dx=player.x-bs.x, _dy=player.y-bs.y;
-      if(_dx*_dx+_dy*_dy<combR2){
-        killPlayer('Eliminated by '+p.name,pid); return;
+      if(_dx*_dx+_dy*_dy < combR2){
+        // Front-face hurtbox: segment must be in front of MY facing direction
+        if((bs.x-player.x)*_myCos+(bs.y-player.y)*_mySin > 0){
+          killPlayer('Eliminated by '+p.name,pid); return;
+        }
       }
     }
   }
 
   // ── Reverse check: their head vs MY body → send kill_target ──────────────
+  // They only die if my body segment is in FRONT of THEIR facing direction.
   var _myMaxWu=Math.min((player.length||10)*16,480);
   for(var ri=0;ri<peers.length;ri++){
     var rp2=peers[ri]; if(!rp2.alive) continue;
@@ -5288,7 +5322,8 @@ function killCheck(){
     var rpx=(rp2.targetX!=null)?rp2.targetX:rp2.x, rpy=(rp2.targetY!=null)?rp2.targetY:rp2.y;
     var rpR=snakeRadius(rp2);
     var rCombR=rpR+myR, rCombR2=rCombR*rCombR;
-    if(dst(player.x,player.y,rpx,rpy)<rCombR) continue; // head-on handled above
+    if(dst(player.x,player.y,rpx,rpy)<rCombR) continue; // head proximity handled above
+    var _rCos=Math.cos(rp2.angle), _rSin=Math.sin(rp2.angle);
     var _rAccWu=0;
     for(var rk=1;rk<player.segs.length;rk++){
       var rsa=player.segs[rk]; if(!rsa) break;
@@ -5297,31 +5332,33 @@ function killCheck(){
         if(_rAccWu>_myMaxWu) break;
       }
       var _rdx=rpx-rsa.x, _rdy=rpy-rsa.y;
-      if(_rdx*_rdx+_rdy*_rdy<rCombR2){
-        _sentKillTs[rpid]=_now;
-        var _rkp=_remoteMap[rpid];
-        if(_rkp&&_rkp.alive){
-          var _rshSegs=_rkp.segs.slice(), _rshLen=_rkp.length;
-          _rkp.alive=false; _rkp.segs=[]; if(_rkp.th) _rkp.th=[];
-          _processedDies[rpid]=true;
-          _recentLeaves[rpid]=_now;
-          if(gameRunning) _scatterDeathFood(_rshSegs, _rshLen);
-          _killerScatteredFor[rpid] = Date.now();
-          peers=peers.filter(function(q){return q!==_rkp;});
-          delete _remoteMap[rpid];
-          if(gameRunning) _updateArenaSize();
-          myKills++; boostE=Math.min(100,boostE+50);
-          kFeed((rp2.name||'Player')+' ran into you!','kill');
-          if(activeTier!=='free'&&TIERS[activeTier]&&TIERS[activeTier].usd>0)
-            kFeed('💰 $'+TIERS[activeTier].usd+' drop appeared! Grab it!','kill');
+      if(_rdx*_rdx+_rdy*_rdy < rCombR2){
+        // Front-face hurtbox: my segment must be in front of THEIR facing direction
+        if((rsa.x-rpx)*_rCos+(rsa.y-rpy)*_rSin > 0){
+          _sentKillTs[rpid]=_now;
+          var _rkp=_remoteMap[rpid];
+          if(_rkp&&_rkp.alive){
+            var _rshSegs=_rkp.segs.slice(),_rshLen=_rkp.length;
+            _rkp.alive=false; _rkp.segs=[]; if(_rkp.th)_rkp.th=[];
+            _processedDies[rpid]=true; _recentLeaves[rpid]=_now;
+            if(gameRunning)_scatterDeathFood(_rshSegs,_rshLen);
+            _killerScatteredFor[rpid]=Date.now();
+            peers=peers.filter(function(q){return q!==_rkp;});
+            delete _remoteMap[rpid];
+            if(gameRunning)_updateArenaSize();
+            myKills++; boostE=Math.min(100,boostE+50);
+            kFeed((rp2.name||'Player')+' ran into you!','kill');
+            if(activeTier!=='free'&&TIERS[activeTier]&&TIERS[activeTier].usd>0)
+              kFeed('💰 $'+TIERS[activeTier].usd+' drop appeared! Grab it!','kill');
+          }
+          if(_ws&&_ws.readyState===WebSocket.OPEN){
+            try{_ws.send(JSON.stringify({type:'pos',clientId:_wsClientId,data:{
+              x:+(player.x.toFixed(1)),y:+(player.y.toFixed(1)),a:+(player.angle.toFixed(3)),
+              l:player.length||10,v:true,kill_target:rpid,killer:_wsClientId
+            }}));}catch(_re){}
+          }
+          break;
         }
-        if(_ws&&_ws.readyState===WebSocket.OPEN){
-          try{_ws.send(JSON.stringify({type:'pos',clientId:_wsClientId,data:{
-            x:+(player.x.toFixed(1)),y:+(player.y.toFixed(1)),a:+(player.angle.toFixed(3)),
-            l:player.length||10,v:true,kill_target:rpid,killer:_wsClientId
-          }}));}catch(_re){}
-        }
-        break;
       }
     }
   }
