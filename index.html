@@ -4498,8 +4498,8 @@ function launchGame() {
 
 function mkSnake(x,y,color,name,isMe,startSegs){
   var initSegs = startSegs || 40;                // default 40 raw segments; mid-match spawn passes peer average
-  var _initDraw=Math.max(initSegs,120); var segs=[]; for(var i=0;i<_initDraw;i++) segs.push({x:x-i*2,y:y});
-  var initLen  = Math.round(_initDraw/SEG_MULT); // derive from actual seg count so length+segs start aligned
+  var _initDraw=initSegs; var segs=[]; for(var i=0;i<_initDraw;i++) segs.push({x:x-i*2,y:y});
+  var initLen  = Math.round(_initDraw/SEG_MULT); // length aligned to seg count from the start
   var _initHeadR=8+Math.pow(initLen*5,0.6)*0.8;
   return{x:x,y:y,segs:segs,angle:0,color:color,name:name,isMe:isMe,speed:BASE_SPEED,
          headR:_initHeadR,length:initLen,widthBonus:0,score:0,alive:true};
