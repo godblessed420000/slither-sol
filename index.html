@@ -4260,7 +4260,7 @@ function initCanvas(){
   resizeC(); window.addEventListener('resize',resizeC);
   gc.addEventListener('wheel', function(e){
     e.preventDefault();
-    _zoomOffset -= e.deltaY * 0.003;
+    _zoomOffset -= e.deltaY * 0.0018;
     _zoomOffset = Math.max(-0.47, Math.min(2.08, _zoomOffset)); // full range: 0.45–3.0
   }, {passive:false});
 }
@@ -4959,8 +4959,8 @@ function update(_dt){
 
   if(!player||!player.alive){
     if(_spectating){
-      // Spectate: default overview at MIN_ZOOM, scroll wheel adjusts from there
-      var _spTargetZ=Math.max(MIN_ZOOM,Math.min(MAX_ZOOM,MIN_ZOOM+_zoomOffset));
+      // Spectate: default 0.70 overview, scroll adjusts from there down to MIN_ZOOM
+      var _spTargetZ=Math.max(MIN_ZOOM,Math.min(MAX_ZOOM,0.70+_zoomOffset));
       CAM_ZOOM+=(_spTargetZ-CAM_ZOOM)*0.05;
       var _sNow=performance.now(),_sExtCap=BASE_SPEED*BOOST_MULT*60;
       var _st=_specTargetId?peers.find(function(p){return p.remoteId===_specTargetId;}):null;
