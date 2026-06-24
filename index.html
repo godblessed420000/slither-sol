@@ -112,7 +112,7 @@ canvas{display:block;width:100%;height:100%;}
 #minimap{position:absolute;top:12px;right:12px;width:108px;height:108px;border:2px solid var(--purple);border-radius:50%;box-shadow:0 0 14px rgba(153,69,215,.5);}
 .hud-top{position:absolute;top:10px;left:50%;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:2px;pointer-events:none;}
 .hud-score{font-family:'Orbitron',monospace;font-size:1.05rem;font-weight:700;color:var(--green);text-shadow:0 0 10px rgba(20,241,149,.15);}
-.hud-sub{font-size:.63rem;color:var(--dim);}
+.hud-sub{font-size:.82rem;color:var(--dim);}
 #cashoutHud{position:absolute;top:10px;right:130px;display:none;flex-direction:column;align-items:flex-end;gap:3px;pointer-events:none;}
 .cq-hint{font-size:.65rem;color:rgba(20,241,149,.7);background:rgba(0,0,0,.15);padding:3px 8px;border-radius:3px;border-left:2px solid var(--green);}
 .co-earn{font-family:'Orbitron',monospace;font-size:.8rem;color:var(--green);background:rgba(0,0,0,.5);padding:3px 8px;border-radius:3px;}
@@ -5087,14 +5087,15 @@ function update(_dt){
   if(_elHudScore&&_hs!==_hudScoreV){ _elHudScore.textContent=_hs; _hudScoreV=_hs; }
   if(_elHudSub){
     var _hsu;
+    var _sizeTag='<span style="color:#4fc3f7">Size:</span> <span style="color:#ff4444">'+len+'</span>';
     if(isFreeGame){
-      _hsu='Size: '+len+' · Free Play · Hold [Q] 1s to exit';
+      _hsu=_sizeTag+' · Free Play · Hold [Q] 1s to exit';
     } else {
       var hudCarry=(W.balance>0)?'Carrying: $'+((W.balance||0)*SOL_USD).toFixed(2)+' · ':'';
       var hudCircle=_autoCircle?'AUTO-CIRCLE · ':'';
-      _hsu='Size: '+len+' · '+hudCarry+hudCircle+'Hold [Q] 1s to cashout';
+      _hsu=_sizeTag+' · '+hudCarry+hudCircle+'Hold [Q] 1s to cashout';
     }
-    if(_hsu!==_hudSubV){ _elHudSub.textContent=_hsu; _hudSubV=_hsu; }
+    if(_hsu!==_hudSubV){ _elHudSub.innerHTML=_hsu; _hudSubV=_hsu; }
   }
   if(_elCashoutEarnVal){
     var _he=isFreeGame?'Free Play':('$'+((W.balance||0)*SOL_USD).toFixed(2)+' carrying');
