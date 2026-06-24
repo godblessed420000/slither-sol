@@ -5799,8 +5799,9 @@ function drawS(s){
   }
   if(pts.length<2) pts.push({x:W2SX(s.segs[1].x),y:W2SY(s.segs[1].y)});
 
-  // ── LOD: skip all skin effects at low zoom — plain body line + head dot ──
-  if(CAM_ZOOM < 0.55){
+  // ── LOD: skip all skin effects at very low zoom — plain body line + head dot ──
+  // Threshold 0.40 is below MIN_ZOOM (0.45) so full rendering always applies in gameplay
+  if(CAM_ZOOM < 0.40){
     var _n0=pts.length, _lc=s.color||'#888';
     ctx.save(); ctx.setTransform(1,0,0,1,0,0);
     ctx.lineCap='round'; ctx.lineJoin='round';
