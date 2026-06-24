@@ -1329,7 +1329,8 @@ var _smoothLen  = 100;     // exponentially-smoothed snake length used for zoom 
 // Slither.io-accurate movement constants
 var BASE_SPEED = 6.0;       // base snake speed
 var BOOST_MULT = 2.0;      // DamnBruh-style boost: 2× base speed
-var TURN_RATE  = 0.13;     // max radians per frame — smooth slither.io-style curves
+var TURN_RATE        = 0.13;  // max radians per frame — smooth slither.io-style curves
+var CIRCLE_RADIUS_WU = 46;   // auto-circle radius in world units (≈screen px at zoom 1×) — damnbruh RADIUS_PX concept
 var SEG_MULT   = 4;        // segments per length unit — lower = shorter tail
 var MAX_FOOD   = 150;      // hard cap on food pellets
 var CASHOUT_FEE= 0.10;
@@ -4606,7 +4607,7 @@ function onKD(e){
   if(e.code==='Space'&&gameRunning){ e.preventDefault(); if(player&&player.length>8) boosting=true; return; }
   if(e.key.toLowerCase()==='q'&&!qDown&&gameRunning&&player&&player.alive){ qDown=true; qStart=performance.now(); startCharge(); }
   if(e.key.toLowerCase()==='t'&&gameRunning&&player&&player.alive){ e.preventDefault(); _openChat(); }
-  if(e.key.toLowerCase()==='y'&&gameRunning&&player&&player.alive){ e.preventDefault(); _autoCircle=!_autoCircle; toast(_autoCircle?'🔄 Auto-circle ON':'⬛ Auto-circle OFF','info'); }
+  if((e.key.toLowerCase()==='y'||e.key.toLowerCase()==='e')&&gameRunning&&player&&player.alive){ e.preventDefault(); _autoCircle=!_autoCircle; toast(_autoCircle?'🔄 Auto-circle ON (Y/E)':'⬛ Auto-circle OFF','info'); }
   if(e.key.toLowerCase()==='h'){ _debugHitboxes=!_debugHitboxes; toast(_debugHitboxes?'[H] HITBOXES ON':'[H] HITBOXES OFF','info'); }
 }
 function onKU(e){
@@ -5014,7 +5015,7 @@ function update(_dt){
     mouseY=gc.height/2+_joyDY*gc.height*0.45;
   }
   if(_autoCircle){
-    player.angle += TURN_RATE * _dt;
+    player.angle += (BASE_SPEED / CIRCLE_RADIUS_WU) * _dt; // derived from radius — tune CIRCLE_RADIUS_WU to change circle size
   } else {
     var dx=mouseX-gc.width/2, dy=mouseY-gc.height/2, tgt=Math.atan2(dy,dx);
     var da=tgt-player.angle; while(da>Math.PI) da-=Math.PI*2; while(da<-Math.PI) da+=Math.PI*2;
