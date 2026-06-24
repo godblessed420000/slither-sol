@@ -5741,14 +5741,13 @@ function drawS(s){
   var W2SX=function(wx){ return (wx-camX)*Z+cw; };
   var W2SY=function(wy){ return (wy-camY)*Z+ch; };
 
-  var _sZ = CAM_ZOOM || 1;
   // Width driven by widthBonus (food eaten - boost drained); fall back to length estimate for remote peers without wb yet
   var _wB = s.widthBonus != null ? s.widthBonus : Math.max(0, ((s.length||10) - 10) * 3);
-  var R   = Math.max(10, Math.min(45, (10 + _wB * 0.28) * _sZ));
+  var R   = Math.max(10, Math.min(45, 10 + _wB * 0.28)); // fixed screen-px size — no zoom multiplier
   var BW  = R*1.9;
   var STEP= Math.max(3, R*0.5);
   var logical = Math.min((s.length||10) * SEG_MULT, 120);
-  var MAXLEN  = Math.max(30, logical * 4) * _sZ;
+  var MAXLEN  = Math.max(30, logical * 4); // fixed screen-px length — no zoom multiplier
 
   var hx=W2SX(s.x), hy=W2SY(s.y);
   var pts=[{x:hx,y:hy}];
