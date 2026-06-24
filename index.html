@@ -4261,7 +4261,7 @@ function initCanvas(){
   gc.addEventListener('wheel', function(e){
     e.preventDefault();
     _zoomOffset -= e.deltaY * 0.0018;
-    _zoomOffset = Math.max(-0.24, Math.min(2.08, _zoomOffset)); // gameplay out: 0.68, spectate out: 0.45
+    _zoomOffset = Math.max(-0.34, Math.min(2.08, _zoomOffset)); // gameplay out: 0.58, spectate out: 0.45
   }, {passive:false});
 }
 function resizeC(){
