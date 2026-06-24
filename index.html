@@ -4959,8 +4959,9 @@ function update(_dt){
 
   if(!player||!player.alive){
     if(_spectating){
-      // Spectate: default 0.70 overview, scroll adjusts from there down to MIN_ZOOM
-      var _spTargetZ=Math.max(MIN_ZOOM,Math.min(MAX_ZOOM,0.70+_zoomOffset));
+      // Spectate: same formula as gameplay (0.92 base); _zoomOffset pre-set to -0.30 on entry → opens at 0.62
+      // Max zoom-out = 0.92 + (-0.34) = 0.58, same as gameplay — scroll behavior is identical
+      var _spTargetZ=Math.max(MIN_ZOOM,Math.min(MAX_ZOOM,0.92+_zoomOffset));
       CAM_ZOOM+=(_spTargetZ-CAM_ZOOM)*0.05;
       var _sNow=performance.now(),_sExtCap=BASE_SPEED*BOOST_MULT*60;
       var _st=_specTargetId?peers.find(function(p){return p.remoteId===_specTargetId;}):null;
@@ -5014,9 +5015,10 @@ function update(_dt){
   if(boosting && boostE>0){
     spd *= BOOST_MULT;
     var prevBoostE = boostE;
-    boostE = Math.max(0, boostE - 0.22 * _dt); // drain while boosting
+    boostE = Math.max(0, boostE - 0.15 * _dt); // drain while boosting (slower = more forgiving)
+    if(boostE <= 0) boosting = false; // auto-cut boost when empty — can't keep boosting on fumes
     var _minLen = Math.round(15 / SEG_MULT);
-    if(player.segs.length > 15 && Math.floor(prevBoostE / 2.0) > Math.floor(boostE / 2.0)){
+    if(player.segs.length > 15 && Math.floor(prevBoostE / 3.5) > Math.floor(boostE / 3.5)){
       var tl=player.segs[player.segs.length-1];
       // 50% trail behind (visual pebble), 50% respawn randomly on map
       if(Math.random()<0.5){
@@ -5472,7 +5474,7 @@ function _updateSpecHud(){
 function startSpectating(){
   var alivePeers=peers.filter(function(p){return p.alive&&p.isRemote;});
   _spectating=true;
-  _zoomOffset=0; // reset so spectate opens at full overview; scroll to zoom in
+  _zoomOffset=-0.30; // pre-zoomed out: 0.92 + (-0.30) = 0.62 overview; scroll in/out same as gameplay
   if(alivePeers.length){
     _specTargetId=alivePeers[0].remoteId;
     camX=alivePeers[0].x; camY=alivePeers[0].y;
