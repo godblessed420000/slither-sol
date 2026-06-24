@@ -1349,7 +1349,7 @@ function _refreshTierPrices() {
   });
 }
 
-var PC = ['#14F195','#9945FF','#00C2FF','#FF4560','#FF6B35','#FF3CAC','#7FFF00','#FF1493','#00FFFF','#FF8C00','#ADFF2F','#DA70D6','#1E90FF','#FF6347','#40E0D0']; // #FFD700 removed — gold is reserved exclusively for death/wager food
+var PC = ['#9945FF','#00C2FF','#FF4560','#FF6B35','#FF3CAC','#14F195','#7FFF00','#FF1493','#00FFFF','#FF8C00','#ADFF2F','#DA70D6','#1E90FF','#FF6347','#40E0D0']; // #FFD700 removed — gold is reserved exclusively for death/wager food; #14F195 moved off index-0 so default color is purple not Solana green
 var _playerColor = PC[0]; // currently selected snake color (user-editable)
 var _SKINS=[
   {id:'default', label:'Default',    col:'#9945FF'},
@@ -5768,7 +5768,7 @@ function drawS(s){
 
   // ── LOD: skip all skin effects at low zoom — plain body line + head dot ──
   if(CAM_ZOOM < 0.55){
-    var _n0=pts.length, _lc=s.color||'#14F195';
+    var _n0=pts.length, _lc=s.color||'#888';
     ctx.save(); ctx.setTransform(1,0,0,1,0,0);
     ctx.lineCap='round'; ctx.lineJoin='round';
     ctx.beginPath(); ctx.moveTo(pts[0].x,pts[0].y);
