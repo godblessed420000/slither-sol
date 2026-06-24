@@ -5782,15 +5782,12 @@ function drawS(s){
 
   // Width driven by widthBonus (food eaten - boost drained); fall back to length estimate for remote peers without wb yet
   var _wB = s.widthBonus != null ? s.widthBonus : Math.max(0, ((s.length||10) - 10) * 3);
-  var _baseR = Math.max(10, Math.min(45, 10 + _wB * 0.09)); // base radius at Z=1 — slow growth
-  var _zF = Math.max(0.45, Math.min(2.0, Z));               // zoom factor clamped so snake scales with world
-  var R   = Math.max(6, Math.min(50, _baseR * _zF));        // screen-px radius — proportional to zoom
+  var R   = Math.max(10, Math.min(45, 10 + _wB * 0.09)); // fixed screen-px size — no zoom multiplier
   var BW  = R*1.9;
-  var STEP   = Math.max(3, R*0.4);
+  var STEP   = Math.max(3, R*0.5);
   var STEP_W = STEP / Z;                              // world-unit spacing between pts
   var logical = Math.min((s.length||10) * SEG_MULT, 120);
-  var _tZF = Math.max(0.45, Math.min(1.3, Z));              // tail scale — same direction as body width
-  var MAXLEN_W = Math.max(15/Z, (logical * 4 * _tZF) / Z); // tail scales with body so aspect ratio stays constant
+  var MAXLEN_W = Math.max(30/Z, (logical * 4) / Z);   // world units — constant screen-pixel tail at every zoom
 
   var hx=W2SX(s.x), hy=W2SY(s.y);
   var pts=[{x:hx,y:hy}];
