@@ -1321,7 +1321,7 @@ var WORLD      = _BASE_WORLD;
 var WORLD_R    = WORLD/2;  // radius of circular arena
 var _targetWorld = _BASE_WORLD; // arena lerps toward this gradually on join/leave
 var CAM_ZOOM   = 1.0;      // current zoom (smoothly lerped)
-var MIN_ZOOM   = 0.32;
+var MIN_ZOOM   = 0.45;
 var MAX_ZOOM   = 3.0;
 var _zoomOffset = 0;       // user's manual scroll offset on top of auto-zoom
 var _smoothLen  = 100;     // exponentially-smoothed snake length used for zoom (avoids per-frame jitter)
@@ -4261,7 +4261,7 @@ function initCanvas(){
   gc.addEventListener('wheel', function(e){
     e.preventDefault();
     _zoomOffset -= e.deltaY * 0.003;
-    _zoomOffset = Math.max(-0.60, Math.min(2.08, _zoomOffset)); // full range: 0.32–3.0
+    _zoomOffset = Math.max(-0.47, Math.min(2.08, _zoomOffset)); // full range: 0.45–3.0
   }, {passive:false});
 }
 function resizeC(){
