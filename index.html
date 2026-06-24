@@ -4975,7 +4975,7 @@ function update(_dt){
           while(_sda>Math.PI)_sda-=Math.PI*2; while(_sda<-Math.PI)_sda+=Math.PI*2;
           _st.angle+=_sda*_LERP;
           _st.segs.unshift({x:_st.x,y:_st.y});
-          var _smaxS=Math.max(_st.length*SEG_MULT,120); if(_st.segs.length>_smaxS)_st.segs.length=_smaxS;
+          var _smaxS=Math.max(_st.length*SEG_MULT,250); if(_st.segs.length>_smaxS)_st.segs.length=_smaxS;
         }
         camX=_st.x; camY=_st.y;
       } else {
@@ -5034,7 +5034,7 @@ function update(_dt){
   moveS(player, player.angle, spd);
   // Enforce exact segment count — moveS only pops once per frame, but we may need to pop
   // many (e.g. after a length decrement of 1 logical unit = 4 segments drop in target).
-  var _tgt = Math.max(player.length * SEG_MULT, 120);
+  var _tgt = Math.max(player.length * SEG_MULT, 250);
   while(player.segs.length > _tgt) player.segs.pop();
 
   player.headR = snakeRadius(player); // unified radius: matches hitbox and body visual
@@ -5062,7 +5062,7 @@ function update(_dt){
       p.angle += da2*_la;
       p.segs.unshift({x:p.x,y:p.y});
       // maxS uses base length unit × SEG_MULT (d.l is now base unit, no double-multiply)
-      var maxS=Math.max(p.length*SEG_MULT, 120);
+      var maxS=Math.max(p.length*SEG_MULT, 250);
       if(p.segs.length>maxS) p.segs.length=maxS; // O(1) truncation — replaces O(n) while+pop
     }
     // No AI bots — only real remote players exist in peers[]
@@ -5109,7 +5109,7 @@ function moveS(s,angle,spd){
   s.angle=angle;
   s.x=((s.x+Math.cos(angle)*spd)%WORLD+WORLD)%WORLD;
   s.y=((s.y+Math.sin(angle)*spd)%WORLD+WORLD)%WORLD;
-  s.segs.unshift({x:s.x,y:s.y}); if(s.segs.length>Math.max(s.length*SEG_MULT,120)) s.segs.pop();
+  s.segs.unshift({x:s.x,y:s.y}); if(s.segs.length>Math.max(s.length*SEG_MULT,250)) s.segs.pop();
 }
 
 /* updatePeer removed — no AI bots in this game */
