@@ -1321,8 +1321,9 @@ var WORLD      = _BASE_WORLD;
 var WORLD_R    = WORLD/2;  // radius of circular arena
 var _targetWorld = _BASE_WORLD; // arena lerps toward this gradually on join/leave
 var CAM_ZOOM   = 1.0;      // current zoom (smoothly lerped)
-var MIN_ZOOM   = 0.45;
-var MAX_ZOOM   = 3.0;
+var MIN_ZOOM   = 0.25;     // extended — matches damnbruh scroll zoom MIN_SCALE
+var MAX_ZOOM   = 4.0;      // extended — matches damnbruh scroll zoom MAX_SCALE
+var ZOOM_STEP  = 1.04;     // multiplicative per wheel tick (4%) — damnbruh STEP_MULT
 var _zoomOffset = 0;       // user's manual scroll offset on top of auto-zoom
 var _smoothLen  = 100;     // exponentially-smoothed snake length used for zoom (avoids per-frame jitter)
 // Slither.io-accurate movement constants
@@ -4267,9 +4268,10 @@ function initCanvas(){
   resizeC(); window.addEventListener('resize',resizeC);
   gc.addEventListener('wheel', function(e){
     e.preventDefault();
-    var _dz = e.deltaY * 0.0018;
-    _zoomOffset -= Math.max(-0.07, Math.min(0.07, _dz)); // cap per-event delta — prevents large jumps
-    _zoomOffset = Math.max(-0.34, Math.min(2.08, _zoomOffset)); // gameplay out: 0.58, spectate out: 0.45
+    // Multiplicative step (4% per tick) — same feel at any zoom level, from damnbruh scroll zoom
+    var _cur = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, 0.92 + _zoomOffset));
+    var _next = e.deltaY < 0 ? _cur * ZOOM_STEP : _cur / ZOOM_STEP;
+    _zoomOffset = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, _next)) - 0.92;
     boosting=false; _scrollLock=true; clearTimeout(_scrollLockTO); _scrollLockTO=setTimeout(function(){_scrollLock=false;},350);
   }, {passive:false});
 }
@@ -4970,7 +4972,7 @@ function update(_dt){
   if(!player||!player.alive){
     if(_spectating){
       // Spectate: same formula as gameplay (0.92 base); _zoomOffset pre-set to -0.30 on entry → opens at 0.62
-      // Max zoom-out = 0.92 + (-0.34) = 0.58, same as gameplay — scroll behavior is identical
+      // Scroll range: MIN_ZOOM (0.25) to MAX_ZOOM (4.0), 4% per tick (ZOOM_STEP)
       var _spTargetZ=Math.max(MIN_ZOOM,Math.min(MAX_ZOOM,0.92+_zoomOffset));
       CAM_ZOOM+=(_spTargetZ-CAM_ZOOM)*0.02;
       var _sNow=performance.now(),_sExtCap=BASE_SPEED*BOOST_MULT*60;
