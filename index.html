@@ -5605,35 +5605,45 @@ function draw(){
   if(player&&player.alive){ _spawnTrail(player, boosting); drawS(player); }
 
   // ── Debug hitbox overlay (toggle with H key) ─────────────────────────────
+  // Drawn in screen-space (identity transform) so sizes stay constant at any zoom.
+  // World→screen via W2SX/W2SY; radii scaled by Z so they match the true collision zone.
   if(_debugHitboxes && player && player.alive){
     ctx.save();
+    ctx.setTransform(1,0,0,1,0,0); // screen space — no world transform influence
     var _dNow=Date.now(), _dZ=CAM_ZOOM||1;
-    var _myR=player.headR||12; // world units — matches killCheck directly
+    var _dcw=gc.width/2, _dch=gc.height/2;
+    var _dW2X=function(wx){return(wx-camX)*_dZ+_dcw;};
+    var _dW2Y=function(wy){return(wy-camY)*_dZ+_dch;};
+    var _myRw=snakeRadius(player);          // collision radius, world units
+    var _myRs=_myRw*_dZ;                   // collision radius, screen pixels
+    var _hx=_dW2X(player.x), _hy=_dW2Y(player.y);
 
-    // My body kill zone (tube — radius = what peer's head must enter to die)
-    var _mSegs=player.segs;
-    var _mMaxWuViz=Math.min((player.length||10)*16,480), _mAccWuViz=0;
-    var _mLim=_mSegs.length;
-    if(_mLim>2 && _mSegs[1]){
+    // Max world-unit coverage = same as visual tail so tube matches visual body
+    var _myLogical=Math.min((player.length||10)*SEG_MULT,120);
+    var _mMaxWu=(_myLogical*4)/_dZ;
+
+    // My body kill zone tube
+    var _mSegs=player.segs, _mAccWu=0;
+    if(_mSegs.length>2 && _mSegs[1]){
       ctx.globalAlpha=0.22; ctx.strokeStyle='#14F195';
-      ctx.lineWidth=_myR*1.9; ctx.lineJoin='round'; ctx.lineCap='round';
-      ctx.beginPath(); ctx.moveTo(_mSegs[1].x,_mSegs[1].y);
-      for(var _mi=2;_mi<_mLim;_mi++){
-        var _ms=_mSegs[_mi], _msp=_mSegs[_mi-1]; if(!_ms||!_msp) break;
-        _mAccWuViz+=dst(_msp.x,_msp.y,_ms.x,_ms.y);
-        if(_mAccWuViz>_mMaxWuViz) break;
-        ctx.lineTo(_ms.x,_ms.y);
+      ctx.lineWidth=_myRs*2; ctx.lineJoin='round'; ctx.lineCap='round';
+      ctx.beginPath(); ctx.moveTo(_dW2X(_mSegs[1].x),_dW2Y(_mSegs[1].y));
+      for(var _mi=2;_mi<_mSegs.length;_mi++){
+        var _ms=_mSegs[_mi],_msp=_mSegs[_mi-1]; if(!_ms||!_msp) break;
+        _mAccWu+=dst(_msp.x,_msp.y,_ms.x,_ms.y);
+        if(_mAccWu>_mMaxWu) break;
+        ctx.lineTo(_dW2X(_ms.x),_dW2Y(_ms.y));
       }
       ctx.stroke();
     }
     // My head circle
-    ctx.globalAlpha=0.85; ctx.strokeStyle='#14F195'; ctx.lineWidth=2/_dZ;
-    ctx.beginPath(); ctx.arc(player.x,player.y,_myR,0,Math.PI*2); ctx.stroke();
-    // Spawn protection ring (yellow dashed)
+    ctx.globalAlpha=0.85; ctx.strokeStyle='#14F195'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.arc(_hx,_hy,_myRs,0,Math.PI*2); ctx.stroke();
+    // Spawn protection ring
     if(_dNow-(player.spawnTs||0)<1500){
-      ctx.globalAlpha=0.7; ctx.strokeStyle='#FFD700'; ctx.lineWidth=3/_dZ;
-      ctx.setLineDash([6/_dZ,4/_dZ]);
-      ctx.beginPath(); ctx.arc(player.x,player.y,_myR*2.2,0,Math.PI*2); ctx.stroke();
+      ctx.globalAlpha=0.7; ctx.strokeStyle='#FFD700'; ctx.lineWidth=3;
+      ctx.setLineDash([6,4]);
+      ctx.beginPath(); ctx.arc(_hx,_hy,_myRs*2.2,0,Math.PI*2); ctx.stroke();
       ctx.setLineDash([]);
     }
 
@@ -5641,34 +5651,35 @@ function draw(){
     for(var _dpi=0;_dpi<peers.length;_dpi++){
       var _dp=peers[_dpi]; if(!_dp.alive) continue;
       var _dpx=(_dp.targetX!=null)?_dp.targetX:_dp.x, _dpy=(_dp.targetY!=null)?_dp.targetY:_dp.y;
-      var _dpR=_dp.headR||12; // world units — matches killCheck directly
+      var _dpRw=snakeRadius(_dp), _dpRs=_dpRw*_dZ;
       var _prot=_dNow-(_dp.joinTs||0)<1500;
       var _pc=_prot?'#FFD700':'#FF4040';
-      var _bR=_myR+_dpR*0.85; // body collision radius (my head must be within this of their segment)
+      var _phx=_dW2X(_dpx), _phy=_dW2Y(_dpy);
+      var _dpLogical=Math.min((_dp.length||10)*SEG_MULT,120);
+      var _dpMaxWu=(_dpLogical*4)/_dZ;
 
-      // Peer body kill zone — use segs (constant spacing, matches visual), stop at visual body length
-      var _dps=_dp.segs;
-      var _dpMaxWu=Math.min((_dp.length||10)*16,480), _dpAccWu=0;
+      // Peer body kill zone tube
+      var _dps=_dp.segs, _dpAccWu=0;
       if(_dps.length>2 && _dps[1]){
         ctx.globalAlpha=0.22; ctx.strokeStyle=_pc;
-        ctx.lineWidth=_dpR*1.9; ctx.lineJoin='round'; ctx.lineCap='round';
-        ctx.beginPath(); ctx.moveTo(_dps[1].x,_dps[1].y);
+        ctx.lineWidth=_dpRs*2; ctx.lineJoin='round'; ctx.lineCap='round';
+        ctx.beginPath(); ctx.moveTo(_dW2X(_dps[1].x),_dW2Y(_dps[1].y));
         for(var _dj=2;_dj<_dps.length;_dj++){
-          var _dps2=_dps[_dj], _dps1=_dps[_dj-1]; if(!_dps2||!_dps1) break;
+          var _dps2=_dps[_dj],_dps1=_dps[_dj-1]; if(!_dps2||!_dps1) break;
           _dpAccWu+=dst(_dps1.x,_dps1.y,_dps2.x,_dps2.y);
           if(_dpAccWu>_dpMaxWu) break;
-          ctx.lineTo(_dps2.x,_dps2.y);
+          ctx.lineTo(_dW2X(_dps2.x),_dW2Y(_dps2.y));
         }
         ctx.stroke();
       }
-      // Head-on threshold (dashed ring — if my head enters this around their head, head-on triggers)
-      ctx.globalAlpha=0.3; ctx.strokeStyle='#FF8800'; ctx.lineWidth=1/_dZ;
-      ctx.setLineDash([5/_dZ,3/_dZ]);
-      ctx.beginPath(); ctx.arc(_dpx,_dpy,_myR+_dpR,0,Math.PI*2); ctx.stroke();
+      // Head-on threshold ring
+      ctx.globalAlpha=0.3; ctx.strokeStyle='#FF8800'; ctx.lineWidth=1;
+      ctx.setLineDash([5,3]);
+      ctx.beginPath(); ctx.arc(_phx,_phy,(_myRw+_dpRw)*_dZ,0,Math.PI*2); ctx.stroke();
       ctx.setLineDash([]);
       // Peer head circle
-      ctx.globalAlpha=0.85; ctx.strokeStyle=_pc; ctx.lineWidth=2/_dZ;
-      ctx.beginPath(); ctx.arc(_dpx,_dpy,_dpR,0,Math.PI*2); ctx.stroke();
+      ctx.globalAlpha=0.85; ctx.strokeStyle=_pc; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.arc(_phx,_phy,_dpRs,0,Math.PI*2); ctx.stroke();
     }
     ctx.globalAlpha=1;
     ctx.restore();
