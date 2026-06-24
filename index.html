@@ -4182,7 +4182,7 @@ var _fcBuckets={}; // reused food-color-bucket dict — avoids {} alloc + GC eve
 var camX=0,camY=0,mouseX=400,mouseY=300,boosting=false,boostE=100;
 var _spectating=false,_specTargetId=null;
 // Named boost handlers — defined once so removeEventListener actually works
-function _boostOn(e){ if(e && e.button!=null && e.button!==0) return; if(!player||player.length<=17||boostE<=0) return; boosting=true; }
+function _boostOn(e){ if(e && e.button!=null && e.button!==0) return; if(!player||player.length<=17) return; boosting=true; }
 function _boostOff(e){ if(e && e.button!=null && e.button!==0) return; boosting=false; }
 var score=0,myKills=0,killSOL=0,pingInt,lbInt;
 var qDown=false,qStart=0,cashingOut=false,cashoutAnimId=null;
@@ -4497,7 +4497,7 @@ function launchGame() {
 }
 
 function mkSnake(x,y,color,name,isMe,startSegs){
-  var initSegs = startSegs || 40;                // default 40 raw segments; mid-match spawn passes peer average
+  var initSegs = startSegs || 39;                // default 39 raw segments (~2% smaller than old 40); mid-match spawn passes peer average
   var _initDraw=initSegs; var segs=[]; for(var i=0;i<_initDraw;i++) segs.push({x:x-i*2,y:y});
   var initLen  = Math.round(_initDraw/SEG_MULT); // length aligned to seg count from the start
   var _initHeadR=8+Math.pow(initLen*5,0.6)*0.8;
@@ -4537,10 +4537,10 @@ function spawnPlayer(){
   sx=bestX; sy=bestY;
   var pn=userProfile?userProfile.name.split(' ')[0].slice(0,14):'YOU';
   // Mid-match size: start at the average live peer length so new joiners aren't tiny
-  var _startSegs=40;
+  var _startSegs=39; // 2% smaller than the old 40-seg default
   if(_livePeers.length>0){
     var _avgSegs=Math.round(_livePeers.reduce(function(s,p){return s+p.length*SEG_MULT;},0)/_livePeers.length);
-    _startSegs=Math.max(40,Math.min(_avgSegs,325));
+    _startSegs=Math.max(39,Math.min(_avgSegs,325));
   } else if(_preRejoinAvgSegs>15){
     // peers[] is empty on rejoin (cleared by _wsJoin) — use snapshot taken before the clear
     _startSegs=_preRejoinAvgSegs;
@@ -4592,7 +4592,7 @@ function onTouch(e){
 }
 function onKD(e){
   if(_chatOpen) return; // all keys go to chat input while chat is open
-  if(e.code==='Space'&&gameRunning){ e.preventDefault(); if(player&&player.length>17&&boostE>0) boosting=true; return; }
+  if(e.code==='Space'&&gameRunning){ e.preventDefault(); if(player&&player.length>17) boosting=true; return; }
   if(e.key.toLowerCase()==='q'&&!qDown&&gameRunning&&player&&player.alive){ qDown=true; qStart=performance.now(); startCharge(); }
   if(e.key.toLowerCase()==='t'&&gameRunning&&player&&player.alive){ e.preventDefault(); _openChat(); }
   if(e.key.toLowerCase()==='y'&&gameRunning&&player&&player.alive){ e.preventDefault(); _autoCircle=!_autoCircle; toast(_autoCircle?'🔄 Auto-circle ON':'⬛ Auto-circle OFF','info'); }
@@ -4661,7 +4661,7 @@ function _initJoystick(){
   // ── Boost ─────────────────────────────────────
   bBtn.addEventListener('touchstart',function(e){
     e.preventDefault(); bBtn.classList.add('active');
-    if(player&&player.length>17&&boostE>0) boosting=true;
+    if(player&&player.length>17) boosting=true;
   },{passive:false});
   bBtn.addEventListener('touchend',function(e){
     e.preventDefault(); bBtn.classList.remove('active'); boosting=false;
@@ -5010,13 +5010,13 @@ function update(_dt){
   }
 
   // ── Speed + boost ──
-  if(boosting && (player.length <= 17 || boostE <= 0)) boosting = false;
+  if(boosting && player.length <= 17) boosting = false;
   var spd = BASE_SPEED * _dt;
   if(boosting && boostE>0){
     spd *= BOOST_MULT;
     var prevBoostE = boostE;
     boostE = Math.max(0, boostE - 0.15 * _dt); // drain while boosting (slower = more forgiving)
-    if(boostE <= 0) boosting = false; // auto-cut boost when empty — can't keep boosting on fumes
+    // boostE exhausted — speed/shrink block above won't fire; boost resumes automatically when orbs refill energy
     var _minLen = Math.round(15 / SEG_MULT);
     if(player.segs.length > 15 && Math.floor(prevBoostE / 3.5) > Math.floor(boostE / 3.5)){
       var tl=player.segs[player.segs.length-1];
