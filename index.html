@@ -5081,7 +5081,8 @@ function update(_dt){
   }
 
   var len=player.length; // used by HUD below (logical length unit, not raw seg count)
-  CAM_ZOOM = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, 0.92 + _zoomOffset));
+  var _tgtZ=Math.max(MIN_ZOOM,Math.min(MAX_ZOOM,0.92+_zoomOffset));
+  CAM_ZOOM+=(_tgtZ-CAM_ZOOM)*0.08; // lerp — prevents snap-zoom lurching
 
   camX=player.x; camY=player.y;
   var isFreeGame=(activeTier==='free');
@@ -5771,7 +5772,7 @@ function drawS(s){
 
   // Width driven by widthBonus (food eaten - boost drained); fall back to length estimate for remote peers without wb yet
   var _wB = s.widthBonus != null ? s.widthBonus : Math.max(0, ((s.length||10) - 10) * 3);
-  var R   = Math.max(10, Math.min(45, 10 + _wB * 0.28)); // fixed screen-px size — no zoom multiplier
+  var R   = Math.max(10, Math.min(45, 10 + _wB * 0.14)); // fixed screen-px size — no zoom multiplier
   var BW  = R*1.9;
   var STEP   = Math.max(3, R*0.5);
   var STEP_W = STEP / Z;                              // world-unit spacing between pts
