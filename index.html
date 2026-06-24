@@ -5776,7 +5776,7 @@ function drawS(s){
 
   // Width driven by widthBonus (food eaten - boost drained); fall back to length estimate for remote peers without wb yet
   var _wB = s.widthBonus != null ? s.widthBonus : Math.max(0, ((s.length||10) - 10) * 3);
-  var R   = Math.max(10, Math.min(45, 10 + _wB * 0.09)); // fixed screen-px size — no zoom multiplier
+  var R   = Math.max(8, Math.min(36, 8 + _wB * 0.072)); // fixed screen-px size — no zoom multiplier
   var BW  = R*1.9;
   var STEP   = Math.max(3, R*0.5);
   var STEP_W = STEP;                                  // 1:1 world-units = screen-px (no Z)
