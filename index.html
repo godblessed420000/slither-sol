@@ -735,7 +735,7 @@ canvas{display:block;width:100%;height:100%;}
 <div id="ct-panel">
   <button id="ct-btn-close" onclick="_ctTogglePanel()">✕</button>
   <h2>⚔ Combat Tuning</h2>
-  <div class="ct-sub">PRIVATE · Ctrl+↑ to toggle</div>
+  <div class="ct-sub">PRIVATE · F8 to toggle</div>
   <canvas id="ct-diagram" width="312" height="70"></canvas>
   <div class="ct-row">
     <span class="ct-label">Hurtbox Forward</span>
@@ -4259,7 +4259,6 @@ var _ctPanelOpen=false;
 function _ctIsAdmin(){ return typeof _currentName==='string'&&_currentName.toLowerCase().indexOf('godbless')>=0; }
 
 function _ctTogglePanel(){
-  if(!_ctIsAdmin()){ return; }
   _ctPanelOpen=!_ctPanelOpen;
   var el=document.getElementById('ct-panel');
   if(el){ el.classList.toggle('open',_ctPanelOpen); if(_ctPanelOpen) setTimeout(_ctDrawDiagram,50); }
@@ -4815,7 +4814,7 @@ function onKD(e){
   if(_chatOpen) return; // all keys go to chat input while chat is open
   if(e.code==='Space'&&gameRunning){ e.preventDefault(); if(player&&player.length>8) boosting=true; return; }
   if(e.key.toLowerCase()==='q'&&!qDown&&gameRunning&&player&&player.alive){ qDown=true; qStart=performance.now(); startCharge(); }
-  if(e.key==='ArrowUp'&&e.ctrlKey){ e.preventDefault(); _ctTogglePanel(); return; }
+  if(e.key==='F8'){ e.preventDefault(); _ctTogglePanel(); return; }
   if(e.key.toLowerCase()==='t'&&gameRunning&&player&&player.alive){ e.preventDefault(); _openChat(); }
   if((e.key.toLowerCase()==='y'||e.key.toLowerCase()==='e')&&gameRunning&&player&&player.alive){ e.preventDefault(); _autoCircle=!_autoCircle; toast(_autoCircle?'🔄 Auto-circle ON (Y/E)':'⬛ Auto-circle OFF','info'); }
   if(e.key.toLowerCase()==='h'){ _debugHitboxes=!_debugHitboxes; toast(_debugHitboxes?'[H] HITBOXES ON':'[H] HITBOXES OFF','info'); }
