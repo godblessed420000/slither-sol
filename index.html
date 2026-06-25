@@ -1328,7 +1328,8 @@ var _zoomOffset = 0;       // user's manual scroll offset on top of auto-zoom
 var _smoothLen  = 100;     // exponentially-smoothed snake length used for zoom (avoids per-frame jitter)
 // Slither.io-accurate movement constants
 var BASE_SPEED = 6.0;       // base snake speed
-var BOOST_MULT = 2.0;      // DamnBruh-style boost: 2× base speed
+var BOOST_MULT        = 2.0;     // DamnBruh-style boost: 2× base speed
+var BOOST_MASS_DRAIN  = 1/60;   // length units lost per frame while boosting (≈1 unit/sec = ~15 mass pts/sec)
 var TURN_RATE        = 0.13;  // max radians per frame — smooth slither.io-style curves
 var CIRCLE_RADIUS_WU = 46;   // auto-circle radius in world units (≈screen px at zoom 1×) — damnbruh RADIUS_PX concept
 var SEG_MULT   = 4;        // segments per length unit — lower = shorter tail
@@ -4184,6 +4185,7 @@ var _fcBuckets={}; // reused food-color-bucket dict — avoids {} alloc + GC eve
 var camX=0,camY=0,mouseX=400,mouseY=300,boosting=false,boostE=100;
 var _spectating=false,_specTargetId=null;
 var _scrollLock=false,_scrollLockTO=null; // blocks boost during scroll-zoom
+var _boostMassAccum=0; // fractional length drain accumulator for boost mass loss
 // Named boost handlers — defined once so removeEventListener actually works
 function _boostOn(e){
   if(e && e.button!=null && e.button!==0) return;
@@ -4437,7 +4439,7 @@ function launchGame() {
   if(tb){ tb.style.display='inline-flex'; tb.className='lobby-badge '+t.badgeCls; tb.textContent=t.name; }
   var alb=document.getElementById('activeLobbyBadge');
   if(alb){ alb.style.display='flex'; alb.innerHTML='<div class="lobby-badge '+t.badgeCls+'">● '+t.name+' Active</div>'; }
-  score=0; myKills=0; killSOL=0; boostE=100; boosting=false; cashingOut=false; qDown=false; _zoomOffset=0; CAM_ZOOM=1.0; _smoothLen=100; _autoCircle=false; _hudScoreV=''; _hudSubV=''; _hudEarnV='';
+  score=0; myKills=0; killSOL=0; boostE=100; boosting=false; cashingOut=false; qDown=false; _zoomOffset=0; CAM_ZOOM=1.0; _smoothLen=100; _autoCircle=false; _hudScoreV=''; _hudSubV=''; _hudEarnV=''; _boostMassAccum=0;
   _updateArenaSize(); WORLD = _targetWorld; WORLD_R = WORLD / 2; // snap immediately at game start; later joins/leaves lerp gradually
   // Restore W.balance from on-chain if it was zeroed by a previous death or is stale.
   // refreshBalance() won't sync during gameplay (gameRunning guard), so we must do it here.
@@ -5027,7 +5029,18 @@ function update(_dt){
   var spd = BASE_SPEED * _dt;
   if(boosting && boostE>0){
     spd *= BOOST_MULT;
-    boostE = Math.max(0, boostE - 0.07 * _dt); // drain while boosting — no length drain
+    boostE = Math.max(0, boostE - 0.07 * _dt);
+    // Mass loss: ~1 length unit per second (≈15 mass pts/sec)
+    _boostMassAccum += BOOST_MASS_DRAIN * _dt;
+    if(_boostMassAccum >= 1){
+      _boostMassAccum -= 1;
+      if(player.length > 4){
+        player.length--;
+        player.widthBonus = Math.max(0, (player.widthBonus||0) - 0.35);
+      }
+    }
+  } else {
+    _boostMassAccum = 0; // reset when not boosting
   }
   // No passive recharge — boost refills only from eating orbs or getting kills
   moveS(player, player.angle, spd);
