@@ -1327,10 +1327,10 @@ var ZOOM_STEP  = 1.04;     // multiplicative per wheel tick (4%) — damnbruh ST
 var _zoomOffset = 0;       // user's manual scroll offset on top of auto-zoom
 var _smoothLen  = 100;     // exponentially-smoothed snake length used for zoom (avoids per-frame jitter)
 // Slither.io-accurate movement constants
-var BASE_SPEED = 6.0;       // base snake speed
-var BOOST_MULT        = 2.0;     // DamnBruh-style boost: 2× base speed
+var BASE_SPEED = 3.0;       // damnbruh.com accurate base speed
+var BOOST_MULT        = 1.5;     // damnbruh.com accurate boost multiplier
 var BOOST_MASS_DRAIN  = 1/60;   // length units lost per frame while boosting (≈1 unit/sec = ~15 mass pts/sec)
-var TURN_RATE        = 0.13;  // max radians per frame — smooth slither.io-style curves
+var TURN_RATE        = 0.082;  // damnbruh.com accurate turn rate
 var CIRCLE_RADIUS_WU = 46;   // auto-circle radius in world units (≈screen px at zoom 1×) — damnbruh RADIUS_PX concept
 var SEG_MULT   = 4;        // segments per length unit — lower = shorter tail
 var MAX_FOOD   = 150;      // hard cap on food pellets
@@ -5027,7 +5027,7 @@ function update(_dt){
 
   // ── Speed + boost ──
   if(boosting && player.length <= 4) boosting = false; // only block at absolute minimum size
-  var spd = (BASE_SPEED / Math.max(1, CAM_ZOOM)) * _dt; // constant screen-pixel speed regardless of zoom
+  var spd = BASE_SPEED * _dt;
   if(boosting && boostE>0){
     spd *= BOOST_MULT;
     boostE = Math.max(0, boostE - 0.07 * _dt);
