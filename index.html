@@ -712,7 +712,68 @@ canvas{display:block;width:100%;height:100%;}
 .send-fee-val.ok{color:var(--green);font-weight:700;}
 .send-fee-hr{height:1px;background:var(--border);margin:1px 0;}
 .send-status{font-size:.6rem;min-height:18px;line-height:1.5;}
+/* ── Combat Tuning Suite ─────────────────────────────────────────────────── */
+#ct-panel{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:9999;background:#0d0d0d;border:2px solid #ff6a00;border-radius:12px;padding:20px 24px 16px;min-width:360px;max-width:400px;color:#fff;font-family:'Share Tech Mono',monospace;font-size:.8rem;display:none;box-shadow:0 0 48px #ff6a0055;}
+#ct-panel.open{display:block;}
+#ct-panel h2{margin:0 0 2px;font-size:.92rem;color:#ff6a00;letter-spacing:.1em;text-transform:uppercase;}
+#ct-panel .ct-sub{font-size:.6rem;color:#555;margin-bottom:10px;}
+#ct-diagram{width:100%;height:70px;background:#0a0a0a;border:1px solid #222;border-radius:6px;margin-bottom:12px;display:block;}
+#ct-panel .ct-row{display:flex;align-items:center;gap:8px;margin-bottom:7px;}
+#ct-panel .ct-label{width:148px;color:#bbb;font-size:.69rem;flex-shrink:0;}
+#ct-panel .ct-val{width:34px;text-align:right;color:#ff6a00;font-size:.69rem;flex-shrink:0;}
+#ct-panel input[type=range]{flex:1;accent-color:#ff6a00;height:3px;cursor:pointer;}
+#ct-panel .ct-btns{display:flex;gap:5px;margin-top:12px;flex-wrap:wrap;}
+#ct-panel .ct-btn{flex:1;min-width:64px;padding:5px 2px;border:1px solid #ff6a00;background:transparent;color:#ff6a00;font-family:'Share Tech Mono',monospace;font-size:.66rem;border-radius:4px;cursor:pointer;text-transform:uppercase;letter-spacing:.04em;}
+#ct-panel .ct-btn:hover{background:#ff6a0020;}
+#ct-panel .ct-btn.active{background:#ff6a00;color:#000;}
+#ct-panel .ct-div{height:1px;background:#1e1e1e;margin:10px 0;}
+#ct-btn-close{position:absolute;top:10px;right:12px;background:none;border:none;color:#444;font-size:1rem;cursor:pointer;line-height:1;padding:0;}
+#ct-btn-close:hover{color:#fff;}
 </style>
+
+<!-- ── Combat Tuning Suite panel (private) ──────────────────────────────── -->
+<div id="ct-panel">
+  <button id="ct-btn-close" onclick="_ctTogglePanel()">✕</button>
+  <h2>⚔ Combat Tuning</h2>
+  <div class="ct-sub">PRIVATE · Ctrl+T to toggle</div>
+  <canvas id="ct-diagram" width="312" height="70"></canvas>
+  <div class="ct-row">
+    <span class="ct-label">Hurtbox Forward</span>
+    <input type="range" id="sl-fwd" min="0" max="1" step="0.01" value="0.14"
+      oninput="_ctFwd=+this.value;document.getElementById('vl-fwd').textContent=(+this.value).toFixed(2);_ctDrawDiagram();">
+    <span class="ct-val" id="vl-fwd">0.14</span>
+  </div>
+  <div class="ct-row">
+    <span class="ct-label">Hurtbox Radius ×</span>
+    <input type="range" id="sl-r" min="0.3" max="2.0" step="0.01" value="0.85"
+      oninput="_ctR=+this.value;document.getElementById('vl-r').textContent=(+this.value).toFixed(2);_ctDrawDiagram();">
+    <span class="ct-val" id="vl-r">0.85</span>
+  </div>
+  <div class="ct-row">
+    <span class="ct-label">H2H Range ×</span>
+    <input type="range" id="sl-h2h" min="0.1" max="2.0" step="0.01" value="0.50"
+      oninput="_ctH2H=+this.value;document.getElementById('vl-h2h').textContent=(+this.value).toFixed(2);_ctDrawDiagram();">
+    <span class="ct-val" id="vl-h2h">0.50</span>
+  </div>
+  <div class="ct-div"></div>
+  <div class="ct-row">
+    <span class="ct-label">Bot Count</span>
+    <input type="range" id="sl-bc" min="1" max="8" step="1" value="1"
+      oninput="document.getElementById('vl-bc').textContent=this.value;">
+    <span class="ct-val" id="vl-bc">1</span>
+  </div>
+  <div class="ct-btns">
+    <button class="ct-btn active" id="ct-m-circle"
+      onclick="_ctBotMode='circle';this.classList.add('active');document.getElementById('ct-m-fighter').classList.remove('active');">CIRCLE</button>
+    <button class="ct-btn" id="ct-m-fighter"
+      onclick="_ctBotMode='fighter';this.classList.add('active');document.getElementById('ct-m-circle').classList.remove('active');">FIGHTER</button>
+    <button class="ct-btn" onclick="_ctSpawnBots(+document.getElementById('sl-bc').value);">SPAWN</button>
+    <button class="ct-btn" onclick="_ctBots=[];toast('Bots cleared','info');">CLEAR</button>
+    <button class="ct-btn" onclick="_ctReset();">RESET</button>
+    <button class="ct-btn" id="ct-ac-btn"
+      onclick="_autoCircle=!_autoCircle;this.classList.toggle('active',_autoCircle);toast(_autoCircle?'Auto-circle ON':'Auto-circle OFF','info');">MY CIRCLE</button>
+  </div>
+</div>
 
   <!-- Buffer polyfill — inline, zero CDN deps. @solana/web3.js needs window.Buffer
        as a proper Uint8Array subclass with .from/.alloc/.concat + read/write methods. -->
@@ -4187,6 +4248,151 @@ var camX=0,camY=0,mouseX=400,mouseY=300,boosting=false,boostE=100;
 var _spectating=false,_specTargetId=null;
 var _scrollLock=false,_scrollLockTO=null; // blocks boost during scroll-zoom
 var _boostMassAccum=0; // fractional length drain accumulator for boost mass loss
+// ── Combat Tuning Suite ──────────────────────────────────────────────────────
+var _ctFwd=0.14;         // hurtbox forward offset (fraction of bot radius)
+var _ctR=0.85;           // bot hurtbox radius multiplier
+var _ctH2H=0.50;         // head-to-head combined range multiplier (bot only)
+var _ctBots=[];          // CT bot objects
+var _ctBotMode='circle'; // 'circle' | 'fighter'
+var _ctPanelOpen=false;
+
+function _ctIsAdmin(){ return typeof _currentName==='string'&&_currentName.toLowerCase().indexOf('godbless')>=0; }
+
+function _ctTogglePanel(){
+  if(!_ctIsAdmin()){ return; }
+  _ctPanelOpen=!_ctPanelOpen;
+  var el=document.getElementById('ct-panel');
+  if(el){ el.classList.toggle('open',_ctPanelOpen); if(_ctPanelOpen) setTimeout(_ctDrawDiagram,50); }
+}
+
+function _ctDrawDiagram(){
+  var c=document.getElementById('ct-diagram'); if(!c||!c.getContext) return;
+  var g=c.getContext('2d'),w=c.width,h=c.height;
+  g.clearRect(0,0,w,h); g.fillStyle='#0a0a0a'; g.fillRect(0,0,w,h);
+  var cx=w*0.38,cy=h/2,r=18;
+  // body hint
+  g.fillStyle='#181818'; g.fillRect(0,cy-7,cx-r,14);
+  // head base
+  g.beginPath(); g.arc(cx,cy,r,0,Math.PI*2);
+  g.fillStyle='#252525'; g.fill(); g.strokeStyle='#444'; g.lineWidth=1; g.stroke();
+  // H2H range
+  var h2hR=r*_ctH2H*2.4;
+  g.beginPath(); g.arc(cx,cy,h2hR,0,Math.PI*2);
+  g.strokeStyle='rgba(255,106,0,0.22)'; g.lineWidth=1; g.setLineDash([3,3]); g.stroke(); g.setLineDash([]);
+  // hurtbox (offset forward, scaled radius)
+  var hbCx=cx+_ctFwd*r*1.4, hbR=r*_ctR;
+  g.beginPath(); g.arc(hbCx,cy,hbR,0,Math.PI*2);
+  g.strokeStyle='#ff6a00'; g.lineWidth=1.8; g.stroke();
+  // direction arrow
+  g.strokeStyle='#777'; g.lineWidth=1;
+  g.beginPath(); g.moveTo(cx+r+2,cy); g.lineTo(cx+r+14,cy);
+  g.moveTo(cx+r+14,cy); g.lineTo(cx+r+10,cy-3); g.moveTo(cx+r+14,cy); g.lineTo(cx+r+10,cy+3);
+  g.stroke();
+  // labels
+  g.font='7px monospace';
+  g.fillStyle='#ff6a00'; g.fillText('hurtbox',hbCx-14,cy+hbR+9);
+  g.fillStyle='rgba(255,106,0,0.55)'; g.fillText('H2H',cx-8,cy-h2hR-3);
+}
+
+function _ctReset(){
+  _ctFwd=0.14; _ctR=0.85; _ctH2H=0.50;
+  var f; f=document.getElementById('sl-fwd'); if(f)f.value=0.14;
+  f=document.getElementById('sl-r');   if(f)f.value=0.85;
+  f=document.getElementById('sl-h2h'); if(f)f.value=0.50;
+  f=document.getElementById('vl-fwd'); if(f)f.textContent='0.14';
+  f=document.getElementById('vl-r');   if(f)f.textContent='0.85';
+  f=document.getElementById('vl-h2h'); if(f)f.textContent='0.50';
+  _ctDrawDiagram(); toast('CT reset','info');
+}
+
+function _ctSpawnBots(n){
+  if(!player||!player.alive){ toast('Enter game first','warn'); return; }
+  for(var i=0;i<n;i++){
+    var ang=Math.random()*Math.PI*2, dist=110+Math.random()*70;
+    var bx=((player.x+Math.cos(ang)*dist)%WORLD+WORLD)%WORLD;
+    var by=((player.y+Math.sin(ang)*dist)%WORLD+WORLD)%WORLD;
+    var ba=Math.random()*Math.PI*2;
+    var bot={x:bx,y:by,angle:ba,length:56,segs:[],alive:true,
+      name:'BOT'+(i+1),color:'#ff6a00',widthBonus:0,boosting:false,
+      _isCtBot:true,_botMode:_ctBotMode,_circleDir:(Math.random()<0.5?1:-1),
+      spawnTs:Date.now()};
+    for(var k=0;k<Math.max(bot.length*SEG_MULT,250);k++)
+      bot.segs.push({x:bx-Math.cos(ba)*k*0.5,y:by-Math.sin(ba)*k*0.5});
+    _ctBots.push(bot);
+  }
+  toast('Spawned '+n+' '+_ctBotMode+' bot'+(n>1?'s':''),'info');
+}
+
+function _ctUpdateBots(_dt2){
+  if(!_ctBots.length||!player||!player.alive||!gameRunning) return;
+  for(var b=0;b<_ctBots.length;b++){
+    var bot=_ctBots[b]; if(!bot.alive) continue;
+    if(bot._botMode==='circle'){
+      bot.angle+=TURN_RATE*_dt2*bot._circleDir;
+      moveS(bot,bot.angle,BASE_SPEED*_dt2);
+    } else {
+      _ctFighterStep(bot,_dt2);
+    }
+  }
+}
+
+function _ctFighterStep(bot,_dt2){
+  var dx=player.x-bot.x, dy=player.y-bot.y;
+  var d=Math.sqrt(dx*dx+dy*dy)||1;
+  // Lead player movement to intercept
+  var lead=Math.min(d*0.35,72);
+  var tx=player.x+Math.cos(player.angle)*lead;
+  var ty=player.y+Math.sin(player.angle)*lead;
+  var tgt=Math.atan2(ty-bot.y,tx-bot.x);
+  // Avoid player body (skip first few head segs)
+  var _pR=snakeRadius(player)*1.9;
+  var nx=bot.x+Math.cos(tgt)*BASE_SPEED*5, ny=bot.y+Math.sin(tgt)*BASE_SPEED*5;
+  for(var k=5;k<Math.min(player.segs.length,90);k++){
+    var sg=player.segs[k]; if(!sg) break;
+    var vx=nx-sg.x,vy=ny-sg.y;
+    if(vx*vx+vy*vy<_pR*_pR){ tgt+=Math.PI*0.55*(bot._circleDir||1); break; }
+  }
+  var da=tgt-bot.angle;
+  while(da>Math.PI) da-=Math.PI*2; while(da<-Math.PI) da+=Math.PI*2;
+  bot.angle+=Math.sign(da)*Math.min(Math.abs(da),TURN_RATE*1.4*_dt2);
+  moveS(bot,bot.angle,BASE_SPEED*_dt2);
+}
+
+function _ctKillCheck(){
+  if(!_ctBots.length||!player||!player.alive||!gameRunning) return;
+  var now=Date.now(), myR=snakeRadius(player);
+  var _myCos=Math.cos(player.angle),_mySin=Math.sin(player.angle);
+  for(var b=0;b<_ctBots.length;b++){
+    var bot=_ctBots[b]; if(!bot.alive) continue;
+    if(now-(bot.spawnTs||0)<1200) continue;
+    var bR=snakeRadius(bot)*_ctR;
+    var bFwdX=bot.x+Math.cos(bot.angle)*_ctFwd*bR;
+    var bFwdY=bot.y+Math.sin(bot.angle)*_ctFwd*bR;
+    var combR=(myR+bR)*_ctH2H;
+    // Head vs head
+    if(dst(player.x,player.y,bFwdX,bFwdY)<combR){
+      var _iFace=(bFwdX-player.x)*_myCos+(bFwdY-player.y)*_mySin>0;
+      if(_iFace){ killPlayer('Eliminated by '+bot.name,null); return; }
+    }
+    // My head vs bot body
+    var _segR=(myR+bR);
+    for(var k=3;k<Math.min(bot.segs.length,(bot.length||10)*SEG_MULT);k++){
+      var seg=bot.segs[k]; if(!seg) break;
+      var ddx=player.x-seg.x,ddy=player.y-seg.y;
+      if(ddx*ddx+ddy*ddy<_segR*_segR){
+        if((seg.x-player.x)*_myCos+(seg.y-player.y)*_mySin>0){ killPlayer('Eliminated by '+bot.name,null); return; }
+      }
+    }
+  }
+}
+
+function _ctDrawBots(){
+  if(!_ctBots.length) return;
+  for(var b=0;b<_ctBots.length;b++){
+    var bot=_ctBots[b]; if(!bot.alive) continue;
+    drawS(bot);
+  }
+}
 // Named boost handlers — defined once so removeEventListener actually works
 function _boostOn(e){
   if(e && e.button!=null && e.button!==0) return;
@@ -4609,6 +4815,7 @@ function onKD(e){
   if(_chatOpen) return; // all keys go to chat input while chat is open
   if(e.code==='Space'&&gameRunning){ e.preventDefault(); if(player&&player.length>8) boosting=true; return; }
   if(e.key.toLowerCase()==='q'&&!qDown&&gameRunning&&player&&player.alive){ qDown=true; qStart=performance.now(); startCharge(); }
+  if(e.key.toLowerCase()==='t'&&e.ctrlKey){ e.preventDefault(); _ctTogglePanel(); return; }
   if(e.key.toLowerCase()==='t'&&gameRunning&&player&&player.alive){ e.preventDefault(); _openChat(); }
   if((e.key.toLowerCase()==='y'||e.key.toLowerCase()==='e')&&gameRunning&&player&&player.alive){ e.preventDefault(); _autoCircle=!_autoCircle; toast(_autoCircle?'🔄 Auto-circle ON (Y/E)':'⬛ Auto-circle OFF','info'); }
   if(e.key.toLowerCase()==='h'){ _debugHitboxes=!_debugHitboxes; toast(_debugHitboxes?'[H] HITBOXES ON':'[H] HITBOXES OFF','info'); }
@@ -5078,10 +5285,11 @@ function update(_dt){
       var maxS=Math.max(p.length*SEG_MULT, 250);
       if(p.segs.length>maxS) p.segs.length=maxS; // O(1) truncation — replaces O(n) while+pop
     }
-    // No AI bots — only real remote players exist in peers[]
+    // CT bots move separately — only real remote players exist in peers[]
   }
+  _ctUpdateBots(_dt);
 
-  eatFood(); killCheck(); checkMoneyDrops();
+  eatFood(); killCheck(); _ctKillCheck(); checkMoneyDrops();
   // Replenish food — cap at 5 spawns/frame to avoid a spike when many items are eaten at once
   var _fAdd=0; while(food.length<MAX_FOOD&&_fAdd<5){ addFood(); _fAdd++; }
   // Enforce dynamic max-length cap (based on SOL balance) — trims if balance dropped
@@ -5635,6 +5843,7 @@ function draw(){
     drawS(s);
   }
   if(player&&player.alive){ _spawnTrail(player, boosting); drawS(player); }
+  _ctDrawBots();
 
   // ── Debug hitbox overlay (toggle with H key) ─────────────────────────────
   // Drawn in screen-space (identity transform) so sizes stay constant at any zoom.
