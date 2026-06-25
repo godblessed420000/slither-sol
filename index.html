@@ -5027,7 +5027,7 @@ function update(_dt){
 
   // ── Speed + boost ──
   if(boosting && player.length <= 4) boosting = false; // only block at absolute minimum size
-  var spd = BASE_SPEED * _dt;
+  var spd = (BASE_SPEED / Math.max(1, CAM_ZOOM)) * _dt; // constant screen-pixel speed regardless of zoom
   if(boosting && boostE>0){
     spd *= BOOST_MULT;
     boostE = Math.max(0, boostE - 0.07 * _dt);
