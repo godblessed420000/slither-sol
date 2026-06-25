@@ -5275,7 +5275,7 @@ function killCheck(){
 
     // ── My head vs their body ─────────────────────────────────────────────────
     // You only die if the body segment is in FRONT of your own face (you are heading into it).
-    var _maxBodyWu=Math.min((p.length||10)*8,240), _accWu=0; // halved to match shorter visual body
+    var _maxBodyWu=Math.min((p.length||10)*4,120), _accWu=0; // matches shorter visual body
     for(var j=1;j<p.segs.length;j++){
       var bs=p.segs[j]; if(!bs) break;
       if(j>1){
@@ -5639,7 +5639,7 @@ function draw(){
 
     // Max world-unit coverage = same as visual tail
     var _myLogical=Math.min((player.length||10)*SEG_MULT,120);
-    var _mMaxWu=Math.max(150,_myLogical*2);
+    var _mMaxWu=Math.max(80,_myLogical*1);
 
     // My body kill zone tube
     var _mSegs=player.segs, _mAccWu=0;
@@ -5675,7 +5675,7 @@ function draw(){
       var _pc=_prot?'#FFD700':'#FF4040';
       var _phx=_dW2X(_dpx), _phy=_dW2Y(_dpy);
       var _dpLogical=Math.min((_dp.length||10)*SEG_MULT,120);
-      var _dpMaxWu=Math.max(150,_dpLogical*2);
+      var _dpMaxWu=Math.max(80,_dpLogical*1);
 
       // Peer body kill zone tube
       var _dps=_dp.segs, _dpAccWu=0;
@@ -5781,7 +5781,7 @@ function drawS(s){
   var STEP   = Math.max(3, R*0.5);
   var STEP_W = STEP;                                  // 1:1 world-units = screen-px (no Z)
   var logical = Math.min((s.length||10) * SEG_MULT, 120);
-  var MAXLEN_W = Math.max(150, logical * 2);          // shorter body — halved from logical*4
+  var MAXLEN_W = Math.max(80, logical * 1);           // short body
   var pts=[{x:hx,y:hy}];
   var pcx_w=s.x, pcy_w=s.y, acc=0, total_w=0;
   for(var i=1;i<s.segs.length && total_w<MAXLEN_W;i++){
