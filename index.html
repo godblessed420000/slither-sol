@@ -4284,9 +4284,11 @@ function _ctDrawDiagram(){
   var maxR  = Math.min(cx-4, w-cx-4, cy-4, h-cy-4);
   var h2hR  = Math.min((headR+hbR)*_ctH2H, maxR);
 
-  // ── 1. H2H dashed ring (yellow-orange, centered on head) ──
+  // ── 1. H2H dashed arc — rear 75% only (270°), front 90° excluded ──
+  // Snake faces right (angle=0). Exclude ±45° around forward (+X).
+  // Arc from +45° to +315° clockwise = down → back → up = rear 270°.
   g.save();
-  g.beginPath(); g.arc(cx,cy,h2hR,0,Math.PI*2);
+  g.beginPath(); g.arc(cx,cy,h2hR, Math.PI/4, -Math.PI/4, false);
   g.strokeStyle='#e8a000'; g.lineWidth=1.2; g.setLineDash([5,4]); g.stroke();
   g.restore();
 
@@ -4468,16 +4470,34 @@ function _ctKillCheck(){
     var bot=_ctBots[b]; if(!bot.alive) continue;
     if(now-(bot.spawnTs||0)<1200) continue;
     var bR=snakeRadius(bot)*_ctR;
-    var bFwdX=bot.x+Math.cos(bot.angle)*_ctFwd*bR;
-    var bFwdY=bot.y+Math.sin(bot.angle)*_ctFwd*bR;
-    var combR=(myR+bR)*_ctH2H;
-    // Head vs head
-    if(dst(player.x,player.y,bFwdX,bFwdY)<combR){
-      var _iFace=(bFwdX-player.x)*_myCos+(bFwdY-player.y)*_mySin>0;
-      if(_iFace){ killPlayer('Eliminated by '+bot.name,null); return; }
+    var botCos=Math.cos(bot.angle), botSin=Math.sin(bot.angle);
+
+    // ── A. Front hurtbox crescent (catches player running into bot's face) ──
+    // Center shifted forward by _ctFwd*bR along bot's facing direction.
+    var bFwdX=bot.x+botCos*_ctFwd*bR;
+    var bFwdY=bot.y+botSin*_ctFwd*bR;
+    var hurtGap=dst(player.x,player.y,bFwdX,bFwdY);
+    if(hurtGap < myR+bR){
+      var _iFaceHurt=(bFwdX-player.x)*_myCos+(bFwdY-player.y)*_mySin>0;
+      if(_iFaceHurt){ killPlayer('Eliminated by '+bot.name,null); return; }
     }
-    // My head vs bot body
-    var _segR=(myR+bR);
+
+    // ── B. H2H rear zone — rear 75% of bot (excludes front ±45°) ──
+    // frontDot > 0.707 means player is within 45° of bot's nose → skip H2H here,
+    // the hurtbox crescent above covers that region instead.
+    var rawGap=dst(player.x,player.y,bot.x,bot.y);
+    var h2hR=(myR+bR)*_ctH2H;
+    if(rawGap < h2hR){
+      var toX=player.x-bot.x, toY=player.y-bot.y;
+      var frontDot=(toX*botCos+toY*botSin)/(rawGap||1);
+      if(frontDot <= 0.707){ // outside the front ±45° cone → in rear 75%
+        var _iFaceH2H=(bot.x-player.x)*_myCos+(bot.y-player.y)*_mySin>0;
+        if(_iFaceH2H){ killPlayer('Eliminated by '+bot.name,null); return; }
+      }
+    }
+
+    // ── C. My head vs bot body ──
+    var _segR=myR+bR;
     for(var k=3;k<Math.min(bot.segs.length,(bot.length||10)*SEG_MULT);k++){
       var seg=bot.segs[k]; if(!seg) break;
       var ddx=player.x-seg.x,ddy=player.y-seg.y;
