@@ -3928,11 +3928,12 @@ function updateJoinSummary() {
   if(!summary||!joinBtn) return;
   var srvNames={us:'US East',eu:'EU West',as:'Asia'};
   var tierNames={'free':'Free Play',1:'$1 Starter',5:'$5 Pro',10:'$10 Whale'};
-  var pingMap={us:'~12ms',eu:'~38ms',as:'~95ms'};
   if(selectedServer&&selectedLobbyTier!=null){
     var t=TIERS[selectedLobbyTier];
     var isFree=(selectedLobbyTier==='free');
     var canAfford=isFree||Math.max(W.balance||0,W.onChainBalance||0)>=(t?t.sol:999);
+    var _rp=_pingEma>0?_pingEma+'ms':'--ms';
+    var _rc=_pingEma>0?(_pingEma<60?'#14F195':_pingEma<120?'#FFD700':'#FF4560'):'#aaa';
     summary.innerHTML='';
     var row=document.createElement('div'); row.style.cssText='display:flex;flex-direction:column;gap:3px;';
     var title=document.createElement('div'); title.style.cssText='color:#dde6f0;font-weight:700;font-size:.68rem;';
@@ -3940,9 +3941,9 @@ function updateJoinSummary() {
     row.appendChild(title);
     var meta=document.createElement('div'); meta.style.fontSize='.65rem';
     if(isFree){
-      meta.innerHTML='Entry: <span style="color:#FF6B35;font-family:Orbitron,monospace;font-weight:700;">FREE</span> &middot; Ping: <span style="color:#14F195;">'+pingMap[selectedServer]+'</span> &middot; <span style="color:#FF6B35;">No SOL required</span>';
+      meta.innerHTML='Entry: <span style="color:#FF6B35;font-family:Orbitron,monospace;font-weight:700;">FREE</span> &middot; Ping: <span style="color:'+_rc+';">'+_rp+'</span> &middot; <span style="color:#FF6B35;">No SOL required</span>';
     } else {
-      meta.innerHTML='Entry: <span style="color:#14F195;font-family:Orbitron,monospace;">$'+(t?t.usd.toFixed(2):'?')+'</span> &middot; Ping: <span style="color:#14F195;">'+pingMap[selectedServer]+'</span> &middot; Balance: <span style="color:'+(canAfford?'#14F195':'#FF4560')+';"> $'+(W.balance*SOL_USD).toFixed(2)+'</span>';
+      meta.innerHTML='Entry: <span style="color:#14F195;font-family:Orbitron,monospace;">$'+(t?t.usd.toFixed(2):'?')+'</span> &middot; Ping: <span style="color:'+_rc+';">'+_rp+'</span> &middot; Balance: <span style="color:'+(canAfford?'#14F195':'#FF4560')+';"> $'+(W.balance*SOL_USD).toFixed(2)+'</span>';
     }
     row.appendChild(meta);
     if(!isFree&&!canAfford){
