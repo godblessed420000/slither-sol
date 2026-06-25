@@ -713,66 +713,71 @@ canvas{display:block;width:100%;height:100%;}
 .send-fee-hr{height:1px;background:var(--border);margin:1px 0;}
 .send-status{font-size:.6rem;min-height:18px;line-height:1.5;}
 /* ── Combat Tuning Suite ─────────────────────────────────────────────────── */
-#ct-panel{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:9999;background:#0d0d0d;border:2px solid #ff6a00;border-radius:12px;padding:20px 24px 16px;min-width:360px;max-width:400px;color:#fff;font-family:'Share Tech Mono',monospace;font-size:.8rem;display:none;box-shadow:0 0 48px #ff6a0055;}
+#ct-panel{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:9999;background:#0b0b0b;border:1.5px solid #ff6a00;border-radius:8px;padding:14px 16px 12px;width:318px;color:#fff;font-family:'Share Tech Mono',monospace;font-size:.8rem;display:none;box-shadow:0 0 36px #ff6a0040;}
 #ct-panel.open{display:block;}
-#ct-panel h2{margin:0 0 2px;font-size:.92rem;color:#ff6a00;letter-spacing:.1em;text-transform:uppercase;}
-#ct-panel .ct-sub{font-size:.6rem;color:#555;margin-bottom:10px;}
-#ct-diagram{width:100%;height:70px;background:#0a0a0a;border:1px solid #222;border-radius:6px;margin-bottom:12px;display:block;}
-#ct-panel .ct-row{display:flex;align-items:center;gap:8px;margin-bottom:7px;}
-#ct-panel .ct-label{width:148px;color:#bbb;font-size:.69rem;flex-shrink:0;}
-#ct-panel .ct-val{width:34px;text-align:right;color:#ff6a00;font-size:.69rem;flex-shrink:0;}
-#ct-panel input[type=range]{flex:1;accent-color:#ff6a00;height:3px;cursor:pointer;}
-#ct-panel .ct-btns{display:flex;gap:5px;margin-top:12px;flex-wrap:wrap;}
-#ct-panel .ct-btn{flex:1;min-width:64px;padding:5px 2px;border:1px solid #ff6a00;background:transparent;color:#ff6a00;font-family:'Share Tech Mono',monospace;font-size:.66rem;border-radius:4px;cursor:pointer;text-transform:uppercase;letter-spacing:.04em;}
-#ct-panel .ct-btn:hover{background:#ff6a0020;}
-#ct-panel .ct-btn.active{background:#ff6a00;color:#000;}
-#ct-panel .ct-div{height:1px;background:#1e1e1e;margin:10px 0;}
-#ct-btn-close{position:absolute;top:10px;right:12px;background:none;border:none;color:#444;font-size:1rem;cursor:pointer;line-height:1;padding:0;}
+#ct-panel .ct-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;}
+#ct-panel .ct-hdr-title{font-size:.82rem;color:#ff6a00;letter-spacing:.1em;text-transform:uppercase;font-weight:700;}
+#ct-btn-close{background:none;border:none;color:#555;font-size:.9rem;cursor:pointer;padding:0;line-height:1;font-family:monospace;}
 #ct-btn-close:hover{color:#fff;}
+#ct-diagram{width:100%;height:86px;background:#080808;border:1px solid #1c1c1c;border-radius:5px;margin-bottom:11px;display:block;}
+#ct-panel .ct-sblock{margin-bottom:9px;}
+#ct-panel .ct-srow{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px;}
+#ct-panel .ct-slabel{font-size:.69rem;color:#ccc;}
+#ct-panel .ct-sval{font-size:.69rem;color:#ff6a00;}
+#ct-panel input[type=range]{width:100%;accent-color:#ff6a00;cursor:pointer;display:block;margin:0;}
+#ct-panel .ct-shints{display:flex;justify-content:space-between;font-size:.57rem;color:#3a3a3a;margin-top:2px;}
+#ct-panel .ct-btns{display:flex;gap:6px;margin-top:10px;}
+#ct-panel .ct-btn{flex:1;padding:6px 2px;border:1.5px solid #ff6a00;background:transparent;color:#ff6a00;font-family:'Share Tech Mono',monospace;font-size:.67rem;border-radius:5px;cursor:pointer;text-transform:uppercase;letter-spacing:.04em;}
+#ct-panel .ct-btn:hover{background:#ff6a0018;}
+#ct-panel .ct-btn.active{background:#ff6a00;color:#000;}
+#ct-panel .ct-footer{font-size:.57rem;color:#383838;text-align:center;margin-top:10px;}
 </style>
 
 <!-- ── Combat Tuning Suite panel (private) ──────────────────────────────── -->
 <div id="ct-panel">
-  <button id="ct-btn-close" onclick="_ctTogglePanel()">✕</button>
-  <h2>⚔ Combat Tuning</h2>
-  <div class="ct-sub">PRIVATE · F8 to toggle</div>
-  <canvas id="ct-diagram" width="312" height="70"></canvas>
-  <div class="ct-row">
-    <span class="ct-label">Hurtbox Forward</span>
+  <div class="ct-hdr">
+    <span class="ct-hdr-title">⚔ Combat Tuning</span>
+    <button id="ct-btn-close" onclick="_ctTogglePanel()">✕</button>
+  </div>
+  <canvas id="ct-diagram" width="286" height="86"></canvas>
+  <div class="ct-sblock">
+    <div class="ct-srow">
+      <span class="ct-slabel">Hurtbox Forward</span>
+      <span class="ct-sval" id="vl-fwd">0.14r</span>
+    </div>
     <input type="range" id="sl-fwd" min="0" max="1" step="0.01" value="0.14"
-      oninput="_ctFwd=+this.value;document.getElementById('vl-fwd').textContent=(+this.value).toFixed(2);_ctDrawDiagram();">
-    <span class="ct-val" id="vl-fwd">0.14</span>
+      oninput="_ctFwd=+this.value;document.getElementById('vl-fwd').textContent=(+this.value).toFixed(2)+'r';_ctDrawDiagram();">
+    <div class="ct-shints"><span>mid-face</span><span>nose tip</span></div>
   </div>
-  <div class="ct-row">
-    <span class="ct-label">Hurtbox Radius ×</span>
+  <div class="ct-sblock">
+    <div class="ct-srow">
+      <span class="ct-slabel">Hurtbox Radius</span>
+      <span class="ct-sval" id="vl-r">0.85r</span>
+    </div>
     <input type="range" id="sl-r" min="0.3" max="2.0" step="0.01" value="0.85"
-      oninput="_ctR=+this.value;document.getElementById('vl-r').textContent=(+this.value).toFixed(2);_ctDrawDiagram();">
-    <span class="ct-val" id="vl-r">0.85</span>
+      oninput="_ctR=+this.value;document.getElementById('vl-r').textContent=(+this.value).toFixed(2)+'r';_ctDrawDiagram();">
+    <div class="ct-shints"><span>tiny</span><span>large</span></div>
   </div>
-  <div class="ct-row">
-    <span class="ct-label">H2H Range ×</span>
+  <div class="ct-sblock">
+    <div class="ct-srow">
+      <span class="ct-slabel">H2H Range</span>
+      <span class="ct-sval" id="vl-h2h">0.50x</span>
+    </div>
     <input type="range" id="sl-h2h" min="0.1" max="2.0" step="0.01" value="0.50"
-      oninput="_ctH2H=+this.value;document.getElementById('vl-h2h').textContent=(+this.value).toFixed(2);_ctDrawDiagram();">
-    <span class="ct-val" id="vl-h2h">0.50</span>
-  </div>
-  <div class="ct-div"></div>
-  <div class="ct-row">
-    <span class="ct-label">Bot Count</span>
-    <input type="range" id="sl-bc" min="1" max="8" step="1" value="1"
-      oninput="document.getElementById('vl-bc').textContent=this.value;">
-    <span class="ct-val" id="vl-bc">1</span>
+      oninput="_ctH2H=+this.value;document.getElementById('vl-h2h').textContent=(+this.value).toFixed(2)+'x';_ctDrawDiagram();">
+    <div class="ct-shints"><span>tighter</span><span>looser</span></div>
   </div>
   <div class="ct-btns">
     <button class="ct-btn active" id="ct-m-circle"
-      onclick="_ctBotMode='circle';this.classList.add('active');document.getElementById('ct-m-fighter').classList.remove('active');">CIRCLE</button>
+      onclick="_ctBotMode='circle';this.classList.add('active');document.getElementById('ct-m-fighter').classList.remove('active');_ctSpawnBots(1);">&#9711; CIRCLE</button>
     <button class="ct-btn" id="ct-m-fighter"
-      onclick="_ctBotMode='fighter';this.classList.add('active');document.getElementById('ct-m-circle').classList.remove('active');">FIGHTER</button>
-    <button class="ct-btn" onclick="_ctSpawnBots(+document.getElementById('sl-bc').value);">SPAWN</button>
-    <button class="ct-btn" onclick="_ctBots=[];toast('Bots cleared','info');">CLEAR</button>
-    <button class="ct-btn" onclick="_ctReset();">RESET</button>
-    <button class="ct-btn" id="ct-ac-btn"
-      onclick="_autoCircle=!_autoCircle;this.classList.toggle('active',_autoCircle);toast(_autoCircle?'Auto-circle ON':'Auto-circle OFF','info');">MY CIRCLE</button>
+      onclick="_ctBotMode='fighter';this.classList.add('active');document.getElementById('ct-m-circle').classList.remove('active');_ctSpawnBots(1);">&#10005; FIGHTER</button>
   </div>
+  <div class="ct-btns">
+    <button class="ct-btn" onclick="_ctBots=[];toast('Bots cleared','info');">&#10005; BOTS</button>
+    <button class="ct-btn" onclick="_ctReset();">RESET</button>
+  </div>
+  <div class="ct-footer">F8 to close &middot; H key = hitbox overlay in-game</div>
 </div>
 
   <!-- Buffer polyfill — inline, zero CDN deps. @solana/web3.js needs window.Buffer
@@ -4267,30 +4272,45 @@ function _ctTogglePanel(){
 function _ctDrawDiagram(){
   var c=document.getElementById('ct-diagram'); if(!c||!c.getContext) return;
   var g=c.getContext('2d'),w=c.width,h=c.height;
-  g.clearRect(0,0,w,h); g.fillStyle='#0a0a0a'; g.fillRect(0,0,w,h);
-  var cx=w*0.38,cy=h/2,r=18;
-  // body hint
-  g.fillStyle='#181818'; g.fillRect(0,cy-7,cx-r,14);
-  // head base
-  g.beginPath(); g.arc(cx,cy,r,0,Math.PI*2);
-  g.fillStyle='#252525'; g.fill(); g.strokeStyle='#444'; g.lineWidth=1; g.stroke();
-  // H2H range
-  var h2hR=r*_ctH2H*2.4;
-  g.beginPath(); g.arc(cx,cy,h2hR,0,Math.PI*2);
-  g.strokeStyle='rgba(255,106,0,0.22)'; g.lineWidth=1; g.setLineDash([3,3]); g.stroke(); g.setLineDash([]);
-  // hurtbox (offset forward, scaled radius)
-  var hbCx=cx+_ctFwd*r*1.4, hbR=r*_ctR;
-  g.beginPath(); g.arc(hbCx,cy,hbR,0,Math.PI*2);
-  g.strokeStyle='#ff6a00'; g.lineWidth=1.8; g.stroke();
-  // direction arrow
-  g.strokeStyle='#777'; g.lineWidth=1;
-  g.beginPath(); g.moveTo(cx+r+2,cy); g.lineTo(cx+r+14,cy);
-  g.moveTo(cx+r+14,cy); g.lineTo(cx+r+10,cy-3); g.moveTo(cx+r+14,cy); g.lineTo(cx+r+10,cy+3);
-  g.stroke();
-  // labels
-  g.font='7px monospace';
-  g.fillStyle='#ff6a00'; g.fillText('hurtbox',hbCx-14,cy+hbR+9);
-  g.fillStyle='rgba(255,106,0,0.55)'; g.fillText('H2H',cx-8,cy-h2hR-3);
+  g.clearRect(0,0,w,h); g.fillStyle='#080808'; g.fillRect(0,0,w,h);
+  var cx=w*0.42, cy=h/2, headR=22;
+  // Derived radii — keep circles visible within canvas
+  var hbR=Math.min(headR*_ctR, h/2-4);
+  var hbCx=cx+_ctFwd*headR*0.9;
+  var h2hR=Math.min((headR+hbR)*_ctH2H*0.95, Math.min(cx-4, w-cx-4));
+  // ── H2H dashed ring (yellow-orange) ──
+  g.save(); g.beginPath(); g.arc(cx,cy,h2hR,0,Math.PI*2);
+  g.strokeStyle='#e8a000'; g.lineWidth=1.2; g.setLineDash([5,4]); g.stroke(); g.restore();
+  // ── Hurtbox dashed ring (orange) ──
+  g.save(); g.beginPath(); g.arc(hbCx,cy,hbR,0,Math.PI*2);
+  g.strokeStyle='#ff6a00'; g.lineWidth=1.5; g.setLineDash([4,3]); g.stroke(); g.restore();
+  // ── Snake body segment (teal, behind head) ──
+  var segW=headR*0.9, segH=headR*1.1;
+  g.save(); g.beginPath();
+  g.ellipse(cx-headR*1.05, cy, segW*0.55, segH*0.55, 0, 0, Math.PI*2);
+  var bg=g.createRadialGradient(cx-headR,cy-4,2,cx-headR,cy,segH*0.55);
+  bg.addColorStop(0,'#1ad9b0'); bg.addColorStop(1,'#0a9e7f');
+  g.fillStyle=bg; g.fill(); g.restore();
+  // ── Snake head (teal gradient) ──
+  g.save(); g.beginPath(); g.arc(cx, cy, headR, 0, Math.PI*2);
+  var hg=g.createRadialGradient(cx-6,cy-6,3,cx,cy,headR);
+  hg.addColorStop(0,'#22f5d2'); hg.addColorStop(1,'#00b896');
+  g.fillStyle=hg; g.fill(); g.restore();
+  // ── Eye ──
+  g.beginPath(); g.arc(cx+headR*0.42, cy-headR*0.28, 4, 0, Math.PI*2);
+  g.fillStyle='#001a14'; g.fill();
+  g.beginPath(); g.arc(cx+headR*0.42, cy-headR*0.28, 1.8, 0, Math.PI*2);
+  g.fillStyle='rgba(255,255,255,0.7)'; g.fill();
+  // ── Labels ──
+  g.font='bold 8px monospace';
+  // HITBOX label — top-right of hurtbox circle
+  var hlx=hbCx+hbR*0.28, hly=cy-hbR+10;
+  if(hly<10) hly=10;
+  g.fillStyle='#ff6a00'; g.fillText('HITBOX r='+Math.round(hbR), hlx, hly);
+  // H2H label — right side
+  var h2lx=cx+h2hR*0.35, h2ly=cy+h2hR-8;
+  if(h2ly>h-4) h2ly=h-4;
+  g.fillStyle='#e8a000'; g.fillText('H2H r='+Math.round(h2hR), h2lx, h2ly);
 }
 
 function _ctReset(){
