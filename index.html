@@ -4284,33 +4284,7 @@ function _ctDrawDiagram(){
   var maxR  = Math.min(cx-4, w-cx-4, cy-4, h-cy-4);
   var h2hR  = Math.min((headR+hbR)*_ctH2H, maxR);
 
-  // ── 1. H2H dashed arc — rear 75% only (270°), front 90° excluded ──
-  // Snake faces right (angle=0). Exclude ±45° around forward (+X).
-  // Arc from +45° to +315° clockwise = down → back → up = rear 270°.
-  g.save();
-  g.beginPath(); g.arc(cx,cy,h2hR, Math.PI/4, -Math.PI/4, false);
-  g.strokeStyle='#e8a000'; g.lineWidth=1.2; g.setLineDash([5,4]); g.stroke();
-  g.restore();
-
-  // ── 2. Hurtbox dashed ring (orange, offset forward) ──
-  g.save();
-  g.beginPath(); g.arc(hbCx,cy,hbR,0,Math.PI*2);
-  g.strokeStyle='#ff6a00'; g.lineWidth=1.5; g.setLineDash([4,3]); g.stroke();
-  g.restore();
-
-  // ── 3. Blue forward crescent — forward half of hurtbox circle ──
-  // Clip to x >= cx (the front half of the head) then fill hurtbox circle.
-  // This leaves a blue half-moon wherever the hurtbox protrudes in front of the head center.
-  g.save();
-  g.beginPath(); g.rect(cx, 0, w-cx, h); g.clip();
-  g.beginPath(); g.arc(hbCx, cy, hbR, 0, Math.PI*2);
-  g.fillStyle='rgba(30,120,255,0.42)'; g.fill();
-  // Blue ring outline on same crescent
-  g.beginPath(); g.arc(hbCx, cy, hbR, 0, Math.PI*2);
-  g.strokeStyle='rgba(80,160,255,0.70)'; g.lineWidth=1.5; g.stroke();
-  g.restore();
-
-  // ── 4. Snake body — thick bezier line going left ──
+  // ── 1. Snake body — thick bezier line going left ──
   var bodyPts=[
     {x:cx-headR*0.6, y:cy},
     {x:cx-headR*1.9, y:cy+headR*0.18},
@@ -4386,7 +4360,30 @@ function _ctDrawDiagram(){
   g.beginPath(); g.arc(e1x-er*0.22,e1y-er*0.22,er*0.18,0,Math.PI*2); g.fill();
   g.beginPath(); g.arc(e2x-er*0.22,e2y-er*0.22,er*0.18,0,Math.PI*2); g.fill();
 
-  // ── 7. Labels ──
+  // ── 7. Rings drawn ON TOP of snake so they're visible ──
+
+  // H2H dashed arc — rear 75% (270°), front 90° open
+  g.save();
+  g.beginPath(); g.arc(cx,cy,h2hR, Math.PI/4, -Math.PI/4, false);
+  g.strokeStyle='#e8a000'; g.lineWidth=1.5; g.setLineDash([5,4]); g.stroke();
+  g.restore();
+
+  // Hurtbox dashed ring (orange, shifted forward)
+  g.save();
+  g.beginPath(); g.arc(hbCx,cy,hbR,0,Math.PI*2);
+  g.strokeStyle='#ff6a00'; g.lineWidth=1.8; g.setLineDash([4,3]); g.stroke();
+  g.restore();
+
+  // Blue forward crescent — fill only x >= cx half, so crescent shows in front of face
+  g.save();
+  g.beginPath(); g.rect(cx,0,w-cx,h); g.clip();
+  g.beginPath(); g.arc(hbCx,cy,hbR,0,Math.PI*2);
+  g.fillStyle='rgba(30,120,255,0.42)'; g.fill();
+  g.beginPath(); g.arc(hbCx,cy,hbR,0,Math.PI*2);
+  g.strokeStyle='rgba(80,160,255,0.80)'; g.lineWidth=1.5; g.stroke();
+  g.restore();
+
+  // ── 8. Labels ──
   g.font='bold 7.5px monospace';
   // HITBOX label — above hurtbox circle
   var hlx=hbCx+2, hly=cy-hbR-4;
