@@ -739,7 +739,7 @@ canvas{display:block;width:100%;height:100%;}
     <span class="ct-hdr-title">⚔ Combat Tuning</span>
     <button id="ct-btn-close" onclick="_ctTogglePanel()">✕</button>
   </div>
-  <canvas id="ct-diagram" width="286" height="86"></canvas>
+  <canvas id="ct-diagram" width="286" height="96"></canvas>
   <div class="ct-sblock">
     <div class="ct-srow">
       <span class="ct-slabel">Hurtbox Forward</span>
@@ -4273,44 +4273,127 @@ function _ctDrawDiagram(){
   var c=document.getElementById('ct-diagram'); if(!c||!c.getContext) return;
   var g=c.getContext('2d'),w=c.width,h=c.height;
   g.clearRect(0,0,w,h); g.fillStyle='#080808'; g.fillRect(0,0,w,h);
-  var cx=w*0.42, cy=h/2, headR=22;
-  // Derived radii — keep circles visible within canvas
-  var hbR=Math.min(headR*_ctR, h/2-4);
-  var hbCx=cx+_ctFwd*headR*0.9;
-  var h2hR=Math.min((headR+hbR)*_ctH2H*0.95, Math.min(cx-4, w-cx-4));
-  // ── H2H dashed ring (yellow-orange) ──
-  g.save(); g.beginPath(); g.arc(cx,cy,h2hR,0,Math.PI*2);
-  g.strokeStyle='#e8a000'; g.lineWidth=1.2; g.setLineDash([5,4]); g.stroke(); g.restore();
-  // ── Hurtbox dashed ring (orange) ──
-  g.save(); g.beginPath(); g.arc(hbCx,cy,hbR,0,Math.PI*2);
-  g.strokeStyle='#ff6a00'; g.lineWidth=1.5; g.setLineDash([4,3]); g.stroke(); g.restore();
-  // ── Snake body segment (teal, behind head) ──
-  var segW=headR*0.9, segH=headR*1.1;
-  g.save(); g.beginPath();
-  g.ellipse(cx-headR*1.05, cy, segW*0.55, segH*0.55, 0, 0, Math.PI*2);
-  var bg=g.createRadialGradient(cx-headR,cy-4,2,cx-headR,cy,segH*0.55);
-  bg.addColorStop(0,'#1ad9b0'); bg.addColorStop(1,'#0a9e7f');
-  g.fillStyle=bg; g.fill(); g.restore();
-  // ── Snake head (teal gradient) ──
-  g.save(); g.beginPath(); g.arc(cx, cy, headR, 0, Math.PI*2);
-  var hg=g.createRadialGradient(cx-6,cy-6,3,cx,cy,headR);
-  hg.addColorStop(0,'#22f5d2'); hg.addColorStop(1,'#00b896');
-  g.fillStyle=hg; g.fill(); g.restore();
-  // ── Eye ──
-  g.beginPath(); g.arc(cx+headR*0.42, cy-headR*0.28, 4, 0, Math.PI*2);
-  g.fillStyle='#001a14'; g.fill();
-  g.beginPath(); g.arc(cx+headR*0.42, cy-headR*0.28, 1.8, 0, Math.PI*2);
-  g.fillStyle='rgba(255,255,255,0.7)'; g.fill();
-  // ── Labels ──
-  g.font='bold 8px monospace';
-  // HITBOX label — top-right of hurtbox circle
-  var hlx=hbCx+hbR*0.28, hly=cy-hbR+10;
-  if(hly<10) hly=10;
+
+  // Snake faces RIGHT (angle=0). Head positioned at cx,cy.
+  var cx=w*0.50, cy=h/2, headR=20;
+  var BW=headR*1.85; // body stroke width (matches drawS BW=R*1.9)
+
+  // Derived hitbox radii — clamp to stay inside canvas
+  var hbR   = Math.max(6, Math.min(headR*_ctR, cy-4, cx-4));
+  var hbCx  = cx + _ctFwd*headR;           // hurtbox center shifted forward
+  var maxR  = Math.min(cx-4, w-cx-4, cy-4, h-cy-4);
+  var h2hR  = Math.min((headR+hbR)*_ctH2H, maxR);
+
+  // ── 1. H2H dashed ring (yellow-orange, centered on head) ──
+  g.save();
+  g.beginPath(); g.arc(cx,cy,h2hR,0,Math.PI*2);
+  g.strokeStyle='#e8a000'; g.lineWidth=1.2; g.setLineDash([5,4]); g.stroke();
+  g.restore();
+
+  // ── 2. Hurtbox dashed ring (orange, offset forward) ──
+  g.save();
+  g.beginPath(); g.arc(hbCx,cy,hbR,0,Math.PI*2);
+  g.strokeStyle='#ff6a00'; g.lineWidth=1.5; g.setLineDash([4,3]); g.stroke();
+  g.restore();
+
+  // ── 3. Blue forward crescent — forward half of hurtbox circle ──
+  // Clip to x >= cx (the front half of the head) then fill hurtbox circle.
+  // This leaves a blue half-moon wherever the hurtbox protrudes in front of the head center.
+  g.save();
+  g.beginPath(); g.rect(cx, 0, w-cx, h); g.clip();
+  g.beginPath(); g.arc(hbCx, cy, hbR, 0, Math.PI*2);
+  g.fillStyle='rgba(30,120,255,0.42)'; g.fill();
+  // Blue ring outline on same crescent
+  g.beginPath(); g.arc(hbCx, cy, hbR, 0, Math.PI*2);
+  g.strokeStyle='rgba(80,160,255,0.70)'; g.lineWidth=1.5; g.stroke();
+  g.restore();
+
+  // ── 4. Snake body — thick bezier line going left ──
+  var bodyPts=[
+    {x:cx-headR*0.6, y:cy},
+    {x:cx-headR*1.9, y:cy+headR*0.18},
+    {x:cx-headR*3.1, y:cy-headR*0.12},
+    {x:cx-headR*4.2, y:cy+headR*0.08},
+    {x:cx-headR*5.2, y:cy},
+  ];
+  g.save();
+  g.lineCap='round'; g.lineJoin='round';
+  // Dark shadow layer
+  g.beginPath(); g.moveTo(cx,cy);
+  for(var bi=0;bi<bodyPts.length;bi++){
+    if(bi<bodyPts.length-1){
+      var mx=(bodyPts[bi].x+bodyPts[bi+1].x)/2, my=(bodyPts[bi].y+bodyPts[bi+1].y)/2;
+      g.quadraticCurveTo(bodyPts[bi].x,bodyPts[bi].y,mx,my);
+    } else { g.lineTo(bodyPts[bi].x,bodyPts[bi].y); }
+  }
+  g.strokeStyle='#003322'; g.lineWidth=BW*1.08; g.stroke();
+  // Main body fill
+  g.beginPath(); g.moveTo(cx,cy);
+  for(var bi=0;bi<bodyPts.length;bi++){
+    if(bi<bodyPts.length-1){
+      var mx=(bodyPts[bi].x+bodyPts[bi+1].x)/2, my=(bodyPts[bi].y+bodyPts[bi+1].y)/2;
+      g.quadraticCurveTo(bodyPts[bi].x,bodyPts[bi].y,mx,my);
+    } else { g.lineTo(bodyPts[bi].x,bodyPts[bi].y); }
+  }
+  g.strokeStyle='#00cc80'; g.lineWidth=BW; g.stroke();
+  // Bright highlight stripe
+  g.beginPath(); g.moveTo(cx,cy);
+  for(var bi=0;bi<bodyPts.length;bi++){
+    if(bi<bodyPts.length-1){
+      var mx=(bodyPts[bi].x+bodyPts[bi+1].x)/2, my=(bodyPts[bi].y+bodyPts[bi+1].y)/2;
+      g.quadraticCurveTo(bodyPts[bi].x,bodyPts[bi].y,mx,my);
+    } else { g.lineTo(bodyPts[bi].x,bodyPts[bi].y); }
+  }
+  g.strokeStyle='#14F195'; g.lineWidth=BW*0.30; g.stroke();
+  g.restore();
+
+  // ── 5. Snake head circle ──
+  g.save();
+  g.beginPath(); g.arc(cx,cy,headR,0,Math.PI*2);
+  g.fillStyle='#004d33'; g.fill();  // dark base
+  g.strokeStyle='#003322'; g.lineWidth=2; g.stroke();
+  // green overlay gradient
+  var hg=g.createRadialGradient(cx-headR*0.3,cy-headR*0.3,headR*0.1,cx,cy,headR);
+  hg.addColorStop(0,'rgba(20,241,149,0.85)'); hg.addColorStop(1,'rgba(0,180,90,0.55)');
+  g.beginPath(); g.arc(cx,cy,headR,0,Math.PI*2);
+  g.fillStyle=hg; g.fill();
+  g.restore();
+
+  // ── 6. Eyes (two, positioned forward + perpendicular, matching drawS layout) ──
+  // ebx = cx + cos(0)*headR*0.30 = cx + headR*0.30
+  // e1y = cy + sin(PI/2)*eo = cy + eo  (bottom eye)
+  // e2y = cy - eo  (top eye)
+  var eo=headR*0.50, er=headR*0.38;
+  var ebx=cx+headR*0.30, eby=cy;
+  var e1x=ebx, e1y=eby+eo;
+  var e2x=ebx, e2y=eby-eo;
+  // eye whites
+  g.fillStyle='#001a0e';
+  g.beginPath(); g.arc(e1x,e1y,er,0,Math.PI*2); g.fill();
+  g.beginPath(); g.arc(e2x,e2y,er,0,Math.PI*2); g.fill();
+  // pupils
+  g.fillStyle='#fff';
+  g.beginPath(); g.arc(e1x,e1y,er*0.55,0,Math.PI*2); g.fill();
+  g.beginPath(); g.arc(e2x,e2y,er*0.55,0,Math.PI*2); g.fill();
+  // pupil center
+  g.fillStyle='#111';
+  g.beginPath(); g.arc(e1x+er*0.15,e1y,er*0.30,0,Math.PI*2); g.fill();
+  g.beginPath(); g.arc(e2x+er*0.15,e2y,er*0.30,0,Math.PI*2); g.fill();
+  // highlight
+  g.fillStyle='rgba(255,255,255,0.75)';
+  g.beginPath(); g.arc(e1x-er*0.22,e1y-er*0.22,er*0.18,0,Math.PI*2); g.fill();
+  g.beginPath(); g.arc(e2x-er*0.22,e2y-er*0.22,er*0.18,0,Math.PI*2); g.fill();
+
+  // ── 7. Labels ──
+  g.font='bold 7.5px monospace';
+  // HITBOX label — above hurtbox circle
+  var hlx=hbCx+2, hly=cy-hbR-4;
+  if(hly<10) hly=cy+hbR+12;
   g.fillStyle='#ff6a00'; g.fillText('HITBOX r='+Math.round(hbR), hlx, hly);
-  // H2H label — right side
-  var h2lx=cx+h2hR*0.35, h2ly=cy+h2hR-8;
-  if(h2ly>h-4) h2ly=h-4;
-  g.fillStyle='#e8a000'; g.fillText('H2H r='+Math.round(h2hR), h2lx, h2ly);
+  // H2H label — inside top of H2H ring
+  var h2ly=cy-h2hR+11;
+  if(h2ly<10) h2ly=10;
+  g.fillStyle='#e8a000'; g.fillText('H2H r='+Math.round(h2hR), cx-14, h2ly);
 }
 
 function _ctReset(){
