@@ -1395,7 +1395,7 @@ var _smoothLen  = 100;     // exponentially-smoothed snake length used for zoom 
 // Slither.io-accurate movement constants
 var BASE_SPEED = 3.6;
 var BOOST_MULT        = 2.7;
-var BOOST_MASS_DRAIN  = 1/60;   // length units lost per frame while boosting (≈1 unit/sec = ~15 mass pts/sec)
+var BOOST_MASS_DRAIN  = 3/60;   // length units lost per frame while boosting (≈3 units/sec)
 var TURN_RATE        = 0.10;
 var CIRCLE_RADIUS_WU = 46;   // auto-circle radius in world units (≈screen px at zoom 1×) — damnbruh RADIUS_PX concept
 var SEG_MULT   = 4;        // segments per length unit — lower = shorter tail
@@ -5360,7 +5360,7 @@ function update(_dt){
       _boostMassAccum -= 1;
       if(player.length > 4){
         player.length--;
-        player.widthBonus = Math.max(0, (player.widthBonus||0) - 0.35);
+        player.widthBonus = Math.max(0, (player.widthBonus||0) - 0.60);
       }
     }
   } else {
