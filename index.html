@@ -4847,12 +4847,12 @@ function mkSnake(x,y,color,name,isMe,startSegs){
 function getMaxSegs(){ return 325; }
 function grow(s){
   // Width grows with every food item — immediate visual feedback, even while boosting
-  s.widthBonus = (s.widthBonus||0) + 0.35; // slow growth — max width needs ~350 orbs
-  // Length only grows when not boosting, once every 3 orbs
+  s.widthBonus = (s.widthBonus||0) + 0.45; // slightly faster width growth
+  // Length only grows when not boosting, once every 2 orbs
   if(s.isMe && boosting) return;
   if(s.isMe && s.segs.length >= getMaxSegs()) return;
   s._growAccum = (s._growAccum || 0) + 1;
-  if(s._growAccum < 3) return;
+  if(s._growAccum < 2) return;
   s._growAccum = 0;
   var l=s.segs[s.segs.length-1]; s.segs.push({x:l.x,y:l.y}); s.length++;
 }
