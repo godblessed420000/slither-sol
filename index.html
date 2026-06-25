@@ -5018,7 +5018,7 @@ function update(_dt){
     mouseY=gc.height/2+_joyDY*gc.height*0.45;
   }
   if(_autoCircle){
-    player.angle += (BASE_SPEED / CIRCLE_RADIUS_WU) * _dt; // derived from radius — tune CIRCLE_RADIUS_WU to change circle size
+    player.angle += TURN_RATE * _dt; // damnbruh: spin at full turn rate, circle size = BASE_SPEED / TURN_RATE
   } else {
     var dx=mouseX-gc.width/2, dy=mouseY-gc.height/2, tgt=Math.atan2(dy,dx);
     var da=tgt-player.angle; while(da>Math.PI) da-=Math.PI*2; while(da<-Math.PI) da+=Math.PI*2;
