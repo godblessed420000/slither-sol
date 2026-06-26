@@ -4516,7 +4516,7 @@ var _autoCircle=false; // Y key — snake spins in a tight circle at max turn ra
 var _elHudScore=null,_elHudSub=null,_elCashoutEarnVal=null;
 var _elCashoutQhint=null,_elPingEl=null,_elSidebar=null;
 var _hudScoreV='',_hudSubV='',_hudEarnV='';
-var _LERP=0.5; // remote snake interpolation — 0.5 is smoother, reduces rubber-banding on missed packets
+var _LERP=0.18; // remote snake interpolation — lower = smoother movement, less rubber-band jerk
 function _cacheHudEls(){
   _elHudScore       = document.getElementById('hudScore');
   _elHudSub         = document.getElementById('hudSub');
@@ -5943,19 +5943,16 @@ function draw(){
     ctx.setTransform(1,0,0,1,0,0); // screen space — no world transform influence
     var _dNow=Date.now();
     var _dcw=gc.width/2, _dch=gc.height/2;
-    // 1:1 world→screen (same as drawS body) so hitbox overlay aligns perfectly at any zoom
-    var _dW2X=function(wx){return(wx-player.x)+_dcw;};
-    var _dW2Y=function(wy){return(wy-player.y)+_dch;};
-    var _myRw=snakeRadius(player);          // collision radius, world units = screen px at 1:1
-    var _myRs=_myRw;                        // no zoom mult — 1:1 space
-    var _hx=_dcw, _hy=_dch;               // head always at screen center in 1:1
+    // Z-scaled world→screen — matches drawS W2SX so hitbox circles align with visual
+    var _Z=CAM_ZOOM;
+    var _dW2X=function(wx){return(wx-player.x)*_Z+_dcw;};
+    var _dW2Y=function(wy){return(wy-player.y)*_Z+_dch;};
+    var _myRw=snakeRadius(player);
+    var _myRs=_myRw*_Z;                    // screen-px radius at current zoom
+    var _hx=_dcw, _hy=_dch;               // head always at screen center
 
-    // Max world-unit coverage = same as visual tail
-    var _myLogical=(player.length||10)*SEG_MULT;
-    var _mMaxWu=Math.max(80,_myLogical);
-
-    // My body kill zone tube
-    var _mSegs=player.segs, _mAccWu=0;
+    // My body kill zone tube — full snake, all segs (matches 360° killCheck)
+    var _mSegs=player.segs;
     if(_mSegs.length>2 && _mSegs[1]){
       ctx.globalAlpha=0.35; ctx.strokeStyle='#14F195';
       ctx.shadowColor='#14F195'; ctx.shadowBlur=6;
@@ -5963,8 +5960,6 @@ function draw(){
       ctx.beginPath(); ctx.moveTo(_dW2X(_mSegs[1].x),_dW2Y(_mSegs[1].y));
       for(var _mi=2;_mi<_mSegs.length;_mi++){
         var _ms=_mSegs[_mi],_msp=_mSegs[_mi-1]; if(!_ms||!_msp) break;
-        _mAccWu+=dst(_msp.x,_msp.y,_ms.x,_ms.y);
-        if(_mAccWu>_mMaxWu) break;
         ctx.lineTo(_dW2X(_ms.x),_dW2Y(_ms.y));
       }
       ctx.stroke();
@@ -5987,15 +5982,13 @@ function draw(){
     for(var _dpi=0;_dpi<peers.length;_dpi++){
       var _dp=peers[_dpi]; if(!_dp.alive) continue;
       var _dpx=(_dp.targetX!=null)?_dp.targetX:_dp.x, _dpy=(_dp.targetY!=null)?_dp.targetY:_dp.y;
-      var _dpRw=snakeRadius(_dp), _dpRs=_dpRw;  // no zoom mult — 1:1 space
+      var _dpRw=snakeRadius(_dp), _dpRs=_dpRw*_Z;  // screen-px radius
       var _prot=_dNow-(_dp.joinTs||0)<1500;
       var _pc=_prot?'#FFD700':'#FF4040';
       var _phx=_dW2X(_dpx), _phy=_dW2Y(_dpy);
-      var _dpLogical=Math.min((_dp.length||10)*SEG_MULT,120);
-      var _dpMaxWu=Math.max(80,_dpLogical*1);
 
-      // Peer body kill zone tube
-      var _dps=_dp.segs, _dpAccWu=0;
+      // Peer body kill zone tube — full snake, all segs (matches 360° killCheck)
+      var _dps=_dp.segs;
       if(_dps.length>2 && _dps[1]){
         ctx.globalAlpha=0.35; ctx.strokeStyle=_pc;
         ctx.shadowColor=_pc; ctx.shadowBlur=6;
@@ -6003,17 +5996,15 @@ function draw(){
         ctx.beginPath(); ctx.moveTo(_dW2X(_dps[1].x),_dW2Y(_dps[1].y));
         for(var _dj=2;_dj<_dps.length;_dj++){
           var _dps2=_dps[_dj],_dps1=_dps[_dj-1]; if(!_dps2||!_dps1) break;
-          _dpAccWu+=dst(_dps1.x,_dps1.y,_dps2.x,_dps2.y);
-          if(_dpAccWu>_dpMaxWu) break;
           ctx.lineTo(_dW2X(_dps2.x),_dW2Y(_dps2.y));
         }
         ctx.stroke();
         ctx.shadowBlur=0;
       }
-      // Head-on threshold ring
+      // H2H threshold ring — MS formula: (headR1+headR2)*1.07 in screen px
       ctx.globalAlpha=0.4; ctx.strokeStyle='#FF8800'; ctx.lineWidth=1.5;
       ctx.setLineDash([5,3]);
-      ctx.beginPath(); ctx.arc(_phx,_phy,(_myRw+_dpRw),0,Math.PI*2); ctx.stroke();
+      ctx.beginPath(); ctx.arc(_phx,_phy,(_myRw+_dpRw)*1.07*_Z,0,Math.PI*2); ctx.stroke();
       ctx.setLineDash([]);
       // Peer head circle — glow
       ctx.shadowColor=_pc; ctx.shadowBlur=10;
@@ -6089,32 +6080,28 @@ function _spawnTrail(s, isBoosting){
 function drawS(s){
   if(s.segs.length<2) return;
   var Z=CAM_ZOOM, cw=gc.width/2, ch=gc.height/2;
-  // Head placed at its correct world-zoom position; body uses fixed 1:1 offset
-  // from the head so the snake is the same screen size at any zoom level.
+  // Head and body both at zoom-correct screen position — fixes 1:1 vs Z body mismatch
   var hx=(s.x-camX)*Z+cw, hy=(s.y-camY)*Z+ch;
-  var W2SX=function(wx){ return (wx-s.x)+hx; };
-  var W2SY=function(wy){ return (wy-s.y)+hy; };
+  var W2SX=function(wx){ return (wx-s.x)*Z+hx; };
+  var W2SY=function(wy){ return (wy-s.y)*Z+hy; };
 
-  // Width driven by widthBonus (food eaten - boost drained); fall back to length estimate for remote peers without wb yet
-  var _wB = s.widthBonus != null ? s.widthBonus : Math.max(0, ((s.length||10) - 10) * 3);
-  var R   = Math.max(8, Math.min(36, 8 + _wB * 0.072)); // fixed screen-px size — no zoom multiplier
-  var BW  = R*1.9;
-  var STEP   = Math.max(3, R*0.5);
-  var STEP_W = STEP;                                  // 1:1 world-units = screen-px (no Z)
-  var logical = (s.length||10) * SEG_MULT;
-  var MAXLEN_W = Math.max(80, logical);               // grows with length
+  // MS-exact radius: world units → screen px; visual and hitbox now match
+  var _Rw = snakeRadius(s);                          // world-unit radius (same as killCheck)
+  var R   = _Rw * Z;                                // screen-px radius at current zoom
+  var BW  = R*1.9;                                  // body stroke width in screen px
+  var STEP_W = Math.max(3, _Rw*0.5);               // world-unit step for curve sampling
   var pts=[{x:hx,y:hy}];
-  var pcx_w=s.x, pcy_w=s.y, acc=0, total_w=0;
-  for(var i=1;i<s.segs.length && total_w<MAXLEN_W;i++){
+  var pcx_w=s.x, pcy_w=s.y, acc=0;
+  for(var i=1;i<s.segs.length;i++){
     var sx_w=s.segs[i].x, sy_w=s.segs[i].y;
     var dx=sx_w-pcx_w, dy=sy_w-pcy_w, dd=Math.sqrt(dx*dx+dy*dy);
     if(dd<1e-6){ continue; }
     var ux=dx/dd, uy=dy/dd;
-    while(acc+dd>=STEP_W && total_w<MAXLEN_W){
+    while(acc+dd>=STEP_W){
       var step=STEP_W-acc;
       pcx_w+=ux*step; pcy_w+=uy*step;
       pts.push({x:W2SX(pcx_w),y:W2SY(pcy_w)});
-      total_w+=STEP_W; dd-=step; acc=0;
+      dd-=step; acc=0;
     }
     acc+=dd; pcx_w=sx_w; pcy_w=sy_w;
   }
