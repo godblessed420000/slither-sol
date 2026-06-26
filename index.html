@@ -4595,14 +4595,7 @@ function initCanvas(){
   gc=document.getElementById('gc'); mm=document.getElementById('minimap');
   ctx=gc.getContext('2d'); mctx=mm.getContext('2d');
   resizeC(); window.addEventListener('resize',resizeC);
-  gc.addEventListener('wheel', function(e){
-    e.preventDefault();
-    // Multiplicative step (4% per tick) — same feel at any zoom level, from damnbruh scroll zoom
-    var _cur = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, 0.92 + _zoomOffset));
-    var _next = e.deltaY < 0 ? _cur * ZOOM_STEP : _cur / ZOOM_STEP;
-    _zoomOffset = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, _next)) - 0.92;
-    boosting=false; _scrollLock=true; clearTimeout(_scrollLockTO); _scrollLockTO=setTimeout(function(){_scrollLock=false;},350);
-  }, {passive:false});
+  gc.addEventListener('wheel', function(e){ e.preventDefault(); }, {passive:false});
 }
 function resizeC(){
   var wrap=document.getElementById('canvasWrap');
@@ -5298,10 +5291,7 @@ function update(_dt){
 
   if(!player||!player.alive){
     if(_spectating){
-      // Spectate: same formula as gameplay (0.92 base); _zoomOffset pre-set to -0.30 on entry → opens at 0.62
-      // Scroll range: MIN_ZOOM (0.25) to MAX_ZOOM (4.0), 4% per tick (ZOOM_STEP)
-      var _spTargetZ=Math.max(MIN_ZOOM,Math.min(MAX_ZOOM,0.92+_zoomOffset));
-      CAM_ZOOM+=(_spTargetZ-CAM_ZOOM)*0.02;
+      CAM_ZOOM=1.0;
       var _sNow=performance.now(),_sExtCap=BASE_SPEED*BOOST_MULT*60;
       var _st=_specTargetId?peers.find(function(p){return p.remoteId===_specTargetId;}):null;
       if(_st&&_st.alive){
@@ -5418,8 +5408,7 @@ function update(_dt){
   }
 
   var len=player.length; // used by HUD below (logical length unit, not raw seg count)
-  var _tgtZ=Math.max(MIN_ZOOM,Math.min(MAX_ZOOM,0.92+_zoomOffset));
-  CAM_ZOOM+=(_tgtZ-CAM_ZOOM)*0.02; // lerp — slow for smooth body transitions
+  CAM_ZOOM=1.0;
 
   camX=player.x; camY=player.y;
   var isFreeGame=(activeTier==='free');
