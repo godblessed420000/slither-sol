@@ -5291,7 +5291,7 @@ function update(_dt){
 
   if(!player||!player.alive){
     if(_spectating){
-      CAM_ZOOM=1.0;
+      CAM_ZOOM=0.75;
       var _sNow=performance.now(),_sExtCap=BASE_SPEED*BOOST_MULT*60;
       var _st=_specTargetId?peers.find(function(p){return p.remoteId===_specTargetId;}):null;
       if(_st&&_st.alive){
@@ -5408,7 +5408,7 @@ function update(_dt){
   }
 
   var len=player.length; // used by HUD below (logical length unit, not raw seg count)
-  CAM_ZOOM=1.0;
+  CAM_ZOOM=0.75;
 
   camX=player.x; camY=player.y;
   var isFreeGame=(activeTier==='free');
