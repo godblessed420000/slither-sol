@@ -780,6 +780,66 @@ canvas{display:block;width:100%;height:100%;}
   <div class="ct-footer">F8 to close &middot; H key = hitbox overlay in-game</div>
 </div>
 
+  <!-- DPR-based zoom engine — scroll wheel zooms the canvas at browser level -->
+  <script>
+  (function(){
+    const MIN_SCALE = 0.25, MAX_SCALE = 4.0, STEP_MULT = 1.04;
+    const RECENTER_DELAY = 80;
+    let zoomScale = 1.0;
+    const originalDPR = window.devicePixelRatio || 1;
+
+    function restoreDPR() {
+      Object.defineProperty(window, 'devicePixelRatio', {
+        configurable: true, enumerable: true, get: () => originalDPR
+      });
+      window.dispatchEvent(new Event('resize'));
+    }
+    function overrideDPR(val) {
+      Object.defineProperty(window, 'devicePixelRatio', {
+        configurable: true, enumerable: true, get: () => val
+      });
+      window.dispatchEvent(new Event('resize'));
+    }
+
+    const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+    const isTyping = () => {
+      const a = document.activeElement;
+      return a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.isContentEditable);
+    };
+
+    function centerOnLargestCanvas() {
+      const canv = [...document.querySelectorAll('canvas')];
+      if (!canv.length) return;
+      let best = null, area = 0;
+      canv.forEach(c => {
+        const r = c.getBoundingClientRect();
+        const a = Math.max(0, r.width) * Math.max(0, r.height);
+        if (a > area) { area = a; best = r; }
+      });
+      if (!best) return;
+      const x = Math.round(best.left + best.width/2 + window.scrollX - window.innerWidth/2);
+      const y = Math.round(best.top + best.height/2 + window.scrollY - window.innerHeight/2);
+      window.scrollTo(x, y);
+    }
+
+    function setZoom(s) {
+      zoomScale = clamp(s, MIN_SCALE, MAX_SCALE);
+      if (zoomScale === 1) restoreDPR();
+      else overrideDPR(1 / zoomScale);
+      setTimeout(centerOnLargestCanvas, RECENTER_DELAY);
+    }
+
+    window.addEventListener('wheel', e => {
+      if (isTyping()) return;
+      e.preventDefault();
+      const next = e.deltaY < 0 ? zoomScale * STEP_MULT : zoomScale / STEP_MULT;
+      setZoom(next);
+    }, { passive: false });
+
+    window.__db_zoomScale = () => zoomScale;
+  })();
+  </script>
+
   <!-- Buffer polyfill — inline, zero CDN deps. @solana/web3.js needs window.Buffer
        as a proper Uint8Array subclass with .from/.alloc/.concat + read/write methods. -->
   <script>
@@ -4595,7 +4655,7 @@ function initCanvas(){
   gc=document.getElementById('gc'); mm=document.getElementById('minimap');
   ctx=gc.getContext('2d'); mctx=mm.getContext('2d');
   resizeC(); window.addEventListener('resize',resizeC);
-  gc.addEventListener('wheel', function(e){ e.preventDefault(); }, {passive:false});
+  // Wheel zoom handled by DPR zoom engine (see script block near top of body)
 }
 function resizeC(){
   var wrap=document.getElementById('canvasWrap');
