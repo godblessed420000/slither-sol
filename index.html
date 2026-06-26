@@ -6089,23 +6089,13 @@ function drawS(s){
   var _Rw = snakeRadius(s);                          // world-unit radius (same as killCheck)
   var R   = _Rw * Z;                                // screen-px radius at current zoom
   var BW  = R*1.9;                                  // body stroke width in screen px
-  var STEP_W = Math.max(3, _Rw*0.5);               // world-unit step for curve sampling
+  // Use every segment directly — no resampling, eliminates bezier arc wobble when circling
   var pts=[{x:hx,y:hy}];
-  var pcx_w=s.x, pcy_w=s.y, acc=0;
   for(var i=1;i<s.segs.length;i++){
-    var sx_w=s.segs[i].x, sy_w=s.segs[i].y;
-    var dx=sx_w-pcx_w, dy=sy_w-pcy_w, dd=Math.sqrt(dx*dx+dy*dy);
-    if(dd<1e-6){ continue; }
-    var ux=dx/dd, uy=dy/dd;
-    while(acc+dd>=STEP_W){
-      var step=STEP_W-acc;
-      pcx_w+=ux*step; pcy_w+=uy*step;
-      pts.push({x:W2SX(pcx_w),y:W2SY(pcy_w)});
-      dd-=step; acc=0;
-    }
-    acc+=dd; pcx_w=sx_w; pcy_w=sy_w;
+    var _sg=s.segs[i]; if(!_sg) break;
+    pts.push({x:W2SX(_sg.x),y:W2SY(_sg.y)});
   }
-  if(pts.length<2) pts.push({x:W2SX(s.segs[1].x),y:W2SY(s.segs[1].y)});
+  if(pts.length<2 && s.segs[1]) pts.push({x:W2SX(s.segs[1].x),y:W2SY(s.segs[1].y)});
 
   // ── LOD: skip all skin effects at very low zoom — plain body line + head dot ──
   // Threshold 0.40 is below MIN_ZOOM (0.45) so full rendering always applies in gameplay
