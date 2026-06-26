@@ -4867,10 +4867,10 @@ function spawnPlayer(){
   sx=bestX; sy=bestY;
   var pn=userProfile?userProfile.name.split(' ')[0].slice(0,14):'YOU';
   // Mid-match size: start at the average live peer length so new joiners aren't tiny
-  var _startSegs=100; // size 25 default (25 * SEG_MULT 4 = 100 segs)
+  var _startSegs=160; // size 40 default (40 * SEG_MULT 4 = 160 segs)
   if(_livePeers.length>0){
     var _avgSegs=Math.round(_livePeers.reduce(function(s,p){return s+p.length*SEG_MULT;},0)/_livePeers.length);
-    _startSegs=Math.max(100,Math.min(_avgSegs,325));
+    _startSegs=Math.max(160,Math.min(_avgSegs,325));
   } else if(_preRejoinAvgSegs>15){
     // peers[] is empty on rejoin (cleared by _wsJoin) — use snapshot taken before the clear
     _startSegs=_preRejoinAvgSegs;
