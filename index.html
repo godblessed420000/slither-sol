@@ -5502,8 +5502,9 @@ function _hoHash(a,b){
 // BASE_RADIUS + size^RADIUS_GROWTH * RADIUS_SCALE  where size = length * SIZE_PER_SEGMENT
 // Used for BOTH head and body hitboxes so they are always the same size.
 function snakeRadius(s){
-  var sz=(s.length||10)*5;
-  return 8+Math.pow(sz,0.6)*0.8;
+  // Match the visual radius R from drawS exactly so hitbox = snake body size
+  var _wB = s.widthBonus != null ? s.widthBonus : Math.max(0, ((s.length||10) - 10) * 3);
+  return Math.max(8, Math.min(36, 8 + _wB * 0.072));
 }
 
 // Swept segment→circle hit test: did segment p1→p2 pass through circle (c, radius r)?
