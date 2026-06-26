@@ -5343,7 +5343,7 @@ function update(_dt){
   var spd = BASE_SPEED * _dt;
   if(boosting && boostE>0){
     spd *= BOOST_MULT;
-    boostE = Math.max(0, boostE - 0.07 * _dt);
+    boostE = Math.max(0, boostE - 0.035 * _dt);
     // Mass loss: ~1 length unit per second (≈15 mass pts/sec)
     _boostMassAccum += BOOST_MASS_DRAIN * _dt;
     if(_boostMassAccum >= 1){
