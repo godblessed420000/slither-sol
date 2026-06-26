@@ -4466,41 +4466,29 @@ function _ctKillCheck(){
   for(var b=0;b<_ctBots.length;b++){
     var bot=_ctBots[b]; if(!bot.alive) continue;
     if(now-(bot.spawnTs||0)<1200) continue;
-    var bR=snakeRadius(bot)*_ctR;
+    var bR=snakeRadius(bot);
     var botCos=Math.cos(bot.angle), botSin=Math.sin(bot.angle);
-
-    // ── A. Front hurtbox crescent (catches player running into bot's face) ──
-    // Center shifted forward by _ctFwd*bR along bot's facing direction.
-    var bFwdX=bot.x+botCos*_ctFwd*bR;
-    var bFwdY=bot.y+botSin*_ctFwd*bR;
-    var hurtGap=dst(player.x,player.y,bFwdX,bFwdY);
-    if(hurtGap < myR+bR){
-      var _iFaceHurt=(bFwdX-player.x)*_myCos+(bFwdY-player.y)*_mySin>0;
-      if(_iFaceHurt){ killPlayer('Eliminated by '+bot.name,null); return; }
-    }
-
-    // ── B. H2H rear zone — rear 75% of bot (excludes front ±45°) ──
-    // frontDot > 0.707 means player is within 45° of bot's nose → skip H2H here,
-    // the hurtbox crescent above covers that region instead.
     var rawGap=dst(player.x,player.y,bot.x,bot.y);
-    var h2hR=(myR+bR)*_ctH2H;
+
+    // H2H: both must face each other within 75° (cos75°=0.2588) → bigger wins
+    var h2hR=(myR+bR)*1.07;
     if(rawGap < h2hR){
-      var toX=player.x-bot.x, toY=player.y-bot.y;
-      var frontDot=(toX*botCos+toY*botSin)/(rawGap||1);
-      if(frontDot <= 0.707){ // outside the front ±45° cone → in rear 75%
-        var _iFaceH2H=(bot.x-player.x)*_myCos+(bot.y-player.y)*_mySin>0;
-        if(_iFaceH2H){ killPlayer('Eliminated by '+bot.name,null); return; }
+      var _myDot=((bot.x-player.x)*_myCos+(bot.y-player.y)*_mySin)/(rawGap||1);
+      var _theirDot=((player.x-bot.x)*botCos+(player.y-bot.y)*botSin)/(rawGap||1);
+      if(_myDot>0.2588 && _theirDot>0.2588){
+        if(myR<=bR){ killPlayer('Eliminated by '+bot.name,null); return; }
+      } else if(_myDot>0.2588){
+        // Only I face them: I ran into their head → I lose
+        killPlayer('Eliminated by '+bot.name,null); return;
       }
     }
 
-    // ── C. My head vs bot body ──
-    var _segR=myR+bR;
-    for(var k=3;k<Math.min(bot.segs.length,(bot.length||10)*SEG_MULT);k++){
+    // My head vs bot body — 360° full body, all segments (MS style)
+    var _segR2=(myR+snakeBodyR(bot)); _segR2*=_segR2;
+    for(var k=3;k<bot.segs.length;k++){
       var seg=bot.segs[k]; if(!seg) break;
       var ddx=player.x-seg.x,ddy=player.y-seg.y;
-      if(ddx*ddx+ddy*ddy<_segR*_segR){
-        if((seg.x-player.x)*_myCos+(seg.y-player.y)*_mySin>0){ killPlayer('Eliminated by '+bot.name,null); return; }
-      }
+      if(ddx*ddx+ddy*ddy<_segR2){ killPlayer('Eliminated by '+bot.name,null); return; }
     }
   }
 }
@@ -5504,13 +5492,24 @@ function _hoHash(a,b){
   return h&1;
 }
 
-// damnbruh.com exact radius formula (ported from reference game):
-// BASE_RADIUS + size^RADIUS_GROWTH * RADIUS_SCALE  where size = length * SIZE_PER_SEGMENT
-// Used for BOTH head and body hitboxes so they are always the same size.
+// MoneySlither exact hitbox pipeline: size → segments → thickness → hitbox scale
+function segmentsForSize(sz){
+  sz=Math.max(40,Number(sz)||40);
+  var n=8+(sz-40)*(26-8)/(100-40); if(sz>100) n=26+(sz-100)*0.08;
+  return Math.max(8,Math.round(n));
+}
+function thicknessForSegments(n){
+  n=Math.max(1,Number(n)||1);
+  var t=7.5+0.55*Math.sqrt(n); if(n>26) t+=Math.pow(n-26,0.7)*0.17;
+  return Math.max(10,t*1.43);
+}
 function snakeRadius(s){
-  // Match the visual radius R from drawS exactly so hitbox = snake body size
-  var _wB = s.widthBonus != null ? s.widthBonus : Math.max(0, ((s.length||10) - 10) * 3);
-  return Math.max(8, Math.min(36, 8 + _wB * 0.072));
+  // Head hitbox: thickness × HITBOX_BASE(0.95) × _hbs(1.07) × _hhs(1.18) ≈ ×1.20
+  return thicknessForSegments(segmentsForSize(s.length||40))*0.95*1.07*1.18;
+}
+function snakeBodyR(s){
+  // Body segment hitbox: thickness × HITBOX_BASE only (no head scale bonus)
+  return thicknessForSegments(segmentsForSize(s.length||40))*0.95;
 }
 
 // Swept segment→circle hit test: did segment p1→p2 pass through circle (c, radius r)?
@@ -5535,7 +5534,7 @@ function killCheck(){
   var _now=Date.now();
   if(_now-(player.spawnTs||0)<1500) return;
   var myR=snakeRadius(player);
-  // My forward unit vector — used for front-face hurtbox checks throughout
+  var myBodyR=snakeBodyR(player);
   var _myCos=Math.cos(player.angle), _mySin=Math.sin(player.angle);
 
   for(var i=0;i<peers.length;i++){
@@ -5544,30 +5543,29 @@ function killCheck(){
     var pid=p.remoteId||'';
     var px=(p.targetX!=null)?p.targetX:p.x, py=(p.targetY!=null)?p.targetY:p.y;
     var pR=snakeRadius(p);
-    var combR=myR+pR, combR2=combR*combR;
+    var pBodyR=snakeBodyR(p);
+    var h2hCombR=(myR+pR)*1.07;
+    var bodyCombR2=(myR+pBodyR)*(myR+pBodyR);
     var headGap=dst(player.x,player.y,px,py);
 
-    // ── Head proximity: static overlap OR swept (catches boosting tunnels) ───
+    // Head proximity: static overlap OR swept (catches boosting tunnels)
     var aPrev=player.segs[0]||{x:player.x,y:player.y};
-    var _headContact=(headGap<combR)||segHitsCircle(aPrev,{x:player.x,y:player.y},{x:px,y:py},combR);
+    var _headContact=(headGap<h2hCombR)||segHitsCircle(aPrev,{x:player.x,y:player.y},{x:px,y:py},h2hCombR);
     if(_headContact){
       var _pCos=Math.cos(p.angle), _pSin=Math.sin(p.angle);
-      // Front-face: dot(otherHead − myHead, myForward) > 0  →  I am heading INTO them.
-      var _iFaceThem=(px-player.x)*_myCos+(py-player.y)*_mySin > 0;
-      var _theyFaceMe=(player.x-px)*_pCos+(player.y-py)*_pSin > 0;
+      // MS 75° facing gate: normalize dot product, threshold = cos(75°) = 0.2588
+      var _myDot=((px-player.x)*_myCos+(py-player.y)*_mySin)/(headGap||1);
+      var _theirDot=((player.x-px)*_pCos+(player.y-py)*_pSin)/(headGap||1);
+      var _iFaceThem=_myDot>0.2588;
+      var _theyFaceMe=_theirDot>0.2588;
 
-      // Engage referee whenever at least one head faces the other.
-      // This is critical: WITHOUT a single referee both clients resolve the same collision
-      // independently from slightly stale angle/position data and BOTH call killPlayer.
+      // Referee: engage when at least one snake faces the other (prevents double-kill)
       if(_iFaceThem || _theyFaceMe){
         var _h2=_hoHash(myId,pid);
         var _iAmRef=(_h2===0)===(myId<pid);
         if(!_iAmRef){ continue; } // non-ref ALWAYS waits — prevents double-kill
 
-        // Ref applies front-face rule:
-        // • Both facing  →  true H2H  →  larger snake wins
-        // • Only I face  →  I ran into their space  →  I lose
-        // • Only they face →  they ran into my space  →  I win
+        // Both facing within 75° → true H2H → bigger wins; one facing → rammer loses
         var _iWin;
         if(_iFaceThem && _theyFaceMe){
           _iWin=myR>pR ? true : myR<pR ? false : ((_pingEma||999)<=((p.ping||999)));
@@ -5607,28 +5605,17 @@ function killCheck(){
       // Neither facing (tangential side-graze) — fall through to body check
     }
 
-    // ── My head vs their body ─────────────────────────────────────────────────
-    // You only die if the body segment is in FRONT of your own face (you are heading into it).
-    var _maxBodyWu=(p.length||10)*SEG_MULT, _accWu=0;
+    // My head vs their body — 360° full body, all segments (MS style)
     for(var j=1;j<p.segs.length;j++){
       var bs=p.segs[j]; if(!bs) break;
-      if(j>1){
-        _accWu+=dst(p.segs[j-1].x,p.segs[j-1].y,bs.x,bs.y);
-        if(_accWu>_maxBodyWu) break;
-      }
       var _dx=player.x-bs.x, _dy=player.y-bs.y;
-      if(_dx*_dx+_dy*_dy < combR2){
-        // Front-face hurtbox: segment must be in front of MY facing direction
-        if((bs.x-player.x)*_myCos+(bs.y-player.y)*_mySin > 0){
-          killPlayer('Eliminated by '+p.name,pid); return;
-        }
+      if(_dx*_dx+_dy*_dy < bodyCombR2){
+        killPlayer('Eliminated by '+p.name,pid); return;
       }
     }
   }
 
-  // ── Reverse check: their head vs MY body → send kill_target ──────────────
-  // They only die if my body segment is in FRONT of THEIR facing direction.
-  var _myMaxWu=Math.min((player.length||10)*16,480);
+  // Reverse check: their head vs MY body — 360°, all segments (MS style)
   for(var ri=0;ri<peers.length;ri++){
     var rp2=peers[ri]; if(!rp2.alive) continue;
     if(_now-(rp2.joinTs||0)<1500) continue;
@@ -5636,44 +5623,35 @@ function killCheck(){
     if(_sentKillTs[rpid]&&_now-_sentKillTs[rpid]<2000) continue;
     var rpx=(rp2.targetX!=null)?rp2.targetX:rp2.x, rpy=(rp2.targetY!=null)?rp2.targetY:rp2.y;
     var rpR=snakeRadius(rp2);
-    var rCombR=rpR+myR, rCombR2=rCombR*rCombR;
-    if(dst(player.x,player.y,rpx,rpy)<rCombR) continue; // head proximity handled above
-    var _rCos=Math.cos(rp2.angle), _rSin=Math.sin(rp2.angle);
-    var _rAccWu=0;
+    var rCombR=rpR+myBodyR, rCombR2=rCombR*rCombR;
+    if(dst(player.x,player.y,rpx,rpy)<(rpR+myR)*1.07) continue; // H2H handled above
     for(var rk=1;rk<player.segs.length;rk++){
       var rsa=player.segs[rk]; if(!rsa) break;
-      if(rk>1){
-        _rAccWu+=dst(player.segs[rk-1].x,player.segs[rk-1].y,rsa.x,rsa.y);
-        if(_rAccWu>_myMaxWu) break;
-      }
       var _rdx=rpx-rsa.x, _rdy=rpy-rsa.y;
       if(_rdx*_rdx+_rdy*_rdy < rCombR2){
-        // Front-face hurtbox: my segment must be in front of THEIR facing direction
-        if((rsa.x-rpx)*_rCos+(rsa.y-rpy)*_rSin > 0){
-          _sentKillTs[rpid]=_now;
-          var _rkp=_remoteMap[rpid];
-          if(_rkp&&_rkp.alive){
-            var _rshSegs=_rkp.segs.slice(),_rshLen=_rkp.length;
-            _rkp.alive=false; _rkp.segs=[]; if(_rkp.th)_rkp.th=[];
-            _processedDies[rpid]=true; _recentLeaves[rpid]=_now;
-            if(gameRunning)_scatterDeathFood(_rshSegs,_rshLen);
-            _killerScatteredFor[rpid]=Date.now();
-            peers=peers.filter(function(q){return q!==_rkp;});
-            delete _remoteMap[rpid];
-            if(gameRunning)_updateArenaSize();
-            myKills++; boostE=Math.min(100,boostE+50);
-            kFeed((rp2.name||'Player')+' ran into you!','kill');
-            if(activeTier!=='free'&&TIERS[activeTier]&&TIERS[activeTier].usd>0)
-              kFeed('💰 $'+TIERS[activeTier].usd+' drop appeared! Grab it!','kill');
-          }
-          if(_ws&&_ws.readyState===WebSocket.OPEN){
-            try{_ws.send(JSON.stringify({type:'pos',clientId:_wsClientId,data:{
-              x:+(player.x.toFixed(1)),y:+(player.y.toFixed(1)),a:+(player.angle.toFixed(3)),
-              l:player.length||10,v:true,kill_target:rpid,killer:_wsClientId
-            }}));}catch(_re){}
-          }
-          break;
+        _sentKillTs[rpid]=_now;
+        var _rkp=_remoteMap[rpid];
+        if(_rkp&&_rkp.alive){
+          var _rshSegs=_rkp.segs.slice(),_rshLen=_rkp.length;
+          _rkp.alive=false; _rkp.segs=[]; if(_rkp.th)_rkp.th=[];
+          _processedDies[rpid]=true; _recentLeaves[rpid]=_now;
+          if(gameRunning)_scatterDeathFood(_rshSegs,_rshLen);
+          _killerScatteredFor[rpid]=Date.now();
+          peers=peers.filter(function(q){return q!==_rkp;});
+          delete _remoteMap[rpid];
+          if(gameRunning)_updateArenaSize();
+          myKills++; boostE=Math.min(100,boostE+50);
+          kFeed((rp2.name||'Player')+' ran into you!','kill');
+          if(activeTier!=='free'&&TIERS[activeTier]&&TIERS[activeTier].usd>0)
+            kFeed('💰 $'+TIERS[activeTier].usd+' drop appeared! Grab it!','kill');
         }
+        if(_ws&&_ws.readyState===WebSocket.OPEN){
+          try{_ws.send(JSON.stringify({type:'pos',clientId:_wsClientId,data:{
+            x:+(player.x.toFixed(1)),y:+(player.y.toFixed(1)),a:+(player.angle.toFixed(3)),
+            l:player.length||10,v:true,kill_target:rpid,killer:_wsClientId
+          }}));}catch(_re){}
+        }
+        break;
       }
     }
   }
