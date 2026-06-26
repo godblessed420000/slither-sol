@@ -1394,6 +1394,7 @@ var _zoomOffset = 0;       // user's manual scroll offset on top of auto-zoom
 var _smoothLen  = 100;     // exponentially-smoothed snake length used for zoom (avoids per-frame jitter)
 // Slither.io-accurate movement constants
 var BASE_SPEED = 5.8;
+var POINT_DIST = 1.6;        // world-units between body segments (MoneySlither POINT_DIST)
 var BOOST_MULT        = 2.7;
 var BOOST_MASS_DRAIN  = 3/60;   // length units lost per frame while boosting (≈3 units/sec)
 var TURN_RATE        = 0.16;
@@ -3539,7 +3540,7 @@ function _wsHandleMsg(msg, fromAbly) {
       var lobby = _lobbyPeers[cid] || {};
       var usedColors = peers.map(function(p){ return p.color; });
       var col = d.color || lobby.color || PC.find(function(c){ return usedColors.indexOf(c)<0; }) || PC[1];
-      var initLen = d.l || Math.round(15/SEG_MULT); // match real starting size
+      var initLen = d.l || 100; // MS START_SIZE=100 default
       delete _processedDies[cid]; // respawn — reset so their new death is tracked fresh
       delete _recentLeaves[cid];  // allow this new session's pos messages through
       var _rpJoinTs = Date.now();
@@ -3555,10 +3556,10 @@ function _wsHandleMsg(msg, fromAbly) {
         velX: 0, velY: 0, lastT: performance.now()
       };
       rp.headR = snakeRadius(rp);
-      var initSegs = Math.max(Math.min(initLen * SEG_MULT, 120), 120);
-      // Spread segments backward along the peer's angle so the snake looks full-size immediately
+      var initSegs = segmentsForSize(initLen||100);
+      // Spread segments backward at POINT_DIST spacing so snake looks correct immediately
       var _ia = d.a || 0;
-      for (var i=0; i<initSegs; i++) rp.segs.push({x: d.x - Math.cos(_ia)*i*2, y: d.y - Math.sin(_ia)*i*2});
+      for (var i=0; i<initSegs; i++) rp.segs.push({x: d.x - Math.cos(_ia)*i*POINT_DIST, y: d.y - Math.sin(_ia)*i*POINT_DIST});
       _remoteMap[cid] = rp;
       peers.push(rp);
       _updateArenaSize(); // world grows when a new player enters
@@ -3581,9 +3582,9 @@ function _wsHandleMsg(msg, fromAbly) {
         clearTimeout(rp._dtClear);
         rp._dtClear = setTimeout(function(){ if(_processedDies[_cid3]===true) delete _processedDies[_cid3]; }, 500);
         var _rja = d.a || 0;
-        var _rjn = Math.min((d.l || Math.round(15/SEG_MULT)) * SEG_MULT, 120);
+        var _rjn = segmentsForSize(d.l||100);
         for (var _rji=0; _rji<_rjn; _rji++)
-          rp.segs.push({x: d.x - Math.cos(_rja)*_rji*2, y: d.y - Math.sin(_rja)*_rji*2});
+          rp.segs.push({x: d.x - Math.cos(_rja)*_rji*POINT_DIST, y: d.y - Math.sin(_rja)*_rji*POINT_DIST});
       }
       var dt2  = Math.max(16, now2 - (rp.lastT || now2 - 20));
       rp.velX  = (d.x - rp.targetX) / dt2;
@@ -3595,7 +3596,7 @@ function _wsHandleMsg(msg, fromAbly) {
       // Target history: actual broadcast positions (no LERP lag) used for collision detection.
       if(!rp.th) rp.th=[];
       rp.th.unshift({x:d.x,y:d.y});
-      var _thCap=Math.max((rp.length||10)*SEG_MULT,15);
+      var _thCap=Math.max(segmentsForSize(rp.length||100)+10,15);
       if(rp.th.length>_thCap) rp.th.length=_thCap;
       if (d.v === false) {
         if (!_processedDies[cid]) {
@@ -4417,8 +4418,8 @@ function _ctSpawnBots(n){
       name:'BOT'+(i+1),color:'#ff6a00',widthBonus:0,boosting:false,
       _isCtBot:true,_botMode:_ctBotMode,_circleDir:(Math.random()<0.5?1:-1),
       spawnTs:Date.now()};
-    for(var k=0;k<Math.max(bot.length*SEG_MULT,250);k++)
-      bot.segs.push({x:bx-Math.cos(ba)*k*0.5,y:by-Math.sin(ba)*k*0.5});
+    for(var k=0;k<segmentsForSize(bot.length||40)+60;k++)
+      bot.segs.push({x:bx-Math.cos(ba)*k*POINT_DIST,y:by-Math.sin(ba)*k*POINT_DIST});
     _ctBots.push(bot);
   }
   toast('Spawned '+n+' '+_ctBotMode+' bot'+(n>1?'s':''),'info');
@@ -4773,7 +4774,7 @@ function launchGame() {
     saveSession();
   }
   spawnPlayer();
-  if(player) _smoothLen=player.segs.length; // zoom starts at actual snake size — no mismatch
+  if(player) _smoothLen=player.length; // zoom starts at actual snake size — no mismatch
   // No AI bots — remote players come entirely via Ably
   peers = peers.filter(function(p){ return p.isRemote&&p.alive; });
   // Seed 35 orbs near the map center, then fill the rest randomly
@@ -4817,22 +4818,20 @@ function launchGame() {
   updateLB(); loop();
 }
 
-function mkSnake(x,y,color,name,isMe,startSegs){
-  var initSegs = startSegs || 100;               // default 100 raw segments = size 25 (25 * SEG_MULT 4)
-  var _initDraw=initSegs; var segs=[]; for(var i=0;i<_initDraw;i++) segs.push({x:x-i*2,y:y});
-  var initLen  = Math.round(_initDraw/SEG_MULT); // length aligned to seg count from the start
-  var _initHeadR=8+Math.pow(initLen*5,0.6)*0.8;
+function mkSnake(x,y,color,name,isMe,startLength){
+  var initLen = startLength || 100;              // MS START_SIZE=100 default
+  var initSegCount = segmentsForSize(initLen);   // number of body segments MS would show
+  var segs=[]; for(var i=0;i<initSegCount;i++) segs.push({x:x-i*POINT_DIST,y:y});
+  var _initHeadR=thicknessForSegments(initSegCount);
   return{x:x,y:y,segs:segs,angle:0,color:color,name:name,isMe:isMe,speed:BASE_SPEED,
-         headR:_initHeadR,length:initLen,widthBonus:0,score:0,alive:true};
+         headR:_initHeadR,length:initLen,widthBonus:0,score:0,alive:true,_segAccum:0};
 }
-function getMaxSegs(){ return 325; }
+function getMaxSegs(){ return 600; }
 function grow(s){
-  // Width grows with every food item — immediate visual feedback, even while boosting
-  s.widthBonus = (s.widthBonus||0) + 0.60; // faster width growth
-  // Length grows every orb when not boosting
+  s.widthBonus = (s.widthBonus||0) + 0.60;
   if(s.isMe && boosting) return;
-  if(s.isMe && s.segs.length >= getMaxSegs()) return;
-  var l=s.segs[s.segs.length-1]; s.segs.push({x:l.x,y:l.y}); s.length++;
+  if(s.length >= 999) return; // absolute size cap
+  s.length = (s.length||40) + 1;
 }
 function spawnPlayer(){
   var cx=WORLD/2, cy=WORLD/2, sx, sy;
@@ -4854,17 +4853,8 @@ function spawnPlayer(){
   }
   sx=bestX; sy=bestY;
   var pn=userProfile?userProfile.name.split(' ')[0].slice(0,14):'YOU';
-  // Mid-match size: start at the average live peer length so new joiners aren't tiny
-  var _startSegs=160; // size 40 default (40 * SEG_MULT 4 = 160 segs)
-  if(_livePeers.length>0){
-    var _avgSegs=Math.round(_livePeers.reduce(function(s,p){return s+p.length*SEG_MULT;},0)/_livePeers.length);
-    _startSegs=Math.max(160,Math.min(_avgSegs,325));
-  } else if(_preRejoinAvgSegs>15){
-    // peers[] is empty on rejoin (cleared by _wsJoin) — use snapshot taken before the clear
-    _startSegs=_preRejoinAvgSegs;
-  }
-  _preRejoinAvgSegs=0; // consumed — reset so a fresh first-join isn't affected
-  player=mkSnake(sx,sy,_playerColor,pn,true,_startSegs);
+  _preRejoinAvgSegs=0; // reset — spawn always at MS START_SIZE=100
+  player=mkSnake(sx,sy,_playerColor,pn,true,100); // MoneySlither START_SIZE=100
   player.skin=_activeSkin;
   player.spawnTs=Date.now(); // grace period start — immune for 3s after spawn
 }
@@ -5075,7 +5065,7 @@ async function triggerCashout(){
     var flash=document.getElementById('cashoutFlash'); if(flash){ flash.style.opacity='1'; setTimeout(function(){ flash.style.opacity='0'; },400); }
     cleanupL();
     ['cashoutHud','pingEl','hudTierBadge','activeLobbyBadge','chatBox'].forEach(function(id){ var el=document.getElementById(id); if(el) el.style.display='none'; }); _closeChat();
-    var coMsg=document.getElementById('coMsg'); if(coMsg) coMsg.textContent='Free Play · Score:'+score+' · Size:'+player.segs.length+' · Kills:'+myKills;
+    var coMsg=document.getElementById('coMsg'); if(coMsg) coMsg.textContent='Free Play · Score:'+score+' · Size:'+player.length+' · Kills:'+myKills;
     var coAmt=document.getElementById('coAmt'); if(coAmt) coAmt.textContent='Practice round — no SOL wagered';
     var coFees=document.getElementById('coFees'); if(coFees) coFees.innerHTML='<div class="pf-row" style="justify-content:center;color:var(--dim)">Enter a paid lobby to earn real SOL</div>';
     hideAll(); var ov=document.getElementById('ovCashout'); if(ov) ov.classList.remove('hidden');
@@ -5118,7 +5108,7 @@ async function triggerCashout(){
   if(W.pubkey){ setTimeout(function(){ refreshBalance(null); }, 1500); }
   cleanupL();
   ['cashoutHud','pingEl','hudTierBadge','activeLobbyBadge','chatBox'].forEach(function(id){ var el=document.getElementById(id); if(el) el.style.display='none'; }); _closeChat();
-  var coMsg=document.getElementById('coMsg'); if(coMsg) coMsg.textContent=t.name+' · Kills:'+myKills+' · Score:'+score+' · Size:'+player.segs.length;
+  var coMsg=document.getElementById('coMsg'); if(coMsg) coMsg.textContent=t.name+' · Kills:'+myKills+' · Score:'+score+' · Size:'+player.length;
   var coAmt=document.getElementById('coAmt');
   var _entrySOL = t.sol || 0;
   var _killEarn = killSOL || 0;
@@ -5291,8 +5281,10 @@ function update(_dt){
           var _sda=_st.targetAngle-_st.angle;
           while(_sda>Math.PI)_sda-=Math.PI*2; while(_sda<-Math.PI)_sda+=Math.PI*2;
           _st.angle+=_sda*_LERP;
-          _st.segs.unshift({x:_st.x,y:_st.y});
-          var _smaxS=Math.max(_st.length*SEG_MULT,250); if(_st.segs.length>_smaxS)_st.segs.length=_smaxS;
+          _st._segAccum=(_st._segAccum||0)+Math.hypot(_st.x-(_st._lpx||_st.x),_st.y-(_st._lpy||_st.y));
+          _st._lpx=_st.x; _st._lpy=_st.y;
+          if(_st._segAccum>=POINT_DIST){ _st._segAccum-=POINT_DIST; _st.segs.unshift({x:_st.x,y:_st.y}); }
+          var _smaxS=segmentsForSize(_st.length||40)+60; if(_st.segs.length>_smaxS)_st.segs.length=_smaxS;
         }
         camX=_st.x; camY=_st.y;
       } else {
@@ -5352,9 +5344,8 @@ function update(_dt){
   }
   // No passive recharge — boost refills only from eating orbs or getting kills
   moveS(player, player.angle, spd);
-  // Enforce exact segment count — moveS only pops once per frame, but we may need to pop
-  // many (e.g. after a length decrement of 1 logical unit = 4 segments drop in target).
-  var _tgt = Math.max(player.length * SEG_MULT, 250);
+  // Enforce segment cap — trim if length decreased (e.g. boost shrink)
+  var _tgt = segmentsForSize(player.length||40) + 60;
   while(player.segs.length > _tgt) player.segs.pop();
 
   player.headR = snakeRadius(player); // unified radius: matches hitbox and body visual
@@ -5380,10 +5371,11 @@ function update(_dt){
       var da2=p.targetAngle-p.angle;
       while(da2>Math.PI) da2-=Math.PI*2; while(da2<-Math.PI) da2+=Math.PI*2;
       p.angle += da2*_la;
-      p.segs.unshift({x:p.x,y:p.y});
-      // maxS uses base length unit × SEG_MULT (d.l is now base unit, no double-multiply)
-      var maxS=Math.max(p.length*SEG_MULT, 250);
-      if(p.segs.length>maxS) p.segs.length=maxS; // O(1) truncation — replaces O(n) while+pop
+      p._segAccum=(p._segAccum||0)+Math.hypot(p.x-(p._lpx||p.x),p.y-(p._lpy||p.y));
+      p._lpx=p.x; p._lpy=p.y;
+      if(p._segAccum>=POINT_DIST){ p._segAccum-=POINT_DIST; p.segs.unshift({x:p.x,y:p.y}); }
+      var maxS=segmentsForSize(p.length||40)+60;
+      if(p.segs.length>maxS) p.segs.length=maxS;
     }
     // CT bots move separately — only real remote players exist in peers[]
   }
@@ -5392,13 +5384,10 @@ function update(_dt){
   eatFood(); killCheck(); _ctKillCheck(); checkMoneyDrops();
   // Replenish food — cap at 5 spawns/frame to avoid a spike when many items are eaten at once
   var _fAdd=0; while(food.length<MAX_FOOD&&_fAdd<5){ addFood(); _fAdd++; }
-  // Enforce dynamic max-length cap (based on SOL balance) — trims if balance dropped
+  // Enforce absolute max-segs cap
   if(player && player.alive){
     var _maxS = getMaxSegs();
-    if(player.segs.length > _maxS){
-      player.segs.length = _maxS;
-      player.length = Math.round(_maxS / SEG_MULT);
-    }
+    if(player.segs.length > _maxS) player.segs.length = _maxS;
   }
 
   var len=player.length; // used by HUD below (logical length unit, not raw seg count)
@@ -5429,9 +5418,20 @@ function update(_dt){
 
 function moveS(s,angle,spd){
   s.angle=angle;
-  s.x=((s.x+Math.cos(angle)*spd)%WORLD+WORLD)%WORLD;
-  s.y=((s.y+Math.sin(angle)*spd)%WORLD+WORLD)%WORLD;
-  s.segs.unshift({x:s.x,y:s.y}); if(s.segs.length>Math.max(s.length*SEG_MULT,250)) s.segs.pop();
+  var _cx=Math.cos(angle), _cy=Math.sin(angle);
+  var px=s.x, py=s.y;
+  s.x=((px+_cx*spd)%WORLD+WORLD)%WORLD;
+  s.y=((py+_cy*spd)%WORLD+WORLD)%WORLD;
+  // Add body segments at POINT_DIST (1.6 wu) intervals — matches MoneySlither exactly
+  var d0=s._segAccum||0, total=d0+spd;
+  var newK=Math.floor(total/POINT_DIST);
+  var _maxS=Math.max(segmentsForSize(s.length||40)+60,80);
+  for(var j=1;j<=newK;j++){
+    var t=(j*POINT_DIST-d0)/spd; // fraction into current frame where this seg falls
+    var sx=((px+_cx*spd*t)%WORLD+WORLD)%WORLD, sy=((py+_cy*spd*t)%WORLD+WORLD)%WORLD;
+    s.segs.unshift({x:sx,y:sy}); if(s.segs.length>_maxS) s.segs.pop();
+  }
+  s._segAccum=total-newK*POINT_DIST; // remainder (always < POINT_DIST)
 }
 
 /* updatePeer removed — no AI bots in this game */
@@ -5605,8 +5605,8 @@ function killCheck(){
       // Neither facing (tangential side-graze) — fall through to body check
     }
 
-    // My head vs their body — 360° full body, all segments (MS style)
-    for(var j=1;j<p.segs.length;j++){
+    // My head vs their body — skip segs 1-2 (adjacent to head, prevent desync false-kills)
+    for(var j=3;j<p.segs.length;j++){
       var bs=p.segs[j]; if(!bs) break;
       var _dx=player.x-bs.x, _dy=player.y-bs.y;
       if(_dx*_dx+_dy*_dy < bodyCombR2){
@@ -5625,7 +5625,7 @@ function killCheck(){
     var rpR=snakeRadius(rp2);
     var rCombR=rpR+myBodyR, rCombR2=rCombR*rCombR;
     if(dst(player.x,player.y,rpx,rpy)<(rpR+myR)*1.07) continue; // H2H handled above
-    for(var rk=1;rk<player.segs.length;rk++){
+    for(var rk=3;rk<player.segs.length;rk++){
       var rsa=player.segs[rk]; if(!rsa) break;
       var _rdx=rpx-rsa.x, _rdy=rpy-rsa.y;
       if(_rdx*_rdx+_rdy*_rdy < rCombR2){
@@ -5692,7 +5692,7 @@ function _doDropTransfer(claimerPubkey, solAmt){
 // broadcast=true → also send positions to all clients via WS so everyone sees the loot.
 function _scatterDeathFood(segs, snakeLen, broadcast){
   if(!segs||segs.length<1) return;
-  var _dfMax=Math.max(30, Math.min((snakeLen||10)*SEG_MULT, 120)*4);
+  var _dfMax=Math.max(30, segmentsForSize(snakeLen||40)*8);
   var _dfStep=7, _dfNext=0, _dfCum=0;
   var _dfPx=segs[0].x, _dfPy=segs[0].y;
   var _bcast=broadcast?[]:null;
@@ -6085,13 +6085,14 @@ function drawS(s){
   var W2SX=function(wx){ return (wx-s.x)*Z+hx; };
   var W2SY=function(wy){ return (wy-s.y)*Z+hy; };
 
-  // MS-exact radius: world units → screen px; visual and hitbox now match
-  var _Rw = snakeRadius(s);                          // world-unit radius (same as killCheck)
+  // Visual radius: pure MS thicknessForSegments (no hitbox ×1.20 scale)
+  var _Rw = thicknessForSegments(segmentsForSize(s.length||40)); // visual world-unit radius
   var R   = _Rw * Z;                                // screen-px radius at current zoom
   var BW  = R*1.9;                                  // body stroke width in screen px
-  // Use every segment directly — no resampling, eliminates bezier arc wobble when circling
+  // Display exactly segmentsForSize(length) body segments — matches MoneySlither tail length
+  var _maxDraw = segmentsForSize(s.length||40);
   var pts=[{x:hx,y:hy}];
-  for(var i=1;i<s.segs.length;i++){
+  for(var i=1;i<s.segs.length&&i<_maxDraw;i++){
     var _sg=s.segs[i]; if(!_sg) break;
     pts.push({x:W2SX(_sg.x),y:W2SY(_sg.y)});
   }
@@ -7336,8 +7337,8 @@ function spawnPt(x,y,color){ for(var i=0;i<6;i++) parts.push({x:x,y:y,vx:(Math.r
 function updateLB(){
   if(!gameRunning) return;
   // Leaderboard sorted by snake length (skill metric, not score)
-  var entries=[]; if(player&&player.alive) entries.push({name:'YOU',score:player.segs.length,color:player.color});
-  for(var i=0;i<peers.length;i++) if(peers[i].alive) entries.push({name:peers[i].name,score:peers[i].segs.length,color:peers[i].color});
+  var entries=[]; if(player&&player.alive) entries.push({name:'YOU',score:player.length,color:player.color});
+  for(var i=0;i<peers.length;i++) if(peers[i].alive) entries.push({name:peers[i].name,score:peers[i].length,color:peers[i].color});
   entries.sort(function(a,b){return b.score-a.score;});
   var lb=document.getElementById('leaderboard');
   if(lb) lb.innerHTML=entries.slice(0,8).map(function(e,idx){ return '<div class="lb-item"><span class="lb-rank '+(idx<3?['r1','r2','r3'][idx]:'')+'">'+( idx+1)+'</span><div class="lb-dot" style="background:'+e.color+';box-shadow:0 0 4px '+e.color+'"></div><span class="lb-name" style="color:'+(e.name==='YOU'?'var(--green)':'var(--text)')+'">'+e.name+'</span><span class="lb-score">'+e.score+'</span></div>'; }).join('');
