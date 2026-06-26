@@ -5973,7 +5973,8 @@ function draw(){
     // My body kill zone tube
     var _mSegs=player.segs, _mAccWu=0;
     if(_mSegs.length>2 && _mSegs[1]){
-      ctx.globalAlpha=0.22; ctx.strokeStyle='#14F195';
+      ctx.globalAlpha=0.35; ctx.strokeStyle='#14F195';
+      ctx.shadowColor='#14F195'; ctx.shadowBlur=6;
       ctx.lineWidth=_myRs*2; ctx.lineJoin='round'; ctx.lineCap='round';
       ctx.beginPath(); ctx.moveTo(_dW2X(_mSegs[1].x),_dW2Y(_mSegs[1].y));
       for(var _mi=2;_mi<_mSegs.length;_mi++){
@@ -5983,10 +5984,13 @@ function draw(){
         ctx.lineTo(_dW2X(_ms.x),_dW2Y(_ms.y));
       }
       ctx.stroke();
+      ctx.shadowBlur=0;
     }
-    // My head circle
-    ctx.globalAlpha=0.85; ctx.strokeStyle='#14F195'; ctx.lineWidth=2;
+    // My head circle — glow so it's visible even at small radius
+    ctx.shadowColor='#14F195'; ctx.shadowBlur=10;
+    ctx.globalAlpha=1.0; ctx.strokeStyle='#14F195'; ctx.lineWidth=3;
     ctx.beginPath(); ctx.arc(_hx,_hy,_myRs,0,Math.PI*2); ctx.stroke();
+    ctx.shadowBlur=0;
     // Spawn protection ring
     if(_dNow-(player.spawnTs||0)<1500){
       ctx.globalAlpha=0.7; ctx.strokeStyle='#FFD700'; ctx.lineWidth=3;
@@ -6009,7 +6013,8 @@ function draw(){
       // Peer body kill zone tube
       var _dps=_dp.segs, _dpAccWu=0;
       if(_dps.length>2 && _dps[1]){
-        ctx.globalAlpha=0.22; ctx.strokeStyle=_pc;
+        ctx.globalAlpha=0.35; ctx.strokeStyle=_pc;
+        ctx.shadowColor=_pc; ctx.shadowBlur=6;
         ctx.lineWidth=_dpRs*2; ctx.lineJoin='round'; ctx.lineCap='round';
         ctx.beginPath(); ctx.moveTo(_dW2X(_dps[1].x),_dW2Y(_dps[1].y));
         for(var _dj=2;_dj<_dps.length;_dj++){
@@ -6019,15 +6024,18 @@ function draw(){
           ctx.lineTo(_dW2X(_dps2.x),_dW2Y(_dps2.y));
         }
         ctx.stroke();
+        ctx.shadowBlur=0;
       }
       // Head-on threshold ring
-      ctx.globalAlpha=0.3; ctx.strokeStyle='#FF8800'; ctx.lineWidth=1;
+      ctx.globalAlpha=0.4; ctx.strokeStyle='#FF8800'; ctx.lineWidth=1.5;
       ctx.setLineDash([5,3]);
       ctx.beginPath(); ctx.arc(_phx,_phy,(_myRw+_dpRw),0,Math.PI*2); ctx.stroke();
       ctx.setLineDash([]);
-      // Peer head circle
-      ctx.globalAlpha=0.85; ctx.strokeStyle=_pc; ctx.lineWidth=2;
+      // Peer head circle — glow
+      ctx.shadowColor=_pc; ctx.shadowBlur=10;
+      ctx.globalAlpha=1.0; ctx.strokeStyle=_pc; ctx.lineWidth=3;
       ctx.beginPath(); ctx.arc(_phx,_phy,_dpRs,0,Math.PI*2); ctx.stroke();
+      ctx.shadowBlur=0;
     }
     ctx.globalAlpha=1;
     ctx.restore();
