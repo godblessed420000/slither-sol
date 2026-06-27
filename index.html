@@ -4930,9 +4930,9 @@ function launchGame() {
   gc.addEventListener('mousedown',  _boostOn);
   window.addEventListener('mouseup',    _boostOff);          // catches release anywhere on page
   window.addEventListener('blur',       _boostOff);          // tab switch / alt-tab
-  gc.addEventListener('touchstart', _boostOn,  {passive:true});
-  gc.addEventListener('touchend',   _boostOff, {passive:true});
-  gc.addEventListener('touchcancel',_boostOff, {passive:true}); // OS interrupt / swipe away
+  gc.addEventListener('touchstart', function(e){ if(e.touches.length>1){e.preventDefault();return;} _boostOn(e); }, {passive:false});
+  gc.addEventListener('touchend',   _boostOff, {passive:false});
+  gc.addEventListener('touchcancel',_boostOff, {passive:false}); // OS interrupt / swipe away
   _cacheHudEls(); // cache all HUD refs once — avoids getElementById each frame
   lbInt=setInterval(updateLB,1200); // leaderboard update — 1.2s is plenty (was 800ms)
   _wsPingLoop(); // start real RTT measurement (was never called before — was showing fake ping)
@@ -5125,19 +5125,13 @@ function _initJoystick(){
     }
   },{passive:false});
 
-  // ── Pinch-to-zoom on the game canvas ──────────
+  // ── Pinch blocked on game canvas ──────────
   gc.addEventListener('touchstart',function(e){
-    if(e.touches.length===2){
-      var dx=e.touches[0].clientX-e.touches[1].clientX;
-      var dy=e.touches[0].clientY-e.touches[1].clientY;
-      _pinchDist=Math.sqrt(dx*dx+dy*dy);
-      boosting=false; // cancel boost that may have started on first touch
-    } else {
-      _pinchDist=null;
-    }
-  },{passive:true});
-  gc.addEventListener('touchend',  function(){ _pinchDist=null; },{passive:true});
-  gc.addEventListener('touchcancel',function(){ _pinchDist=null; },{passive:true});
+    if(e.touches.length>1){ e.preventDefault(); _pinchDist=null; boosting=false; return; }
+    _pinchDist=null;
+  },{passive:false});
+  gc.addEventListener('touchend',  function(){ _pinchDist=null; },{passive:false});
+  gc.addEventListener('touchcancel',function(){ _pinchDist=null; },{passive:false});
 }
 
 function _joyMoveKnob(cx,cy,knob){
@@ -8809,12 +8803,12 @@ async function _fetchSolPrice() {
 }
 setInterval(_fetchSolPrice, 30000); // refresh every 30 s
 
-// Block pinch-to-zoom on mobile (iOS ignores viewport user-scalable=no since iOS 10)
-document.addEventListener('gesturestart',  function(e){ e.preventDefault(); }, {passive:false});
-document.addEventListener('gesturechange', function(e){ e.preventDefault(); }, {passive:false});
-document.addEventListener('gestureend',    function(e){ e.preventDefault(); }, {passive:false});
-document.addEventListener('touchstart', function(e){ if(e.touches&&e.touches.length>1) e.preventDefault(); }, {passive:false});
-document.addEventListener('touchmove',  function(e){ if(e.touches&&e.touches.length>1) e.preventDefault(); }, {passive:false});
+// Block pinch-to-zoom on mobile — capture phase fires before any element handler
+document.addEventListener('gesturestart',  function(e){ e.preventDefault(); }, {passive:false, capture:true});
+document.addEventListener('gesturechange', function(e){ e.preventDefault(); }, {passive:false, capture:true});
+document.addEventListener('gestureend',    function(e){ e.preventDefault(); }, {passive:false, capture:true});
+document.addEventListener('touchstart', function(e){ if(e.touches&&e.touches.length>1) e.preventDefault(); }, {passive:false, capture:true});
+document.addEventListener('touchmove',  function(e){ if(e.touches&&e.touches.length>1) e.preventDefault(); }, {passive:false, capture:true});
 
 window.addEventListener('load', function() {
   _fetchSolPrice(); // immediate fetch on page load
