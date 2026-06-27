@@ -4868,8 +4868,8 @@ function spawnPlayer(){
   }
   sx=bestX; sy=bestY;
   var pn=userProfile?userProfile.name.split(' ')[0].slice(0,14):'YOU';
-  _preRejoinAvgSegs=0; // reset — spawn always at MS START_SIZE=100
-  player=mkSnake(sx,sy,_playerColor,pn,true,100); // MoneySlither START_SIZE=100
+  _preRejoinAvgSegs=0; // reset
+  player=mkSnake(sx,sy,_playerColor,pn,true,200); // start a bit longer
   player.skin=_activeSkin;
   player.spawnTs=Date.now(); // grace period start — immune for 3s after spawn
 }
