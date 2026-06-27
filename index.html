@@ -524,6 +524,14 @@ canvas{display:block;width:100%;height:100%;}
 .cancel-1v1{padding:11px;border-radius:10px;border:1px solid var(--border);background:transparent;color:var(--dim);font-family:'Orbitron',monospace;font-size:.6rem;cursor:pointer;letter-spacing:1px;}
 .confirm-1v1{padding:11px;border-radius:10px;border:none;background:linear-gradient(135deg,#a020f0,#ff2d9b);color:#fff;font-family:'Orbitron',monospace;font-size:.6rem;font-weight:700;cursor:pointer;letter-spacing:1px;transition:opacity .15s;}
 .confirm-1v1:disabled{opacity:.4;cursor:not-allowed;}
+/* SET BOUNTY landing */
+.sb-landing{display:flex;flex-direction:column;align-items:center;gap:20px;padding:10px 0;}
+.sb-card{width:100%;background:rgba(10,6,28,.85);border:2px dashed rgba(160,32,240,.55);border-radius:18px;padding:38px 20px 30px;display:flex;flex-direction:column;align-items:center;gap:14px;cursor:pointer;transition:border-color .2s,box-shadow .2s;}
+.sb-card:hover{border-color:#a020f0;box-shadow:0 0 30px rgba(160,32,240,.35);}
+.sb-icon{width:80px;height:80px;border-radius:22px;background:rgba(160,32,240,.18);display:flex;align-items:center;justify-content:center;box-shadow:0 0 40px rgba(160,32,240,.6),0 0 80px rgba(160,32,240,.25);font-size:2.2rem;position:relative;}
+.sb-icon::after{content:'';position:absolute;inset:-6px;border-radius:28px;background:radial-gradient(circle,rgba(160,32,240,.25) 0%,transparent 70%);}
+.sb-title{font-family:'Orbitron',monospace;font-size:.85rem;font-weight:900;letter-spacing:3px;color:#fff;}
+.sb-desc{font-size:.58rem;color:var(--dim);letter-spacing:.5px;text-align:center;line-height:1.6;}
 
 /* ══ SERVER CARDS ══ */
 .server-card{flex:1;background:var(--panel);border:2px solid var(--border);border-radius:7px;padding:5px 6px;display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;transition:border-color .2s,box-shadow .2s,transform .15s;}
@@ -8463,13 +8471,22 @@ var _1v1Stake=1, _1v1Dur=60;
 
 function open1v1(){
   var m=document.getElementById('modal1v1'); if(m) m.classList.remove('hidden');
+  _back1v1Step1();
+}
+function close1v1(){
+  var m=document.getElementById('modal1v1'); if(m) m.classList.add('hidden');
+}
+function _back1v1Step1(){
+  var s1=document.getElementById('1v1Step1'); if(s1) s1.style.display='flex';
+  var s2=document.getElementById('1v1Step2'); if(s2) s2.style.display='none';
+}
+function _go1v1Step2(){
+  var s1=document.getElementById('1v1Step1'); if(s1) s1.style.display='none';
+  var s2=document.getElementById('1v1Step2'); if(s2) s2.style.display='flex';
   _sel1v1Stake(1); _sel1v1Dur(60);
   var chk=document.getElementById('chk1v1'); if(chk) chk.checked=false;
   var inp=document.getElementById('s1v1-custom'); if(inp) inp.value='';
   _upd1v1Btn();
-}
-function close1v1(){
-  var m=document.getElementById('modal1v1'); if(m) m.classList.add('hidden');
 }
 function _sel1v1Stake(amt){
   _1v1Stake=amt;
@@ -9041,8 +9058,21 @@ window.addEventListener('load', function() {
   <div class="box-1v1">
     <div class="hdr-1v1">
       <h2>⚔️ 1V1 ME BRO</h2>
-      <p>POST YOUR RUN</p>
+      <p>CHALLENGE MODE</p>
     </div>
+
+    <!-- STEP 1: SET BOUNTY landing -->
+    <div class="sb-landing" id="1v1Step1">
+      <div class="sb-card" onclick="_go1v1Step2()">
+        <div class="sb-icon">➕</div>
+        <div class="sb-title">SET BOUNTY</div>
+        <div class="sb-desc">Play a run, post your score,<br>set the stake</div>
+      </div>
+      <button class="cancel-1v1" style="width:100%" onclick="close1v1()">CANCEL</button>
+    </div>
+
+    <!-- STEP 2: Stake / Duration setup -->
+    <div id="1v1Step2" style="display:none;flex-direction:column;gap:16px">
     <div>
       <div class="lbl-1v1">STAKE</div>
       <div class="stake-grid">
@@ -9071,9 +9101,10 @@ window.addEventListener('load', function() {
       I understand my score is final
     </label>
     <div class="btns-1v1">
-      <button class="cancel-1v1" onclick="close1v1()">CANCEL</button>
+      <button class="cancel-1v1" onclick="_back1v1Step1()">BACK</button>
       <button class="confirm-1v1" id="confirm1v1Btn" disabled onclick="_confirm1v1()">CONFIRM $1 · 1MIN</button>
     </div>
+    </div><!-- end step2 -->
   </div>
 </div>
 
