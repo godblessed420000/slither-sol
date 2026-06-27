@@ -5893,14 +5893,14 @@ function draw(){
   // ── Dark base (arena interior) ────────────────────────────────────────────
   ctx.fillStyle='#0f0f0f';
   ctx.fillRect(vx1,vy1,vx2-vx1,vy2-vy1);
-  // ── Hexagonal honeycomb grid — always drawn so zooming out never looks black ─
-  // Fade hex contrast at low zoom so tiny hexagons don't look noisy.
+  // ── Hexagonal honeycomb grid — always visible at any zoom ────────────────────
+  // lineWidth is in world-space coords, so dividing by CAM_ZOOM keeps lines a
+  // constant 1.2px on screen. Fill at full opacity so cells stay visible when zoomed out.
   {
     var _hR=35, _hH=_hR*Math.sqrt(3), _hCS=_hR*1.5;
-    var _hAlpha=Math.max(0.25, Math.min(1.0, (CAM_ZOOM-0.25)/0.35)); // fade in from zoom 0.25→0.60
-    ctx.fillStyle='rgba(26,26,26,'+_hAlpha+')';
-    ctx.strokeStyle='rgba(10,10,10,'+_hAlpha+')';
-    ctx.lineWidth=Math.max(0.5, 1.5*CAM_ZOOM); // thinner lines at low zoom
+    ctx.fillStyle='#1a1a1a';          // full-opacity fill: contrast = 11 against #0f0f0f
+    ctx.strokeStyle='#262626';        // brighter stroke: contrast = 23 — always legible
+    ctx.lineWidth=1.2/CAM_ZOOM;       // constant 1.2 screen-px wide regardless of zoom
     ctx.beginPath();
     for(var _hc=Math.floor(vx1/_hCS)-1; _hc<=Math.ceil(vx2/_hCS)+1; _hc++){
       var _hx=_hc*_hCS, _hOff=(_hc&1)?_hH*0.5:0;
