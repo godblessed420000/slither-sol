@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <!-- Cache-busting: force browser to always fetch the latest version from the server -->
 <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0">
 <meta http-equiv="Pragma"        content="no-cache">
@@ -8807,6 +8807,10 @@ async function _fetchSolPrice() {
   }
 }
 setInterval(_fetchSolPrice, 30000); // refresh every 30 s
+
+// Block pinch-to-zoom on mobile
+document.addEventListener('gesturestart', function(e){ e.preventDefault(); }, {passive:false});
+document.addEventListener('touchmove', function(e){ if(e.touches&&e.touches.length>1) e.preventDefault(); }, {passive:false});
 
 window.addEventListener('load', function() {
   _fetchSolPrice(); // immediate fetch on page load
