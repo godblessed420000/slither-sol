@@ -731,6 +731,66 @@ canvas{display:block;width:100%;height:100%;}
 #ct-panel .ct-btn:hover{background:#ff6a0018;}
 #ct-panel .ct-btn.active{background:#ff6a00;color:#000;}
 #ct-panel .ct-footer{font-size:.57rem;color:#383838;text-align:center;margin-top:10px;}
+
+/* ══ 3-COLUMN MAIN MENU ══ */
+#ovStart{justify-content:center;align-items:center;padding:12px 16px;}
+#menuLayout{display:grid;grid-template-columns:240px 1fr 250px;gap:12px;width:100%;max-width:1080px;height:calc(100vh - 80px);max-height:680px;align-items:start;}
+.menu3-col{display:flex;flex-direction:column;gap:10px;height:100%;}
+.menu3-center{display:flex;flex-direction:column;align-items:center;gap:10px;}
+.m3card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:8px;}
+.m3card-hdr{display:flex;align-items:center;gap:7px;font-family:'Orbitron',monospace;font-size:.6rem;font-weight:700;color:var(--text);text-transform:uppercase;letter-spacing:1px;padding-bottom:6px;border-bottom:1px solid var(--border);}
+.m3-live-dot{margin-left:auto;color:var(--green);font-size:.55rem;animation:titleFlash 1.8s ease-in-out infinite;}
+.m3-playing-chip{margin-left:auto;background:rgba(20,241,149,.12);border:1px solid rgba(20,241,149,.3);color:var(--green);font-size:.48rem;padding:2px 7px;border-radius:10px;font-family:'Orbitron',monospace;}
+.m3-icon-btn{background:transparent;border:none;color:var(--dim);font-size:.52rem;cursor:pointer;font-family:'Orbitron',monospace;letter-spacing:.5px;}
+.m3-icon-btn:hover{color:var(--green);}
+.m3-outline-btn{background:transparent;border:1px solid var(--border);color:var(--dim);border-radius:5px;padding:6px 10px;font-family:'Orbitron',monospace;font-size:.5rem;cursor:pointer;text-align:center;transition:border-color .15s,color .15s;}
+.m3-outline-btn:hover{border-color:var(--green);color:var(--green);}
+.m3-lb-list{display:flex;flex-direction:column;gap:4px;min-height:48px;}
+.m3-lb-row{display:flex;align-items:center;gap:7px;font-size:.62rem;padding:3px 4px;border-radius:5px;}
+.m3-lb-row:hover{background:rgba(215,215,215,.03);}
+.m3-lb-rank{width:16px;text-align:center;font-size:.58rem;color:var(--dim);}
+.m3-lb-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+.m3-lb-name{flex:1;color:var(--text);}
+.m3-lb-earn{color:var(--gold);font-size:.6rem;font-family:'Orbitron',monospace;}
+.m3-empty-msg{font-size:.58rem;color:var(--dim);padding:6px 0;font-style:italic;}
+.m3-section-lbl{font-size:.5rem;color:var(--purple);text-transform:uppercase;letter-spacing:1.5px;font-family:'Orbitron',monospace;margin-top:2px;}
+.m3-friends-list{display:flex;flex-direction:column;gap:3px;flex:1;min-height:20px;}
+.m3-friend-row{display:flex;align-items:center;gap:6px;font-size:.6rem;padding:3px 4px;border-radius:5px;}
+.m3-friend-row:hover{background:rgba(215,215,215,.03);}
+.m3-friend-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+.m3-friend-name{flex:1;color:var(--text);}
+.m3-friend-tier{font-size:.48rem;color:var(--dim);}
+/* Center column */
+.m3-logo{font-family:'Orbitron',monospace;font-size:2rem;font-weight:900;color:#fff;letter-spacing:4px;text-shadow:0 0 24px rgba(255,255,255,.2);line-height:1;}
+.m3-logo-sol{background:linear-gradient(90deg,var(--purple),var(--green));-webkit-background-clip:text;-webkit-text-fill-color:transparent;letter-spacing:4px;}
+.m3-name-row{display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:7px 14px;width:100%;}
+.m3-name-dot{font-size:1rem;}
+.m3-player-name{flex:1;font-family:'Orbitron',monospace;font-size:.72rem;font-weight:700;color:var(--text);}
+.m3-edit-btn{background:transparent;border:1px solid var(--border);color:var(--dim);border-radius:5px;width:28px;height:28px;cursor:pointer;font-size:.75rem;display:flex;align-items:center;justify-content:center;transition:border-color .15s,color .15s;}
+.m3-edit-btn:hover{border-color:var(--green);color:var(--green);}
+.m3-bet-row{display:flex;gap:7px;width:100%;}
+.m3-bet-btn{flex:1;padding:10px 4px;border-radius:7px;border:2px solid rgba(255,215,0,.3);background:rgba(255,215,0,.08);color:var(--gold);font-family:'Orbitron',monospace;font-size:.75rem;font-weight:700;cursor:pointer;transition:all .15s;letter-spacing:.5px;}
+.m3-bet-btn:hover,.m3-bet-btn.active{background:rgba(255,215,0,.22);border-color:var(--gold);box-shadow:0 0 12px rgba(255,215,0,.3);color:#fff;}
+.m3-bet-btn.m3-bet-green{border-color:rgba(20,241,149,.3);background:rgba(20,241,149,.06);color:var(--green);}
+.m3-bet-btn.m3-bet-green:hover,.m3-bet-btn.m3-bet-green.active{background:rgba(20,241,149,.2);border-color:var(--green);box-shadow:0 0 12px rgba(20,241,149,.3);color:#fff;}
+.m3-bet-btn.m3-bet-blue{border-color:rgba(0,194,215,.3);background:rgba(0,194,215,.06);color:var(--blue);}
+.m3-bet-btn.m3-bet-blue:hover,.m3-bet-btn.m3-bet-blue.active{background:rgba(0,194,215,.2);border-color:var(--blue);box-shadow:0 0 12px rgba(0,194,215,.3);color:#fff;}
+.m3-bet-btn.m3-bet-red{border-color:rgba(255,69,96,.3);background:rgba(255,69,96,.06);color:var(--red);}
+.m3-bet-btn.m3-bet-red:hover,.m3-bet-btn.m3-bet-red.active{background:rgba(255,69,96,.2);border-color:var(--red);box-shadow:0 0 12px rgba(255,69,96,.3);color:#fff;}
+.m3-join-btn{width:100%;padding:13px;border-radius:8px;font-family:'Orbitron',monospace;font-size:.85rem;font-weight:900;letter-spacing:2px;cursor:pointer;color:#000;background:linear-gradient(135deg,var(--gold),#cc8800);}
+.m3-join-btn:disabled{opacity:.35;cursor:not-allowed;animation:none!important;background:linear-gradient(135deg,#444,#222);color:#666;}
+.m3-srv-row{display:flex;gap:6px;width:100%;align-items:stretch;}
+.m3-srv-card{flex:1;padding:6px 4px!important;min-width:0;}
+.m3-srv-name{font-family:'Orbitron',monospace;font-size:.4rem;font-weight:700;color:var(--text);}
+.m3-srv-ping{font-size:.38rem;}
+.m3-srv-cnt{font-size:.36rem;color:var(--dim);}
+.m3-browse-btn{flex:1;background:rgba(153,69,215,.1);border:1px solid rgba(153,69,215,.3);color:var(--purple);border-radius:7px;font-family:'Orbitron',monospace;font-size:.48rem;font-weight:700;cursor:pointer;padding:6px 4px;transition:all .15s;letter-spacing:.5px;}
+.m3-browse-btn:hover{background:rgba(153,69,215,.25);border-color:var(--purple);}
+.m3-stats-row{display:flex;gap:10px;width:100%;}
+.m3-stat-box{flex:1;background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:10px 8px;text-align:center;}
+.m3-stat-num{font-family:'Orbitron',monospace;font-size:.95rem;font-weight:900;color:var(--gold);}
+.m3-stat-lbl{font-size:.45rem;color:var(--dim);margin-top:3px;text-transform:uppercase;letter-spacing:.5px;}
+@media(max-width:900px){#menuLayout{grid-template-columns:1fr;grid-template-rows:auto;height:auto;max-height:none;overflow-y:auto;}#menu3Left,#menu3Right{flex-direction:row;flex-wrap:wrap;}#menu3Left .m3card,#menu3Right .m3card{flex:1;min-width:200px;}}
 </style>
 
 <!-- ── Combat Tuning Suite panel (private) ──────────────────────────────── -->
@@ -1062,134 +1122,163 @@ canvas{display:block;width:100%;height:100%;}
     </div>
 
 <div class="overlay hidden" id="ovStart">
-      <div style="display:flex;align-items:center;justify-content:space-between;width:100%;max-width:700px;margin-bottom:2px;gap:10px;flex-wrap:wrap;">
-        <div>
+  <div id="menuLayout">
+
+    <!-- ═══ LEFT: Leaderboard + Friends ═══ -->
+    <div class="menu3-col" id="menu3Left">
+
+      <div class="m3card">
+        <div class="m3card-hdr">
+          &#127942; Leaderboard
+          <span class="m3-live-dot">&#9679; Live</span>
         </div>
-        <!-- ══ WALLET PANEL ══ -->
-        <div class="wb" id="walletPanel">
-          <!-- Address row -->
-          <div class="wb-head">
-            <div>
-              <div class="wb-label">&#9675; Solana Wallet · Mainnet</div>
-              <div class="wb-addr" id="walletAddrDisp">Not connected</div>
-            </div>
-            <button class="wb-copy" onclick="copyWalletAddr()" title="Copy wallet address">&#128203;</button>
-          </div>
-          <!-- Balance row — single unified balance -->
-          <div class="wb-bals">
-            <div class="wb-bal-row">
-              <span class="wb-bal-lbl">SOL Balance</span>
-              <span class="wb-bal-amt" id="wbGameBal">0.0000 SOL</span>
-              <span class="wb-bal-usd" id="wbGameUSD">$0.00</span>
-            </div>
-          </div>
-          <!-- Hidden compat spans so old code that references wbChainBal/wbChainUSD doesn't throw -->
-          <span id="wbChainBal" style="display:none"></span>
-          <span id="wbChainUSD" style="display:none"></span>
-          <!-- Action buttons -->
-          <div class="wb-actions">
-            <button class="wb-btn wb-btn-green" onclick="openAdd()">+ Add Funds</button>
-            <button class="wb-btn wb-btn-blue" onclick="openWithdraw()">Withdraw</button>
-            <button class="wb-btn-icon" id="wbRefreshBtn" onclick="refreshBalance(this)" title="Refresh wallet balance">&#8635;</button>
-            <button class="wb-btn-icon" onclick="openRpcPanel()" title="RPC endpoint status" style="font-size:.15rem;font-family:'Orbitron',monospace;font-weight:700;">&#9889;RPC</button>
-            <button class="wb-btn-icon purple" onclick="exportPrivateKey()" title="Export / backup your private key">&#128273;</button>
-            <button class="wb-btn-icon gold" onclick="openImportWallet()" title="Import / restore a saved wallet">&#128229;</button>
-          </div>
-          <!-- Status / last updated -->
-          <div class="wb-footer" id="wbStatus">&#9675; Click &#8635; to fetch live wallet balance</div>
-          <!-- Hidden compat element for old updateWalletDisplays calls -->
-          <span id="walletBalDisp" style="display:none"></span>
+        <div id="menuLBPreview" class="m3-lb-list">
+          <div class="m3-empty-msg">No players online yet</div>
         </div>
+        <button class="m3-outline-btn" onclick="openLeaderboard()">View Full Leaderboard</button>
       </div>
 
-      <div style="width:100%;max-width:360px;">
-        <div style="font-family:'Orbitron',monospace;font-size:.8rem;text-transform:uppercase;letter-spacing:2px;margin-bottom:4px;animation:labelFlash 2s linear infinite;">&#9312; Choose Server</div>
-        <div style="display:flex;gap:5px;">
-          <div class="server-card" id="srv-us" onclick="selectServer('us')">
-            <div style="font-size:.8rem;">&#127482;&#127480;</div>
-            <div style="font-family:'Orbitron',monospace;font-size:.46rem;font-weight:700;color:var(--text);">US East</div>
-            <div style="font-size:.39rem;color:var(--green);" id="ping-us">&#9679; 12ms</div>
-            <div style="font-size:.37rem;color:var(--dim);" id="players-us">142 online</div>
-          </div>
-          <div class="server-card" id="srv-eu" onclick="selectServer('eu')">
-            <div style="font-size:.8rem;">&#127466;&#127482;</div>
-            <div style="font-family:'Orbitron',monospace;font-size:.46rem;font-weight:700;color:var(--text);">EU West</div>
-            <div style="font-size:.39rem;color:var(--green);" id="ping-eu">&#9679; 38ms</div>
-            <div style="font-size:.37rem;color:var(--dim);" id="players-eu">98 online</div>
-          </div>
-          <div class="server-card" id="srv-as" onclick="selectServer('as')">
-            <div style="font-size:.8rem;">&#127462;&#127480;</div>
-            <div style="font-family:'Orbitron',monospace;font-size:.46rem;font-weight:700;color:var(--text);">Asia</div>
-            <div style="font-size:.39rem;color:var(--gold);" id="ping-as">&#9679; 95ms</div>
-            <div style="font-size:.37rem;color:var(--dim);" id="players-as">54 online</div>
-          </div>
+      <div class="m3card" style="flex:1;min-height:0;overflow:hidden;">
+        <div class="m3card-hdr">
+          &#128101; Friends
+          <button class="m3-icon-btn" onclick="updateMenuFriends()" title="Refresh">&#8635; Refresh</button>
+          <span class="m3-playing-chip" id="menuFriendsPlayBadge">0 playing</span>
         </div>
+        <div class="m3-section-lbl">Playing</div>
+        <div id="menuFriendsPlaying" class="m3-friends-list"><div class="m3-empty-msg">No friends playing</div></div>
+        <div class="m3-section-lbl" style="margin-top:6px">Offline</div>
+        <div id="menuFriendsOffline" class="m3-friends-list"></div>
+        <button class="m3-outline-btn" style="margin-top:auto" onclick="toggleFriends();switchTab('find')">Add Friends</button>
       </div>
 
-      <div style="width:100%;max-width:600px;">
-        <div style="font-family:'Orbitron',monospace;font-size:.62rem;text-transform:uppercase;letter-spacing:2px;margin-bottom:5px;animation:labelFlash 2s linear infinite;">&#9313; Choose Lobby</div>
-        <div class="lobby-grid">
-          <div class="lobby-card lcfree" id="cardfree" onclick="selCard('free')">
-            <div class="lc-glow"></div>
-            <div class="ct-label">&#128293; Free Play</div>
-            <div class="ct-fee">FREE</div>
-            <div class="ct-sub" id="solSubfree"><span class="ct-free-badge">No Entry Fee</span></div>
-            <div class="ct-div"></div>
-            <div class="ct-stat">Players<b>Up to 8</b></div>
-            <div class="ct-dots" id="dotsfree"></div>
-            <div class="ct-online" id="onlinefree">0 online</div>
-          </div>
-          <div class="lobby-card lc1" id="card1" onclick="selCard(1)">
-            <div class="lc-glow"></div>
-            <div class="ct-label">&#128994; Starter</div>
-            <div class="ct-fee">$1</div>
-            <div class="ct-sub" id="solSub1">&#8776; 0.0068 SOL</div>
-            <div class="ct-div"></div>
-            <div class="ct-stat">Players<b>Up to 8</b></div>
-            <div class="ct-dots" id="dots1"></div>
-            <div class="ct-online" id="online1">4 online</div>
-          </div>
-          <div class="lobby-card lc5" id="card5" onclick="selCard(5)">
-            <div class="lc-glow"></div>
-            <div class="ct-label">&#128309; Pro</div>
-            <div class="ct-fee">$5</div>
-            <div class="ct-sub" id="solSub5">&#8776; 0.0338 SOL</div>
-            <div class="ct-div"></div>
-            <div class="ct-stat">Players<b>Up to 8</b></div>
-            <div class="ct-dots" id="dots5"></div>
-            <div class="ct-online" id="online5">2 online</div>
-          </div>
-          <div class="lobby-card lc10" id="card10" onclick="selCard(10)">
-            <div class="lc-glow"></div>
-            <div class="ct-label">&#127942; Whale</div>
-            <div class="ct-fee">$10</div>
-            <div class="ct-sub" id="solSub10">&#8776; 0.0676 SOL</div>
-            <div class="ct-div"></div>
-            <div class="ct-stat">Players<b>Up to 8</b></div>
-            <div class="ct-dots" id="dots10"></div>
-            <div class="ct-online" id="online10">1 online</div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Skin Picker -->
-      <div style="width:100%;max-width:420px;background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:4px 8px;">
-        <div style="font-family:'Orbitron',monospace;font-size:.38rem;color:var(--dim);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:3px;">Snake Skin</div>
-        <div id="skinSwatches" style="display:flex;flex-wrap:nowrap;gap:4px;overflow-x:auto;padding-bottom:3px;"></div>
-      </div>
-
-      <div style="width:100%;max-width:420px;display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:10px 14px;flex-wrap:wrap;">
-        <div id="joinSummary" style="font-size:.62rem;color:var(--dim);line-height:1.6;flex:1;">Select a lobby to continue.</div>
-        <button id="joinBtn" onclick="doJoinGame()" class="btn" style="background:linear-gradient(135deg,var(--red),#cc1133);color:#fff;font-size:.70rem;padding:10px 20px;white-space:nowrap;opacity:.4;cursor:not-allowed;" disabled>Join Game</button>
-      </div>
-      <div style="width:100%;max-width:700px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
-        <div style="font-size:.58rem;color:var(--dim);">Mouse to steer &middot; Hold LMB or Space to boost &middot; Hold Q (1s) to cash out</div>
-        <div id="versionBadge" style="display:inline-flex;align-items:center;gap:5px;background:rgba(20,241,149,.08);border:1px solid rgba(20,241,149,.25);border-radius:8px;padding:5px 14px;font-family:'Share Tech Mono',monospace;font-size:.7rem;font-weight:700;color:#14F195;cursor:pointer;user-select:all;letter-spacing:1px;" title="Game version — click to copy" onclick="(function(v){navigator.clipboard&&navigator.clipboard.writeText(v).catch(function(){});toast('Version copied: '+v);})(this.dataset.v)" data-v="V1">
-          <span style="font-size:.5rem;">&#9679;</span>
-          <span id="versionText">V1</span>
-        </div>
-      </div>
     </div>
+
+    <!-- ═══ CENTER: Main controls ═══ -->
+    <div class="menu3-center">
+
+      <div class="m3-logo">SLITHER<span class="m3-logo-sol">.SOL</span></div>
+
+      <div class="m3-name-row">
+        <span class="m3-name-dot" id="menuColorDot" style="color:#14F195;font-size:1.1rem;">&#9679;</span>
+        <span id="menuPlayerName" class="m3-player-name">Player</span>
+        <button class="m3-edit-btn" onclick="openShop()" title="Customize">&#9998;</button>
+      </div>
+
+      <div class="m3-bet-row">
+        <button class="m3-bet-btn m3-bet-green" id="mbtnfree" onclick="menuSelCard('free')">FREE</button>
+        <button class="m3-bet-btn" id="mbtn1" onclick="menuSelCard(1)">$1</button>
+        <button class="m3-bet-btn m3-bet-blue" id="mbtn5" onclick="menuSelCard(5)">$5</button>
+        <button class="m3-bet-btn m3-bet-red" id="mbtn10" onclick="menuSelCard(10)">$10</button>
+      </div>
+
+      <button id="joinBtn" onclick="doJoinGame()" class="m3-join-btn btn" disabled>&#9654; JOIN GAME</button>
+
+      <div class="m3-srv-row">
+        <div class="server-card m3-srv-card" id="srv-us" onclick="selectServer('us')">
+          <div style="font-size:.95rem;">&#127482;&#127480;</div>
+          <div class="m3-srv-name">US East</div>
+          <div class="m3-srv-ping" id="ping-us" style="color:var(--green);">&#9679; --ms</div>
+          <div class="m3-srv-cnt" id="players-us">-- online</div>
+        </div>
+        <div class="server-card m3-srv-card" id="srv-eu" onclick="selectServer('eu')">
+          <div style="font-size:.95rem;">&#127466;&#127482;</div>
+          <div class="m3-srv-name">EU West</div>
+          <div class="m3-srv-ping" id="ping-eu" style="color:var(--green);">&#9679; --ms</div>
+          <div class="m3-srv-cnt" id="players-eu">-- online</div>
+        </div>
+        <div class="server-card m3-srv-card" id="srv-as" onclick="selectServer('as')">
+          <div style="font-size:.95rem;">&#127462;&#127480;</div>
+          <div class="m3-srv-name">Asia</div>
+          <div class="m3-srv-ping" id="ping-as" style="color:var(--gold);">&#9679; --ms</div>
+          <div class="m3-srv-cnt" id="players-as">-- online</div>
+        </div>
+        <button class="m3-browse-btn" onclick="openLeaderboard()">&#8801; Browse Lobbies</button>
+      </div>
+
+      <div class="m3-stats-row">
+        <div class="m3-stat-box">
+          <div class="m3-stat-num" id="menuStatPlayers">--</div>
+          <div class="m3-stat-lbl">Players In Game</div>
+        </div>
+        <div class="m3-stat-box">
+          <div class="m3-stat-num" id="menuStatWinnings">$--</div>
+          <div class="m3-stat-lbl">Global Player Winnings</div>
+        </div>
+      </div>
+
+      <div style="font-size:.52rem;color:var(--dim);text-align:center;">Mouse to steer &middot; Hold LMB / Space to boost &middot; Hold Q (1s) to cash out</div>
+
+      <div id="versionBadge" style="display:inline-flex;align-items:center;gap:5px;background:rgba(20,241,149,.08);border:1px solid rgba(20,241,149,.25);border-radius:8px;padding:4px 12px;font-family:'Share Tech Mono',monospace;font-size:.65rem;font-weight:700;color:#14F195;cursor:pointer;letter-spacing:1px;" title="Game version — click to copy" onclick="(function(v){navigator.clipboard&&navigator.clipboard.writeText(v).catch(function(){});toast('Version copied: '+v);})(this.dataset.v)" data-v="V1">
+        <span style="font-size:.5rem;">&#9679;</span>
+        <span id="versionText">V1</span>
+      </div>
+
+      <!-- Hidden compat elements JS still needs -->
+      <div style="display:none">
+        <div id="joinSummary"></div>
+        <div class="lobby-card lcfree" id="cardfree" onclick="selCard('free')">
+          <div class="ct-dots" id="dotsfree"></div><div class="ct-online" id="onlinefree">0</div><div id="solSubfree"></div>
+        </div>
+        <div class="lobby-card lc1" id="card1" onclick="selCard(1)">
+          <div class="ct-dots" id="dots1"></div><div class="ct-online" id="online1">0</div><div id="solSub1"></div>
+        </div>
+        <div class="lobby-card lc5" id="card5" onclick="selCard(5)">
+          <div class="ct-dots" id="dots5"></div><div class="ct-online" id="online5">0</div><div id="solSub5"></div>
+        </div>
+        <div class="lobby-card lc10" id="card10" onclick="selCard(10)">
+          <div class="ct-dots" id="dots10"></div><div class="ct-online" id="online10">0</div><div id="solSub10"></div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ═══ RIGHT: Wallet + Customize ═══ -->
+    <div class="menu3-col" id="menu3Right">
+
+      <div class="wb" id="walletPanel">
+        <div class="wb-head">
+          <div>
+            <div class="wb-label">&#128427; Wallet</div>
+            <div class="wb-addr" id="walletAddrDisp">Not connected</div>
+          </div>
+          <div style="display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end;">
+            <button class="wb-copy" onclick="copyWalletAddr()" title="Copy wallet address">&#128203; Copy</button>
+            <button class="wb-btn-icon" id="wbRefreshBtn" onclick="refreshBalance(this)" title="Refresh wallet balance">&#8635;</button>
+          </div>
+        </div>
+        <div class="wb-bals">
+          <div class="wb-bal-row">
+            <span class="wb-bal-lbl">Balance</span>
+            <span class="wb-bal-amt" id="wbGameBal">0.0000 SOL</span>
+            <span class="wb-bal-usd" id="wbGameUSD">$0.00</span>
+          </div>
+        </div>
+        <span id="wbChainBal" style="display:none"></span>
+        <span id="wbChainUSD" style="display:none"></span>
+        <div class="wb-actions">
+          <button class="wb-btn wb-btn-green" onclick="openAdd()">+ Add Funds</button>
+          <button class="wb-btn wb-btn-blue" onclick="openWithdraw()">Cash Out</button>
+          <button class="wb-btn-icon purple" onclick="exportPrivateKey()" title="Export key">&#128273;</button>
+          <button class="wb-btn-icon gold" onclick="openImportWallet()" title="Import wallet">&#128229;</button>
+          <button class="wb-btn-icon" onclick="openRpcPanel()" title="RPC" style="font-size:.42rem;font-family:'Orbitron',monospace;">&#9889;RPC</button>
+        </div>
+        <div class="wb-footer" id="wbStatus">&#9675; Click &#8635; to fetch live balance</div>
+        <span id="walletBalDisp" style="display:none"></span>
+      </div>
+
+      <div class="m3card" style="flex:1;">
+        <div class="m3card-hdr">&#127757; Customize</div>
+        <div class="m3-section-lbl">Snake Skin</div>
+        <div id="skinSwatches" style="display:flex;flex-wrap:wrap;gap:5px;padding:2px 0;"></div>
+        <div class="m3-section-lbl" style="margin-top:4px">Color</div>
+        <div id="colorSwatches" style="display:flex;flex-wrap:wrap;gap:4px;align-items:center;padding:2px 0;"></div>
+        <button class="m3-outline-btn" style="margin-top:auto" onclick="openShop()">Change Appearance</button>
+      </div>
+
+    </div>
+
+  </div>
+</div>
 
     <!-- WAITING / ENTERING ARENA -->
     <div class="overlay hidden" id="ovLobby">
@@ -1925,6 +2014,7 @@ function _finishLogin(name, email, avatar, uniqueId, picture) {
   refreshCards();
   renderColorPicker();
   autoDetectServer();
+  setTimeout(_refreshMenuOnShow, 150);
   _wsConnect(); // pre-connect WebSocket on login
   _wsPingLoop(); // start ping measurement
   setTimeout(_wpConnect, 200); // presence WS — slight delay so walletAddress is set
@@ -4181,6 +4271,7 @@ function showStart() {
   else {
     var ov2=document.getElementById('ovStart'); if(ov2) ov2.classList.remove('hidden');
     refreshCards(); updateWalletDisplays(); renderColorPicker(); renderSkinPicker(); _startLobbyCountPoll(); _startNotifWatch();
+    setTimeout(_refreshMenuOnShow, 100);
     // Silently refresh on-chain balance when lobby screen opens.
     // Pass null so a timeout never shows an error toast — cached balance stays valid.
     if (W.pubkey) {
@@ -8365,6 +8456,73 @@ function renderLB(){
   if(ft) ft.textContent='🟢 Live · '+entries.length+' player'+(entries.length!==1?'s':'')+' online · Refreshes every 3s';
 }
 
+// ════════════════ 3-COL MENU HELPERS ════════════════
+function menuSelCard(t) {
+  selCard(t);
+  // update visual state of the new bet buttons
+  ['free',1,5,10].forEach(function(k){
+    var b=document.getElementById('mbtn'+k); if(!b) return;
+    b.classList.toggle('active', k===t);
+  });
+}
+
+function updateMenuLBPreview() {
+  var el=document.getElementById('menuLBPreview'); if(!el) return;
+  var entries=[];
+  if(userProfile) entries.push({name:_wpMyName()||userProfile.name,color:_playerColor||'#14F195',earned:(W.stats&&W.stats.earned)||0,isMe:true});
+  Object.keys(_wpPeers).forEach(function(cid){
+    var p=_wpPeers[cid]; if(!p||cid.indexOf('guest_')===0) return;
+    entries.push({name:p.n||('P_'+cid.slice(0,4)),color:p.color||'#9945FF',earned:p.earned||0,isMe:false});
+  });
+  entries.sort(function(a,b){return b.earned-a.earned;});
+  if(entries.length===0){el.innerHTML='<div class="m3-empty-msg">No players online yet</div>';return;}
+  var ranks=['&#129945;','&#129946;','&#129947;'];
+  el.innerHTML=entries.slice(0,5).map(function(e,i){
+    var val='$'+e.earned.toFixed(2);
+    var nc=e.isMe?'color:var(--green)':'';
+    return '<div class="m3-lb-row"><span class="m3-lb-rank '+(i<3?['r1','r2','r3'][i]:'')+'">'+( i+1)+'</span><div class="m3-lb-dot" style="background:'+e.color+';box-shadow:0 0 4px '+e.color+'"></div><span class="m3-lb-name" style="'+nc+'">'+e.name+(e.isMe?' (you)':'')+'</span><span class="m3-lb-earn">'+val+'</span></div>';
+  }).join('');
+}
+
+function updateMenuFriends() {
+  var playing=friendsList.filter(function(f){return f.status==='ingame'||f.inGame;});
+  var offline=friendsList.filter(function(f){return f.status!=='ingame'&&!f.inGame;});
+  var badge=document.getElementById('menuFriendsPlayBadge');
+  if(badge) badge.textContent=playing.length+' playing';
+  function renderList(id,arr,emptyMsg){
+    var el=document.getElementById(id); if(!el) return;
+    if(arr.length===0){el.innerHTML='<div class="m3-empty-msg">'+emptyMsg+'</div>';return;}
+    el.innerHTML=arr.map(function(f){
+      var dot=f.color||'#9945FF';
+      var tier=f.tier?'$'+f.tier:'';
+      return '<div class="m3-friend-row"><div class="m3-friend-dot" style="background:'+dot+';box-shadow:0 0 4px '+dot+'"></div><span class="m3-friend-name">'+f.name+'</span><span class="m3-friend-tier">'+tier+'</span></div>';
+    }).join('');
+  }
+  renderList('menuFriendsPlaying',playing,'No friends playing');
+  renderList('menuFriendsOffline',offline,'');
+  // update player name + color dot in center
+  var pn=document.getElementById('menuPlayerName');
+  if(pn&&userProfile) pn.textContent=userProfile.name.split(' ')[0].slice(0,14);
+  var cd=document.getElementById('menuColorDot');
+  if(cd) cd.style.color=_playerColor||'#14F195';
+  // update menu lb while we're here
+  updateMenuLBPreview();
+  // update stats: count all live peers + self
+  var cnt=Object.keys(_wpPeers).length+(userProfile?1:0);
+  var sp=document.getElementById('menuStatPlayers');
+  if(sp) sp.textContent=cnt||'--';
+}
+
+function _refreshMenuOnShow(){
+  // Update player name
+  var pn=document.getElementById('menuPlayerName');
+  if(pn&&userProfile) pn.textContent=userProfile.name.split(' ')[0].slice(0,14);
+  var cd=document.getElementById('menuColorDot');
+  if(cd) cd.style.color=_playerColor||'#14F195';
+  updateMenuLBPreview();
+  updateMenuFriends();
+}
+
 // ════════════════ PING SIMULATION ════════════════
 setInterval(function(){
   var pings={us:10+Math.floor(Math.random()*8),eu:32+Math.floor(Math.random()*14),as:85+Math.floor(Math.random()*20)};
@@ -8430,6 +8588,7 @@ window.addEventListener('load', function() {
     _renderHeader(); updateWalletDisplays(); hideAll();
     var ov = document.getElementById('ovStart'); if (ov) ov.classList.remove('hidden');
     refreshCards(); renderColorPicker(); renderSkinPicker(); autoDetectServer();
+    setTimeout(_refreshMenuOnShow, 100);
     toast('Welcome back, ' + (userProfile ? userProfile.name : '') + '! Restoring wallet…');
     // Connect WebSocket on session restore — same as fresh login.
     // Without this the status badge stays "Offline" forever after a page reload.
