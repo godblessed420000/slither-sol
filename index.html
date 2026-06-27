@@ -8766,7 +8766,66 @@ function _ppAddFriend(){
     wpSendFriendReq(addr,name);
   }
 }
-function _ppTip(){ if(!_ppViewData) return; toast('⚡ Tip feature coming soon','info'); }
+function _ppTip(){
+  if(!_ppViewData) return;
+  if(!W.connected||!_localKeypair){ toast('Sign in first to tip','error'); return; }
+  var addr=_ppViewData.fullAddr||'';
+  if(!addr||addr.length<32){ toast('No wallet address for this player','error'); return; }
+  if(addr===W.pubkey){ toast("You can't tip yourself!",'error'); return; }
+  var name=_ppViewData.name;
+  var ex=document.getElementById('tipModal'); if(ex) ex.remove();
+  var div=document.createElement('div');
+  div.id='tipModal';
+  div.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:9999;display:flex;align-items:center;justify-content:center;';
+  div.innerHTML=
+    '<div style="background:#0d1117;border:1px solid #2a2a3a;border-radius:16px;padding:28px 24px;min-width:270px;text-align:center;">'+
+    '<div style="font-size:.95rem;font-weight:700;color:#9945FF;margin-bottom:4px;">⚡ Tip '+name+'</div>'+
+    '<div style="font-size:.6rem;color:#666;margin-bottom:18px;">Balance: '+W.balance.toFixed(4)+' SOL</div>'+
+    '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px;">'+
+      '<button onclick="_sendTip(0.01)" style="background:#1a1a2e;border:1px solid #2a2a3a;color:#fff;padding:12px 8px;border-radius:8px;cursor:pointer;font-size:.75rem;line-height:1.4;">0.01<br><span style=\"color:#666;font-size:.6rem\">SOL</span></button>'+
+      '<button onclick="_sendTip(0.05)" style="background:#1a1a2e;border:1px solid #2a2a3a;color:#fff;padding:12px 8px;border-radius:8px;cursor:pointer;font-size:.75rem;line-height:1.4;">0.05<br><span style=\"color:#666;font-size:.6rem\">SOL</span></button>'+
+      '<button onclick="_sendTip(0.1)" style="background:#1a1a2e;border:1px solid #2a2a3a;color:#fff;padding:12px 8px;border-radius:8px;cursor:pointer;font-size:.75rem;line-height:1.4;">0.10<br><span style=\"color:#666;font-size:.6rem\">SOL</span></button>'+
+    '</div>'+
+    '<button onclick="document.getElementById(\'tipModal\').remove()" style="background:transparent;border:1px solid #2a2a3a;color:#666;padding:8px 20px;border-radius:8px;cursor:pointer;font-size:.65rem;width:100%;">Cancel</button>'+
+    '</div>';
+  document.body.appendChild(div);
+}
+async function _sendTip(solAmt){
+  var modal=document.getElementById('tipModal'); if(modal) modal.remove();
+  if(!_ppViewData||!W.connected||!_localKeypair) return;
+  var toAddr=_ppViewData.fullAddr||'';
+  var name=_ppViewData.name;
+  if(!toAddr||toAddr.length<32){ toast('No wallet address for this player','error'); return; }
+  if(W.balance<solAmt+0.0001){ toast('Insufficient balance — need '+(solAmt+0.0001).toFixed(4)+' SOL','error'); return; }
+  try{
+    toast('Sending tip…','info');
+    var bh=await _getBlockhash();
+    var fromKey=new solanaWeb3.PublicKey(W.pubkey);
+    var toKey=new solanaWeb3.PublicKey(toAddr);
+    var lamports=Math.floor(solAmt*1e9);
+    var tx=new solanaWeb3.Transaction();
+    tx.recentBlockhash=bh.blockhash;
+    tx.lastValidBlockHeight=bh.lastValidBlockHeight;
+    tx.feePayer=fromKey;
+    tx.add(solanaWeb3.SystemProgram.transfer({fromPubkey:fromKey,toPubkey:toKey,lamports:lamports}));
+    tx.sign(_localKeypair);
+    var rawTx=tx.serialize();
+    var sends=SOLANA_RPCS.map(function(ep){
+      return Promise.race([
+        (new solanaWeb3.Connection(ep,{commitment:'confirmed'})).sendRawTransaction(rawTx,{skipPreflight:true,maxRetries:3}),
+        new Promise(function(_,rej){setTimeout(function(){rej(new Error('timeout'));},5000);})
+      ]).catch(function(){return null;});
+    });
+    var results=await Promise.all(sends);
+    var sig=results.find(function(s){return s;})||null;
+    if(!sig) throw new Error('All RPCs rejected the transaction');
+    W.balance=Math.max(0,(W.balance||0)-solAmt);
+    W.lamports=Math.floor(W.balance*1e9);
+    toast('⚡ Tipped '+solAmt+' SOL to '+name+'!','info');
+  }catch(e){
+    toast('Tip failed: '+(e.message||e),'error');
+  }
+}
 function _ppShare(){
   if(!_ppViewData) return;
   var name=_ppViewData.name;
