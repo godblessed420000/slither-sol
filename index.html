@@ -1403,7 +1403,8 @@ var POINT_DIST = 1.6;        // world-units between body segments (MoneySlither 
 var WIDTH_BASE  = 15.0;      // world-radius of the body at spawn size (len 100)
 var WIDTH_DEN   = 700;       // visible width growth per orb without getting too wide
 var WIDTH_SCMAX = 6.0;       // max scale, like slither.io's 6× cap
-var ZOOM_PX     = 14;        // spawn body screen-radius in px; sets perceived snake size
+var ZOOM_PX     = 20;        // controls auto-zoom level (higher = zoomed in more)
+var BODY_SCALE  = 0.65;      // visual-only width multiplier; <1.0 = thinner snake, doesn't affect zoom or hitbox
 var BOOST_MULT        = 2.7;
 var BOOST_MASS_DRAIN  = 3/60;   // length units lost per frame while boosting (≈3 units/sec)
 var TURN_RATE        = 0.16;
@@ -6133,9 +6134,9 @@ function drawS(s){
   var W2SX=function(wx){ return (wx-s.x)*Z+hx; };
   var W2SY=function(wy){ return (wy-s.y)*Z+hy; };
 
-  // Visual radius = body hitbox thickness, so what you see is exactly what kills.
-  var R   = snakeThickness(s.length||100) * Z;      // screen-px radius at current zoom
-  var BW  = R*2.0;                                  // body stroke width in screen px
+  // Visual radius scaled by BODY_SCALE for thinner look; hitbox (snakeRadius) is unchanged.
+  var R   = snakeThickness(s.length||100) * Z * BODY_SCALE;  // screen-px radius at current zoom
+  var BW  = R*2.0;                                            // body stroke width in screen px
   // Display segmentsForSize(length) body segments — matches MoneySlither tail length
   var _maxDraw = segmentsForSize(s.length||40);
   var pts=[{x:hx,y:hy}];
