@@ -4864,9 +4864,9 @@ function launchGame() {
   var _cb=document.getElementById('chatBox'); if(_cb) _cb.style.display='flex';
   _initChat();
   var tb=document.getElementById('hudTierBadge');
-  if(tb){ tb.style.display='inline-flex'; tb.className='lobby-badge '+t.badgeCls; tb.textContent=t.name; }
+  if(tb){ tb.style.display='none'; }
   var alb=document.getElementById('activeLobbyBadge');
-  if(alb){ alb.style.display='flex'; alb.innerHTML='<div class="lobby-badge '+t.badgeCls+'">● '+t.name+' Active</div>'; }
+  if(alb){ alb.style.display='none'; }
   score=0; myKills=0; killSOL=0; boostE=100; boosting=false; cashingOut=false; qDown=false; _zoomOffset=0; _zoomScale=1.0; CAM_ZOOM=1.0; _smoothLen=100; _autoCircle=false; _hudScoreV=''; _hudSubV=''; _hudEarnV=''; _boostMassAccum=0;
   _updateArenaSize(); WORLD = _targetWorld; WORLD_R = WORLD / 2; // snap immediately at game start; later joins/leaves lerp gradually
   // Restore W.balance from on-chain if it was zeroed by a previous death or is stale.
