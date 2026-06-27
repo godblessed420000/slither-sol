@@ -3321,6 +3321,7 @@ var _wsConnTimer    = null;   // connect timeout handle
 var _wpWs        = null;   // separate WS connection to 'ss-presence' room
 var _wpMyId      = null;   // my wallet address as presence peer ID
 var _wpPeers     = {};     // walletAddr → { n, color, lastSeen }
+var _playerHistory = {};   // all non-guest peers seen this session, for search
 var _wpPingTimer = null;   // re-announce timer (every 10s)
 var _wpConnTimer = null;   // connect timeout
 
@@ -4067,6 +4068,7 @@ function _wpHandleMsg(msg) {
       wins:    d.wins   || 0,
       lobbyTier: d.lobbyTier != null ? d.lobbyTier : null
     };
+    _playerHistory[cid] = { name: _wpPeers[cid].n, color: _wpPeers[cid].color };
     // Reply once so they know we exist — defer during gameplay to avoid blocking game loop
     if (isNew && !d.reply && _wpWs && _wpWs.readyState === WebSocket.OPEN) {
       var _replyMsg = JSON.stringify({ type: 'join', clientId: _wpMyId, tier: 'presence',
@@ -7901,7 +7903,7 @@ function sendFriendReq(){
   // ── Short text → search online presence peers by display name ─────────────
   var q2=val.toLowerCase();
   var nameMatches=Object.keys(_wpPeers).filter(function(cid){
-    return cid!==_wpMyId && _wpPeers[cid].n.toLowerCase().indexOf(q2)!==-1;
+    return cid!==_wpMyId && (_wpPeers[cid].n||'').toLowerCase().indexOf(q2)!==-1;
   });
   if(nameMatches.length>0){
     var html2='<div style="font-size:.58rem;color:var(--green);margin-bottom:6px;">'+nameMatches.length+' online player'+(nameMatches.length>1?'s':'')+' found</div>';
@@ -8403,7 +8405,7 @@ async function doSearch() {
   var liveMatches = (searchType === 'username')
     ? Object.keys(_wpPeers).filter(function(cid) {
         return cid !== _wpMyId && cid.indexOf('guest_') === -1
-          && _wpPeers[cid].n.toLowerCase().indexOf(q) !== -1;
+          && (_wpPeers[cid].n||'').toLowerCase().indexOf(q) !== -1;
       }).map(function(cid) {
         return { cid: cid, n: _wpPeers[cid].n, color: _wpPeers[cid].color };
       })
@@ -8771,6 +8773,13 @@ function doSocialSearch(q){
   friendsList.forEach(function(f){
     if(!found.some(function(x){return x.name===f.name;})&&((f.name||'').toLowerCase().includes(q)||(f.fullAddr||'').toLowerCase().includes(q)))
       found.push({name:f.name,color:f.color||'#9945FF',addr:f.fullAddr||'',isMe:false,status:f.status||'offline'});
+  });
+  // Also search session history — players seen this session but no longer in presence room
+  Object.keys(_playerHistory).forEach(function(cid){
+    if(found.some(function(x){return x.addr===cid;})) return;
+    var ph=_playerHistory[cid];
+    if((ph.name||'').toLowerCase().includes(q))
+      found.push({name:ph.name,color:ph.color||'#9945FF',addr:cid,isMe:false,status:'offline'});
   });
   if(found.length===0){ res.innerHTML='<div style="text-align:center;padding:24px;color:var(--dim);font-size:.65rem;">No players found matching "'+q+'"</div>'; return; }
   res.innerHTML=found.map(function(p){
