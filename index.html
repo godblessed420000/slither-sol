@@ -4845,7 +4845,7 @@ function getMaxSegs(){ return 600; }
 function grow(s){
   s.widthBonus = (s.widthBonus||0) + 0.60;
   if(s.isMe && boosting) return;
-  if(s.length >= 9999) return; // absolute size cap
+  if(snakeRadius(s) >= 50) return; // max visible size cap (headR 50)
   s.length = (s.length||100) + 10; // +10 size per food — visible growth each orb
 }
 function spawnPlayer(){
