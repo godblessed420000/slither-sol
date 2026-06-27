@@ -6312,6 +6312,10 @@ function drawS(s){
 
   var ang=s.angle, fx2=Math.cos(ang), fy2=Math.sin(ang);
   var sxp=Math.cos(ang+Math.PI/2), syp=Math.sin(ang+Math.PI/2);
+  // Pupil look direction: player tracks mouse, others look forward
+  var _lookDX, _lookDY;
+  if(s.isMe){ var _ldx=mouseX-hx,_ldy=mouseY-hy,_ld=Math.sqrt(_ldx*_ldx+_ldy*_ldy)||1; _lookDX=_ldx/_ld; _lookDY=_ldy/_ld; }
+  else { _lookDX=fx2; _lookDY=fy2; }
   function _pulse(period){ return (tnow%period)/period; }
 
   // ══════════════════ SKIN RENDERING ══════════════════
@@ -6728,7 +6732,7 @@ function drawS(s){
     ctx.beginPath(); ctx.arc(e1x,e1y,er*0.44,0,Math.PI*2); ctx.fill();
     ctx.beginPath(); ctx.arc(e2x,e2y,er*0.44,0,Math.PI*2); ctx.fill();
     ctx.shadowBlur=0;
-    var pox=fx2*er*0.35,poy=fy2*er*0.35; ctx.fillStyle='#05000f';
+    var pox=_lookDX*er*0.35,poy=_lookDY*er*0.35; ctx.fillStyle='#05000f';
     ctx.beginPath(); ctx.arc(e1x+pox,e1y+poy,pr,0,Math.PI*2); ctx.fill();
     ctx.beginPath(); ctx.arc(e2x+pox,e2y+poy,pr,0,Math.PI*2); ctx.fill();
     ctx.fillStyle='rgba(255,255,255,.92)';
@@ -6820,7 +6824,7 @@ function drawS(s){
     ctx.beginPath(); ctx.arc(e1x,e1y,er*0.44,0,Math.PI*2); ctx.stroke();
     ctx.beginPath(); ctx.arc(e2x,e2y,er*0.44,0,Math.PI*2); ctx.stroke();
     ctx.shadowBlur=0; ctx.globalAlpha=1;
-    var pox=fx2*er*0.38,poy=fy2*er*0.38; ctx.fillStyle='#0f0500';
+    var pox=_lookDX*er*0.38,poy=_lookDY*er*0.38; ctx.fillStyle='#0f0500';
     ctx.beginPath(); ctx.arc(e1x+pox,e1y+poy,pr3,0,Math.PI*2); ctx.fill();
     ctx.beginPath(); ctx.arc(e2x+pox,e2y+poy,pr3,0,Math.PI*2); ctx.fill();
     ctx.fillStyle='rgba(255,255,200,.92)';
@@ -6927,11 +6931,11 @@ function drawS(s){
     ctx.beginPath(); ctx.arc(e2x,e2y,er*0.70,0,Math.PI*2); ctx.stroke();
     ctx.globalAlpha=1;
     ctx.fillStyle='#0a0012';
-    ctx.beginPath(); ctx.arc(e1x+fx2*er*0.32,e1y+fy2*er*0.32,npr,0,Math.PI*2); ctx.fill();
-    ctx.beginPath(); ctx.arc(e2x+fx2*er*0.32,e2y+fy2*er*0.32,npr,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(e1x+_lookDX*er*0.32,e1y+_lookDY*er*0.32,npr,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(e2x+_lookDX*er*0.32,e2y+_lookDY*er*0.32,npr,0,Math.PI*2); ctx.fill();
     ctx.fillStyle='rgba(255,255,255,.95)';
-    ctx.beginPath(); ctx.arc(e1x+fx2*er*0.32-npr*0.36,e1y+fy2*er*0.32-npr*0.36,npr*0.42,0,Math.PI*2); ctx.fill();
-    ctx.beginPath(); ctx.arc(e2x+fx2*er*0.32-npr*0.36,e2y+fy2*er*0.32-npr*0.36,npr*0.42,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(e1x+_lookDX*er*0.32-npr*0.36,e1y+_lookDY*er*0.32-npr*0.36,npr*0.42,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(e2x+_lookDX*er*0.32-npr*0.36,e2y+_lookDY*er*0.32-npr*0.36,npr*0.42,0,Math.PI*2); ctx.fill();
 
   } else if(skin==='dragon'){
     // ═══ DRAGON FLAME: Ancient Fire Dragon ═══
@@ -7012,7 +7016,7 @@ function drawS(s){
     ctx.beginPath(); ctx.arc(e1x,e1y,er*0.72,0,Math.PI*2); ctx.fill();
     ctx.beginPath(); ctx.arc(e2x,e2y,er*0.72,0,Math.PI*2); ctx.fill();
     ctx.shadowBlur=0;
-    var pox=fx2*er*0.28,poy=fy2*er*0.28;
+    var pox=_lookDX*er*0.28,poy=_lookDY*er*0.28;
     ctx.fillStyle='#0a0000';
     ctx.save(); ctx.translate(e1x+pox,e1y+poy); ctx.rotate(ang);
     ctx.beginPath(); ctx.ellipse(0,0,er*0.17,er*0.50,0,0,Math.PI*2); ctx.fill(); ctx.restore();
@@ -7135,7 +7139,7 @@ function drawS(s){
     ctx.beginPath(); ctx.arc(e1x,e1y,er*0.44,0,Math.PI*2); ctx.fill();
     ctx.beginPath(); ctx.arc(e2x,e2y,er*0.44,0,Math.PI*2); ctx.fill();
     ctx.shadowBlur=0;
-    var pox=fx2*er*0.30,poy=fy2*er*0.30;
+    var pox=_lookDX*er*0.30,poy=_lookDY*er*0.30;
     ctx.fillStyle='#020810';
     ctx.beginPath(); ctx.arc(e1x+pox,e1y+poy,er*0.34,0,Math.PI*2); ctx.fill();
     ctx.beginPath(); ctx.arc(e2x+pox,e2y+poy,er*0.34,0,Math.PI*2); ctx.fill();
@@ -7230,7 +7234,7 @@ function drawS(s){
     ctx.beginPath(); ctx.arc(e1x,e1y,er*0.46,0,Math.PI*2); ctx.fill();
     ctx.beginPath(); ctx.arc(e2x,e2y,er*0.46,0,Math.PI*2); ctx.fill();
     ctx.shadowBlur=0;
-    var pox=fx2*er*0.28,poy=fy2*er*0.28;
+    var pox=_lookDX*er*0.28,poy=_lookDY*er*0.28;
     ctx.fillStyle='#ffffff'; ctx.globalAlpha=0.95;
     ctx.beginPath(); ctx.arc(e1x+pox,e1y+poy,er*0.22,0,Math.PI*2); ctx.fill();
     ctx.beginPath(); ctx.arc(e2x+pox,e2y+poy,er*0.22,0,Math.PI*2); ctx.fill();
@@ -7323,7 +7327,7 @@ function drawS(s){
     ctx.beginPath(); ctx.arc(e1x,e1y,er*0.46,0,Math.PI*2); ctx.fill();
     ctx.beginPath(); ctx.arc(e2x,e2y,er*0.46,0,Math.PI*2); ctx.fill();
     ctx.shadowBlur=0;
-    var pox=fx2*er*0.28,poy=fy2*er*0.28;
+    var pox=_lookDX*er*0.28,poy=_lookDY*er*0.28;
     ctx.fillStyle='#010808';
     ctx.beginPath(); ctx.arc(e1x+pox,e1y+poy,er*0.30,0,Math.PI*2); ctx.fill();
     ctx.beginPath(); ctx.arc(e2x+pox,e2y+poy,er*0.30,0,Math.PI*2); ctx.fill();
@@ -7443,12 +7447,27 @@ function drawS(s){
     ctx.fillStyle='#fff';
     ctx.beginPath(); ctx.arc(e1x,e1y,er,0,Math.PI*2); ctx.fill();
     ctx.beginPath(); ctx.arc(e2x,e2y,er,0,Math.PI*2); ctx.fill();
-    var pox=fx2*er*0.40,poy=fy2*er*0.40; ctx.fillStyle='#111';
+    var pox=_lookDX*er*0.40,poy=_lookDY*er*0.40; ctx.fillStyle='#111';
     ctx.beginPath(); ctx.arc(e1x+pox,e1y+poy,pr,0,Math.PI*2); ctx.fill();
     ctx.beginPath(); ctx.arc(e2x+pox,e2y+poy,pr,0,Math.PI*2); ctx.fill();
     ctx.fillStyle='rgba(255,255,255,.85)';
     ctx.beginPath(); ctx.arc(e1x+pox-pr*0.3,e1y+poy-pr*0.3,pr*0.35,0,Math.PI*2); ctx.fill();
     ctx.beginPath(); ctx.arc(e2x+pox-pr*0.3,e2y+poy-pr*0.3,pr*0.35,0,Math.PI*2); ctx.fill();
+  }
+
+  // ── Universal pupil tracking for skins without a movable pupil ──
+  if(skin==='default'||skin==='void'||skin==='inferno'||skin==='toxic'){
+    var _oeo=R*0.52,_oebx=hx+fx2*R*0.30,_oeby=hy+fy2*R*0.30;
+    var _oe1x=_oebx+sxp*_oeo,_oe1y=_oeby+syp*_oeo;
+    var _oe2x=_oebx-sxp*_oeo,_oe2y=_oeby-syp*_oeo;
+    var _opr=R*0.44*0.30,_ooff=_opr*0.9;
+    ctx.shadowBlur=0; ctx.globalAlpha=1;
+    ctx.fillStyle='rgba(0,0,0,0.82)';
+    ctx.beginPath(); ctx.arc(_oe1x+_lookDX*_ooff,_oe1y+_lookDY*_ooff,_opr,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(_oe2x+_lookDX*_ooff,_oe2y+_lookDY*_ooff,_opr,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,0.88)';
+    ctx.beginPath(); ctx.arc(_oe1x+_lookDX*_ooff-_opr*0.3,_oe1y+_lookDY*_ooff-_opr*0.3,_opr*0.38,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(_oe2x+_lookDX*_ooff-_opr*0.3,_oe2y+_lookDY*_ooff-_opr*0.3,_opr*0.38,0,Math.PI*2); ctx.fill();
   }
 
   // ── Name tag — same for all skins ──
