@@ -1401,7 +1401,7 @@ var POINT_DIST = 1.6;        // world-units between body segments (MoneySlither 
 // This is linear-in-length like slither.io's sc=1+(sct-2)/106, so the snake VISIBLY
 // widens as you eat (the old sqrt-of-segments formula barely moved per orb).
 var WIDTH_BASE  = 15.0;      // world-radius of the body at spawn size (len 100)
-var WIDTH_DEN   = 1200;      // calibrated to match MoneySlither growth rate exactly
+var WIDTH_DEN   = 700;       // visible width growth per orb without getting too wide
 var WIDTH_SCMAX = 6.0;       // max scale, like slither.io's 6× cap
 var ZOOM_PX     = 27;        // spawn body screen-radius in px; sets perceived snake size
 var BOOST_MULT        = 2.7;
