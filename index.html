@@ -1573,7 +1573,7 @@ var WIDTH_BASE  = 15.0;      // world-radius of the body at spawn size (len 100)
 var WIDTH_DEN   = 700;       // visible width growth per orb without getting too wide
 var WIDTH_SCMAX = 6.0;       // max scale, like slither.io's 6× cap
 var ZOOM_PX     = 20;        // controls auto-zoom level (higher = zoomed in more)
-var BODY_SCALE  = 1.0;       // visual width matches hitbox exactly
+var BODY_SCALE  = 0.72;      // visual + hitbox scale — change one place to resize both
 var BOOST_MULT        = 2.7;
 var BOOST_MASS_DRAIN  = 3/60;   // length units lost per frame while boosting (≈3 units/sec)
 var TURN_RATE        = 0.16;
@@ -5779,12 +5779,10 @@ function snakeThickness(len){
 // Back-compat shim: a couple of call sites still pass a segment count.
 function thicknessForSegments(n){ return WIDTH_BASE; }
 function snakeRadius(s){
-  // Head hitbox — slightly larger than the body, like slither.io's fang reach
-  return snakeThickness(s.length||40)*1.15;
+  return snakeThickness(s.length||40)*BODY_SCALE;
 }
 function snakeBodyR(s){
-  // Body segment hitbox = the drawn body radius, so what you see is what kills
-  return snakeThickness(s.length||40);
+  return snakeThickness(s.length||40)*BODY_SCALE;
 }
 
 // Swept segment→circle hit test: did segment p1→p2 pass through circle (c, radius r)?
