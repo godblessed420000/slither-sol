@@ -6315,8 +6315,10 @@ function drawS(s){
   // Visual radius scaled by BODY_SCALE for thinner look; hitbox (snakeRadius) is unchanged.
   var R   = snakeThickness(s.length||100) * Z * BODY_SCALE;  // screen-px radius at current zoom
   var BW  = R*2.0;                                            // body stroke width in screen px
-  // Display segmentsForSize(length) body segments — matches MoneySlither tail length
+  // Display segmentsForSize(length) body segments; shrink tail while boosting
+  var _isBst = s.isMe ? (boosting && boostE>0) : !!s.boosting;
   var _maxDraw = segmentsForSize(s.length||40);
+  if(_isBst) _maxDraw = Math.max(6, Math.round(_maxDraw * 0.45));
   var pts=[{x:hx,y:hy}];
   for(var i=1;i<s.segs.length&&i<_maxDraw;i++){
     var _sg=s.segs[i]; if(!_sg) break;
