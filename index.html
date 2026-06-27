@@ -4066,33 +4066,38 @@ function _wpHandleMsg(msg) {
       earned:  d.earned || 0,
       wins:    d.wins   || 0
     };
-    // Reply once so they know we exist — include our stats
+    // Reply once so they know we exist — defer during gameplay to avoid blocking game loop
     if (isNew && !d.reply && _wpWs && _wpWs.readyState === WebSocket.OPEN) {
-      _wpWs.send(JSON.stringify({ type: 'join', clientId: _wpMyId, tier: 'presence',
+      var _replyMsg = JSON.stringify({ type: 'join', clientId: _wpMyId, tier: 'presence',
         data: { n: _wpMyName(), color: _playerColor, reply: true,
           games: W.stats.games||0, kills: myKills||0, earned: W.stats.earned||0, wins: W.stats.wins||0,
-          lobbyTier: selectedLobbyTier } }));
+          lobbyTier: selectedLobbyTier } });
+      if (gameRunning) { setTimeout(function(){ if(_wpWs&&_wpWs.readyState===WebSocket.OPEN) _wpWs.send(_replyMsg); }, 200); }
+      else { _wpWs.send(_replyMsg); }
     }
     if (isNew && !gameRunning && (d.lobbyTier===5 || d.lobbyTier===10)) _playCashSound();
-    // Sync stats into friendsList if this peer is a real friend
-    friendsList.forEach(function(f){
-      if((f.fullAddr||'')===cid){
-        f.status='online'; f.inGame=false; f.tier=null;
-        if(d.games  != null) f.games  = d.games;
-        if(d.kills  != null) f.kills  = d.kills;
-        if(d.earned != null) f.earned = d.earned;
-        if(d.wins   != null) f.wins   = d.wins;
-      }
-    });
-    if (panelOpen && currentTab === 'find') renderFriendsPanel();
-    renderLB();
+    if (!gameRunning) {
+      friendsList.forEach(function(f){
+        if((f.fullAddr||'')===cid){
+          f.status='online'; f.inGame=false; f.tier=null;
+          if(d.games  != null) f.games  = d.games;
+          if(d.kills  != null) f.kills  = d.kills;
+          if(d.earned != null) f.earned = d.earned;
+          if(d.wins   != null) f.wins   = d.wins;
+        }
+      });
+      if (panelOpen && currentTab === 'find') renderFriendsPanel();
+      renderLB();
+    }
     return;
   }
 
   if (type === 'leave') {
     delete _wpPeers[cid];
-    if (panelOpen && currentTab === 'find') renderFriendsPanel();
-    renderLB();
+    if (!gameRunning) {
+      if (panelOpen && currentTab === 'find') renderFriendsPanel();
+      renderLB();
+    }
     return;
   }
 
