@@ -8759,8 +8759,12 @@ function _pp1v1(){ if(!_ppViewData) return; toast('⚔️ 1V1 challenge sent to 
 function _ppAddFriend(){
   if(!_ppViewData) return;
   var addr=_ppViewData.fullAddr||'', name=_ppViewData.name, color=_ppViewData.color;
-  if(addr&&addr.length>=32) wpSendFriendReq(addr,name);
-  else addFriendSoc(name,addr,color);
+  // Always add locally immediately so they appear in the friends list right away
+  addFriendSoc(name,addr,color);
+  // Also send a WS friend request if we have a full wallet address and are connected
+  if(addr&&addr.length>=32&&W.connected&&_wpWs&&_wpWs.readyState===WebSocket.OPEN){
+    wpSendFriendReq(addr,name);
+  }
 }
 function _ppTip(){ if(!_ppViewData) return; toast('⚡ Tip feature coming soon','info'); }
 function _ppShare(){
