@@ -5405,7 +5405,7 @@ function update(_dt){
     if(player.segs.length > _maxS) player.segs.length = _maxS;
   }
 
-  var len=player.length; // used by HUD below (logical length unit, not raw seg count)
+  var len=Math.round(player.headR); // display collision-radius so size feels real (24 at spawn → 103 max)
   // Dynamic zoom — SUB-LINEAR so the snake still visibly grows on screen as it widens.
   // screen_radius = thickness × zoom = ZOOM_PX × sqrt(thickness/WIDTH_BASE):
   //   • spawn → ZOOM_PX px (snake looks the right size, not tiny)
