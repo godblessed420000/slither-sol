@@ -5495,7 +5495,6 @@ function update(_dt){
 
   if(!player||!player.alive){
     if(_spectating){
-      CAM_ZOOM=0.75;
       var _sNow=performance.now(),_sExtCap=BASE_SPEED*BOOST_MULT*60;
       var _st=_specTargetId?peers.find(function(p){return p.remoteId===_specTargetId;}):null;
       if(_st&&_st.alive){
@@ -5513,6 +5512,9 @@ function update(_dt){
           var _smaxS=Math.floor(segmentsForSize(_st.length||40)+60); if(isFinite(_smaxS)&&_smaxS>0&&_st.segs.length>_smaxS)_st.segs.length=_smaxS;
         }
         camX=_st.x; camY=_st.y;
+        var _szCur=snakeThickness(_st.length||40);
+        var _sautoZ=Math.max(0.42,Math.min(1.9,ZOOM_PX/Math.sqrt(_szCur*WIDTH_BASE)));
+        CAM_ZOOM=CAM_ZOOM+(_sautoZ*_zoomScale-CAM_ZOOM)*0.12;
       } else {
         // Target died/left — try to find any alive peer and auto-follow them
         var _snp=peers.find(function(p){return p.alive&&p.isRemote;});
