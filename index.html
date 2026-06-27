@@ -16,7 +16,8 @@ document.title = 'SLITHER.SOL — V1';
 @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap');
 :root{--purple:#9945FF;--green:#14F195;--blue:#00C2FF;--red:#FF4560;--gold:#FFD700;--bg:#020810;--panel:#080d1a;--border:#141e35;--text:#dde6f0;--dim:#3d4f6a;}
 *{margin:0;padding:0;box-sizing:border-box;}
-body{background:var(--bg);color:var(--text);font-family:'Share Tech Mono',monospace;overflow:hidden;height:100vh;display:flex;flex-direction:column;user-select:none;}
+html{touch-action:none;-ms-touch-action:none;}
+body{background:var(--bg);color:var(--text);font-family:'Share Tech Mono',monospace;overflow:hidden;height:100vh;display:flex;flex-direction:column;user-select:none;touch-action:none;-ms-touch-action:none;}
 header{display:flex;align-items:center;justify-content:space-between;padding:5px 14px;background:var(--panel);border-bottom:1px solid var(--purple);box-shadow:0 0 24px rgba(153,69,215,.25);flex-shrink:0;z-index:10;gap:8px;flex-wrap:wrap;}
 @keyframes titleFlash{0%,100%{opacity:.75;filter:brightness(.9) drop-shadow(0 0 5px rgba(20,241,149,.15));}45%,55%{opacity:1;filter:brightness(1.5) drop-shadow(0 0 22px rgba(20,241,149,1)) drop-shadow(0 0 44px rgba(153,69,215,.8));}}
 @keyframes labelFlash{0%{color:#14F195;}20%{color:#9945FF;}40%{color:#00c2ff;}60%{color:#ff4ecd;}80%{color:#ffb800;}100%{color:#14F195;}}
@@ -8808,9 +8809,12 @@ async function _fetchSolPrice() {
 }
 setInterval(_fetchSolPrice, 30000); // refresh every 30 s
 
-// Block pinch-to-zoom on mobile
-document.addEventListener('gesturestart', function(e){ e.preventDefault(); }, {passive:false});
-document.addEventListener('touchmove', function(e){ if(e.touches&&e.touches.length>1) e.preventDefault(); }, {passive:false});
+// Block pinch-to-zoom on mobile (iOS ignores viewport user-scalable=no since iOS 10)
+document.addEventListener('gesturestart',  function(e){ e.preventDefault(); }, {passive:false});
+document.addEventListener('gesturechange', function(e){ e.preventDefault(); }, {passive:false});
+document.addEventListener('gestureend',    function(e){ e.preventDefault(); }, {passive:false});
+document.addEventListener('touchstart', function(e){ if(e.touches&&e.touches.length>1) e.preventDefault(); }, {passive:false});
+document.addEventListener('touchmove',  function(e){ if(e.touches&&e.touches.length>1) e.preventDefault(); }, {passive:false});
 
 window.addEventListener('load', function() {
   _fetchSolPrice(); // immediate fetch on page load
