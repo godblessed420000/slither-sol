@@ -4130,6 +4130,7 @@ function _wpHandleMsg(msg) {
       friendsList.push({ id: cid, name: aname, addr: ashort, fullAddr: cid,
         status: 'online', color: d.color || '#9945FF', inGame: false, tier: null,
         games: d.games||0, kills: d.kills||0, earned: d.earned||0, wins: d.wins||0 });
+      _saveFriends();
     }
     renderFriendsPanel();
     toast('✅ ' + aname + ' accepted your friend request!', 'info');
@@ -7666,7 +7667,8 @@ function cleanupL(keepAbly){
 // fullAddr: full Solana wallet address (set when a friend is added by wallet addr or known)
 // addr:     display-only truncated form shown in the UI
 // games/kills/earned/wins: leaderboard stats (synced from presence announcements)
-var friendsList=[];
+var friendsList=(function(){try{var s=localStorage.getItem('slither_friends');return s?JSON.parse(s):[];}catch(e){return[];}}());
+function _saveFriends(){try{localStorage.setItem('slither_friends',JSON.stringify(friendsList));}catch(e){}}
 var friendRequests=[]; // populated by real fr_req messages from presence WebSocket
 var _pendingFriendReqs={}; // walletAddr → { name, sentAt } — outgoing requests awaiting accept
 var currentTab='friends', panelOpen=false, pendingInvite=null, inviteDismissTimer=null;
@@ -7836,7 +7838,7 @@ function inviteFriend(id){
   toast('Share this link with '+f.name+': '+link,'info');
 }
 
-function removeFriend(id){ friendsList=friendsList.filter(function(f){return f.id!==id;}); renderFriendsPanel(); toast('Friend removed'); }
+function removeFriend(id){ friendsList=friendsList.filter(function(f){return f.id!==id;}); _saveFriends(); renderFriendsPanel(); toast('Friend removed'); }
 
 function acceptRequest(id){
   var req=null; for(var i=0;i<friendRequests.length;i++) if(friendRequests[i].id===id){req=friendRequests[i];break;}
@@ -7847,6 +7849,7 @@ function acceptRequest(id){
   if(!friendsList.some(function(f){ return f.id===req.id || (fa && (f.fullAddr||'')===fa); })){
     friendsList.push({id:req.id, name:req.name, addr:short, fullAddr:fa, status:'online', color:req.color,
       inGame:false, tier:null, games:req.games||0, kills:req.kills||0, earned:req.earned||0, wins:req.wins||0});
+    _saveFriends();
   }
   // Notify the other player that we accepted — include our own stats so they can display them
   if(_wpWs && _wpWs.readyState===WebSocket.OPEN && _wpMyId && fa && fa.length>=32){
@@ -7931,6 +7934,7 @@ function confirmAddFriend(name,color,fullAddr){
   var fa = (fullAddr && fullAddr.length >= 32) ? fullAddr : '';
   var disp = fa ? (fa.slice(0,4)+'...'+fa.slice(-4)) : name;
   friendsList.push({id:'f'+Date.now(),name:name,addr:disp,fullAddr:fa,status:'online',color:color,inGame:false,tier:null});
+  _saveFriends();
   var inp=document.getElementById('friendInput'); if(inp) inp.value='';
   var res=document.getElementById('friendSearchResult'); if(res) res.innerHTML='';
   switchTab('friends'); toast('Request sent to '+name+'!');
@@ -8511,6 +8515,7 @@ function addFriendByAddr(addr, displayName, color) {
     id: 'f' + Date.now(), name: displayName, addr: short, fullAddr: addr,
     status: 'online', color: color || '#9945FF', inGame: false, tier: null
   });
+  _saveFriends();
   toast('Friend request sent to ' + displayName + '!');
   // Re-render the send button as disabled in search results
   var res = document.getElementById('searchResults');
@@ -8525,6 +8530,7 @@ function addFromSearch(pid) {
   if (!p) return;
   if (friendsList.some(function(f){ return f.name === p.name; })) { toast(p.name+' already a friend','error'); return; }
   friendsList.push({id:'f'+Date.now(),name:p.name,addr:p.addr,fullAddr:p.fullAddr||'',status:p.status,color:p.color,inGame:p.status==='ingame',tier:p.tier});
+  _saveFriends();
   toast('Friend request sent to '+p.name+'!');
   doSearch();
 }
@@ -8826,6 +8832,7 @@ function addFriendSoc(name,addr,color){
   var safeAddr=addr||'';
   var short=safeAddr.length>=8?safeAddr.slice(0,4)+'…'+safeAddr.slice(-4):safeAddr;
   friendsList.push({id:'f'+Date.now(),name:name,addr:short,fullAddr:safeAddr,status:'online',color:color||'#9945FF',inGame:false,tier:null});
+  _saveFriends();
   toast('Added '+name+' as friend!');
   var inp=document.getElementById('socSearchInp'); if(inp) doSocialSearch(inp.value);
 }
@@ -8964,6 +8971,7 @@ function _socFrTab(t){ _frSubTab=t; renderFriendsSocTab(); }
 
 function removeFrSoc(id){
   friendsList=friendsList.filter(function(f){return f.id!==id;});
+  _saveFriends();
   renderFriendsSocTab(); toast('Friend removed');
 }
 
