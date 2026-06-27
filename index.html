@@ -3992,7 +3992,8 @@ function _wpConnect() {
           games: (W.stats && W.stats.games)||0,
           kills: myKills||0,
           earned:(W.stats && W.stats.earned)||0,
-          wins:  (W.stats && W.stats.wins)||0 }
+          wins:  (W.stats && W.stats.wins)||0,
+          lobbyTier: selectedLobbyTier }
       }));
     }
     _wpAnnounce(false);
@@ -4023,6 +4024,26 @@ function _wpConnect() {
   _wpWs.onerror = function() { if (_wpWs) _wpWs.close(); };
 }
 
+function _playCashSound(){
+  try{
+    var ac=new(window.AudioContext||window.webkitAudioContext)();
+    function _note(freq,start,dur,gain){
+      var o=ac.createOscillator(), g=ac.createGain();
+      o.connect(g); g.connect(ac.destination);
+      o.type='sine'; o.frequency.value=freq;
+      g.gain.setValueAtTime(0,ac.currentTime+start);
+      g.gain.linearRampToValueAtTime(gain,ac.currentTime+start+0.01);
+      g.gain.exponentialRampToValueAtTime(0.001,ac.currentTime+start+dur);
+      o.start(ac.currentTime+start); o.stop(ac.currentTime+start+dur+0.05);
+    }
+    // cha  —  ching
+    _note(1050,0.00,0.10,0.28);
+    _note(1400,0.00,0.10,0.18);
+    _note(1800,0.09,0.18,0.32);
+    _note(2400,0.09,0.18,0.14);
+  }catch(e){}
+}
+
 function _wpHandleMsg(msg) {
   var type = msg.type, cid = msg.clientId, d = msg.data || {};
   if (!cid) return;
@@ -4045,8 +4066,10 @@ function _wpHandleMsg(msg) {
     if (isNew && !d.reply && _wpWs && _wpWs.readyState === WebSocket.OPEN) {
       _wpWs.send(JSON.stringify({ type: 'join', clientId: _wpMyId, tier: 'presence',
         data: { n: _wpMyName(), color: _playerColor, reply: true,
-          games: W.stats.games||0, kills: myKills||0, earned: W.stats.earned||0, wins: W.stats.wins||0 } }));
+          games: W.stats.games||0, kills: myKills||0, earned: W.stats.earned||0, wins: W.stats.wins||0,
+          lobbyTier: selectedLobbyTier } }));
     }
+    if (isNew && !gameRunning && (d.lobbyTier===5 || d.lobbyTier===10)) _playCashSound();
     // Sync stats into friendsList if this peer is a real friend
     friendsList.forEach(function(f){
       if((f.fullAddr||'')===cid){
