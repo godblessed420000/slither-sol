@@ -8955,24 +8955,9 @@ window.addEventListener('load', function() {
   Follow on X
 </a>
 
-<!-- ══ FRIENDS FLOATING BTN ══ -->
-<button id="friendsFloatBtn" class="friends-btn" onclick="toggleFriends()" title="Friends">
-  👥<span class="friends-badge" id="friendsBadge">0</span>
-</button>
-
-<!-- ══ FRIENDS PANEL ══ -->
-<div class="friends-panel" id="friendsPanel">
-  <div class="fp-header">
-    <span class="fp-title">👥 Friends</span>
-    <button onclick="toggleFriends()" style="background:transparent;border:none;color:var(--dim);cursor:pointer;font-size:1rem;line-height:1;">✕</button>
-  </div>
-  <div class="fp-tabs">
-    <button class="fp-tab active" id="tabFriends" onclick="switchTab('friends')">Friends</button>
-    <button class="fp-tab" id="tabRequests" onclick="switchTab('requests')">Requests <span id="reqCount" style="color:var(--red)"></span></button>
-    <button class="fp-tab" id="tabFind" onclick="switchTab('find')">Add</button>
-  </div>
-  <div class="fp-body" id="fpBody"></div>
-</div>
+<!-- friends float btn removed -->
+<div style="display:none" id="friendsFloatBtn"></div>
+<div style="display:none" id="friendsPanel"><span id="friendsBadge"></span><span id="reqCount"></span><div id="fpBody"></div><span id="tabFriends"></span><span id="tabRequests"></span><span id="tabFind"></span></div>
 
 <!-- ══ SEND SOL MODAL ══ -->
 <div class="modal-back hidden" id="modalSend" style="z-index:400;">
