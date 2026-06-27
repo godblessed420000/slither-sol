@@ -1391,7 +1391,7 @@ var MIN_ZOOM   = 0.45;     // floor: body renders 1:1 so below 0.45× ring looks
 var MAX_ZOOM   = 4.0;      // extended from 3.0 — matches damnbruh scroll zoom MAX_SCALE
 var ZOOM_STEP  = 1.04;     // multiplicative per wheel tick (4%) — damnbruh STEP_MULT
 var _zoomOffset = 0;       // (legacy, unused) manual scroll offset
-var _zoomScale  = 1.0;     // scroll zoom-OUT only: 1.0 = normal, 0.85 = max 15% zoomed out
+var _zoomScale  = 1.0;     // scroll zoom-OUT only: 1.0 = normal, 0.75 = max 25% zoomed out
 var _smoothLen  = 100;     // exponentially-smoothed snake length used for zoom (avoids per-frame jitter)
 // Slither.io-accurate movement constants
 var BASE_SPEED = 5.8;
@@ -4593,12 +4593,12 @@ function initCanvas(){
   gc=document.getElementById('gc'); mm=document.getElementById('minimap');
   ctx=gc.getContext('2d'); mctx=mm.getContext('2d');
   resizeC(); window.addEventListener('resize',resizeC);
-  // Scroll wheel: zoom-OUT only, up to 15% below normal. Scroll down zooms out toward
-  // 0.85×, scroll up returns to 1.0× (can't zoom in past the normal auto-zoom).
+  // Scroll wheel: zoom-OUT only, up to 25% below normal. Scroll down zooms out toward
+  // 0.75×, scroll up returns to 1.0× (can't zoom in past the normal auto-zoom).
   gc.addEventListener('wheel', function(e){
     e.preventDefault();
     var step=Math.max(-0.05,Math.min(0.05,e.deltaY*0.0015)); // scroll down (deltaY>0) => zoom out
-    _zoomScale=Math.max(0.85,Math.min(1.0,_zoomScale-step));
+    _zoomScale=Math.max(0.75,Math.min(1.0,_zoomScale-step));
   }, {passive:false});
 }
 function resizeC(){
@@ -5413,7 +5413,7 @@ function update(_dt){
   // (The old 22/snakeRadius made screen_radius constant, cancelling all width growth.)
   var _zCur=snakeThickness(player.length||100);
   var _autoZ=Math.max(0.42,Math.min(1.9, ZOOM_PX/Math.sqrt(_zCur*WIDTH_BASE)));
-  var _tarZ=_autoZ*_zoomScale; // scroll wheel can zoom OUT up to 15% (_zoomScale ∈ [0.85,1.0])
+  var _tarZ=_autoZ*_zoomScale; // scroll wheel can zoom OUT up to 25% (_zoomScale ∈ [0.75,1.0])
   CAM_ZOOM=CAM_ZOOM+(_tarZ-CAM_ZOOM)*0.12; // lerp — responsive to scroll, still smooth
 
   camX=player.x; camY=player.y;
