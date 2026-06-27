@@ -8600,6 +8600,7 @@ var _lbRefreshTimer=null;
 var _socTab='lb';
 var _frSubTab='friends';
 var _ppCache={};
+var _ppViewData=null; // current profile open — read by _ppAddFriend/_pp1v1/etc
 
 function openLeaderboard(){
   var el=document.getElementById('lbModal'); if(el) el.classList.remove('hidden');
@@ -8713,14 +8714,12 @@ function showPlayerProfile(pJSON){
   if(p.games>20) badges+='<span class="pp-badge" title="Veteran">🔥</span>';
   if(!badges) badges='<span class="pp-badge" title="Newcomer">🎮</span>';
   var isMe=p.isMe;
-  var _ppN=p.name.replace(/'/g,'&#39;');
-  var _ppA=(p.fullAddr||'').replace(/'/g,'&#39;');
-  var _ppC=(p.color||'#9945FF').replace(/'/g,'&#39;');
+  _ppViewData=p;
   var actBtns=isMe?'':
-    '<button class="pp-act-btn" onclick="_pp1v1(\''+_ppN+'\')" title="Challenge"><span>⚔️</span><span class="pp-act-lbl">1V1</span></button>'+
-    '<button class="pp-act-btn" onclick="_ppAddFriend(\''+_ppA+'\',\''+_ppN+'\',\''+_ppC+'\')" title="Add Friend"><span>👤+</span><span class="pp-act-lbl">ADD</span></button>'+
-    '<button class="pp-act-btn" onclick="_ppTip(\''+_ppN+'\')" title="Tip"><span>⚡</span><span class="pp-act-lbl">TIP</span></button>'+
-    '<button class="pp-act-btn" onclick="_ppShare(\''+_ppN+'\')" title="Share"><span>📤</span><span class="pp-act-lbl">SHARE</span></button>';
+    '<button class="pp-act-btn" onclick="_pp1v1()" title="Challenge"><span>⚔️</span><span class="pp-act-lbl">1V1</span></button>'+
+    '<button class="pp-act-btn" onclick="_ppAddFriend()" title="Add Friend"><span>👤+</span><span class="pp-act-lbl">ADD</span></button>'+
+    '<button class="pp-act-btn" onclick="_ppTip()" title="Tip"><span>⚡</span><span class="pp-act-lbl">TIP</span></button>'+
+    '<button class="pp-act-btn" onclick="_ppShare()" title="Share"><span>📤</span><span class="pp-act-lbl">SHARE</span></button>';
   body.innerHTML=
     '<div class="pp-wrap">'+
       '<div class="pp-back" onclick="switchSocTab(\'lb\')">◀ Back to Leaderboard</div>'+
@@ -8749,13 +8748,17 @@ function showPlayerProfile(pJSON){
       '</div>'+
     '</div>';
 }
-function _pp1v1(name){ toast('⚔️ 1V1 challenge sent to '+name,'info'); }
-function _ppAddFriend(addr,name,color){
+function _pp1v1(){ if(!_ppViewData) return; toast('⚔️ 1V1 challenge sent to '+_ppViewData.name,'info'); }
+function _ppAddFriend(){
+  if(!_ppViewData) return;
+  var addr=_ppViewData.fullAddr||'', name=_ppViewData.name, color=_ppViewData.color;
   if(addr&&addr.length>=32) wpSendFriendReq(addr,name);
   else addFriendSoc(name,addr,color);
 }
-function _ppTip(name){ toast('⚡ Tip feature coming soon','info'); }
-function _ppShare(name){
+function _ppTip(){ if(!_ppViewData) return; toast('⚡ Tip feature coming soon','info'); }
+function _ppShare(){
+  if(!_ppViewData) return;
+  var name=_ppViewData.name;
   var url=window.location.href.split('?')[0]+'?player='+encodeURIComponent(name);
   if(navigator.clipboard){ navigator.clipboard.writeText(url).then(function(){ toast('🔗 Profile link copied!','info'); }); }
   else { toast('🔗 Share: '+url,'info'); }
