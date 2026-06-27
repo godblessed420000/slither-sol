@@ -4830,8 +4830,8 @@ function getMaxSegs(){ return 600; }
 function grow(s){
   s.widthBonus = (s.widthBonus||0) + 0.60;
   if(s.isMe && boosting) return;
-  if(s.length >= 999) return; // absolute size cap
-  s.length = (s.length||40) + 1;
+  if(s.length >= 9999) return; // absolute size cap
+  s.length = (s.length||100) + 10; // +10 size per food — visible growth each orb
 }
 function spawnPlayer(){
   var cx=WORLD/2, cy=WORLD/2, sx, sy;
@@ -5391,7 +5391,9 @@ function update(_dt){
   }
 
   var len=player.length; // used by HUD below (logical length unit, not raw seg count)
-  CAM_ZOOM=0.75;
+  // Dynamic zoom: zooms in for small snakes, out for large — matches MoneySlither behaviour
+  var _tarZ=Math.max(0.45,Math.min(1.8,22/snakeRadius(player)));
+  CAM_ZOOM=CAM_ZOOM+(_tarZ-CAM_ZOOM)*0.04; // smooth lerp ~1s to adapt
 
   camX=player.x; camY=player.y;
   var isFreeGame=(activeTier==='free');
@@ -5536,6 +5538,7 @@ function killCheck(){
   var myR=snakeRadius(player);
   var myBodyR=snakeBodyR(player);
   var _myCos=Math.cos(player.angle), _mySin=Math.sin(player.angle);
+  var _h2hHandled={}; // peers whose heads were in contact this frame (static OR swept)
 
   for(var i=0;i<peers.length;i++){
     var p=peers[i]; if(!p.alive) continue;
@@ -5552,6 +5555,7 @@ function killCheck(){
     var aPrev=player.segs[0]||{x:player.x,y:player.y};
     var _headContact=(headGap<h2hCombR)||segHitsCircle(aPrev,{x:player.x,y:player.y},{x:px,y:py},h2hCombR);
     if(_headContact){
+      _h2hHandled[pid]=true; // mark so reverse-check skips this peer this frame
       var _pCos=Math.cos(p.angle), _pSin=Math.sin(p.angle);
       // MS 75° facing gate: normalize dot product, threshold = cos(75°) = 0.2588
       var _myDot=((px-player.x)*_myCos+(py-player.y)*_mySin)/(headGap||1);
@@ -5620,6 +5624,7 @@ function killCheck(){
     var rp2=peers[ri]; if(!rp2.alive) continue;
     if(_now-(rp2.joinTs||0)<1500) continue;
     var rpid=rp2.remoteId||'';
+    if(_h2hHandled[rpid]) continue; // head contact this frame — H2H forward-pass owns this
     if(_sentKillTs[rpid]&&_now-_sentKillTs[rpid]<2000) continue;
     var rpx=(rp2.targetX!=null)?rp2.targetX:rp2.x, rpy=(rp2.targetY!=null)?rp2.targetY:rp2.y;
     var rpR=snakeRadius(rp2);
@@ -6085,11 +6090,14 @@ function drawS(s){
   var W2SX=function(wx){ return (wx-s.x)*Z+hx; };
   var W2SY=function(wy){ return (wy-s.y)*Z+hy; };
 
-  // Visual radius: pure MS thicknessForSegments (no hitbox ×1.20 scale)
-  var _Rw = thicknessForSegments(segmentsForSize(s.length||40)); // visual world-unit radius
+  // Visual radius: continuous MS thickness (no integer rounding) so width grows every food
+  var _szC=Math.max(40,s.length||100);
+  var _nC=(_szC<=100)?(8+(_szC-40)*(18/60)):(26+(_szC-100)*0.08); // continuous segs
+  var _Rw=(7.5+0.55*Math.sqrt(_nC))*1.43; if(_nC>26) _Rw+=Math.pow(_nC-26,0.7)*0.17*1.43;
+  _Rw=Math.max(10,_Rw);
   var R   = _Rw * Z;                                // screen-px radius at current zoom
   var BW  = R*1.9;                                  // body stroke width in screen px
-  // Display exactly segmentsForSize(length) body segments — matches MoneySlither tail length
+  // Display segmentsForSize(length) body segments — matches MoneySlither tail length
   var _maxDraw = segmentsForSize(s.length||40);
   var pts=[{x:hx,y:hy}];
   for(var i=1;i<s.segs.length&&i<_maxDraw;i++){
