@@ -8632,6 +8632,7 @@ function renderLB(){
 
 function showPlayerProfile(pJSON){
   var p=typeof pJSON==='string'?JSON.parse(pJSON):pJSON;
+  _socTab='player';
   var body=document.getElementById('lbmBody'); if(!body) return;
   var ft=document.getElementById('lbFooter'); if(ft) ft.textContent='';
   var col=p.color||'#9945FF';
