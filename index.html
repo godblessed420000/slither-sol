@@ -1395,6 +1395,14 @@ var _smoothLen  = 100;     // exponentially-smoothed snake length used for zoom 
 // Slither.io-accurate movement constants
 var BASE_SPEED = 5.8;
 var POINT_DIST = 1.6;        // world-units between body segments (MoneySlither POINT_DIST)
+// ── Width model (slither.io-accurate) ─────────────────────────────────────────
+// Body radius = WIDTH_BASE × scale, scale = 1 + (len-100)/WIDTH_DEN, capped at WIDTH_SCMAX.
+// This is linear-in-length like slither.io's sc=1+(sct-2)/106, so the snake VISIBLY
+// widens as you eat (the old sqrt-of-segments formula barely moved per orb).
+var WIDTH_BASE  = 15.0;      // world-radius of the body at spawn size (len 100)
+var WIDTH_DEN   = 200;       // larger = slower width growth; width doubles every +200 len
+var WIDTH_SCMAX = 6.0;       // max scale, like slither.io's 6× cap
+var ZOOM_PX     = 27;        // spawn body screen-radius in px; sets perceived snake size
 var BOOST_MULT        = 2.7;
 var BOOST_MASS_DRAIN  = 3/60;   // length units lost per frame while boosting (≈3 units/sec)
 var TURN_RATE        = 0.16;
@@ -4822,7 +4830,7 @@ function mkSnake(x,y,color,name,isMe,startLength){
   var initLen = startLength || 100;              // MS START_SIZE=100 default
   var initSegCount = segmentsForSize(initLen);   // number of body segments MS would show
   var segs=[]; for(var i=0;i<initSegCount;i++) segs.push({x:x-i*POINT_DIST,y:y});
-  var _initHeadR=thicknessForSegments(initSegCount);
+  var _initHeadR=snakeThickness(initLen)*1.15;
   return{x:x,y:y,segs:segs,angle:0,color:color,name:name,isMe:isMe,speed:BASE_SPEED,
          headR:_initHeadR,length:initLen,widthBonus:0,score:0,alive:true,_segAccum:0};
 }
@@ -5391,8 +5399,13 @@ function update(_dt){
   }
 
   var len=player.length; // used by HUD below (logical length unit, not raw seg count)
-  // Dynamic zoom: zooms in for small snakes, out for large — matches MoneySlither behaviour
-  var _tarZ=Math.max(0.45,Math.min(1.8,22/snakeRadius(player)));
+  // Dynamic zoom — SUB-LINEAR so the snake still visibly grows on screen as it widens.
+  // screen_radius = thickness × zoom = ZOOM_PX × sqrt(thickness/WIDTH_BASE):
+  //   • spawn → ZOOM_PX px (snake looks the right size, not tiny)
+  //   • 4× thicker → 2× bigger on screen, while the camera gently pulls back.
+  // (The old 22/snakeRadius made screen_radius constant, cancelling all width growth.)
+  var _zCur=snakeThickness(player.length||100);
+  var _tarZ=Math.max(0.42,Math.min(1.9, ZOOM_PX/Math.sqrt(_zCur*WIDTH_BASE)));
   CAM_ZOOM=CAM_ZOOM+(_tarZ-CAM_ZOOM)*0.04; // smooth lerp ~1s to adapt
 
   camX=player.x; camY=player.y;
@@ -5494,24 +5507,31 @@ function _hoHash(a,b){
   return h&1;
 }
 
-// MoneySlither exact hitbox pipeline: size → segments → thickness → hitbox scale
+// How many body segments to render/store for a given size. CONTINUOUS (no rounding) so
+// width/length grow smoothly every orb. Above 100 the snake keeps lengthening at a
+// visible rate (0.25 seg per size unit ≈ +4 world-units of tail per orb).
 function segmentsForSize(sz){
   sz=Math.max(40,Number(sz)||40);
-  var n=8+(sz-40)*(26-8)/(100-40); if(sz>100) n=26+(sz-100)*0.08;
-  return Math.max(8,Math.round(n));
+  var n=(sz<=100)?(8+(sz-40)*(26-8)/(100-40)):(26+(sz-100)*0.25);
+  return Math.max(8,n);
 }
-function thicknessForSegments(n){
-  n=Math.max(1,Number(n)||1);
-  var t=7.5+0.55*Math.sqrt(n); if(n>26) t+=Math.pow(n-26,0.7)*0.17;
-  return Math.max(10,t*1.43);
+// Unified body thickness (world-radius) — single source of truth for hitbox, body
+// collision, visual width, and zoom. Linear-in-length like slither.io's scale factor.
+function snakeThickness(len){
+  len=Math.max(40,Number(len)||100);
+  var sc=1+(len-100)/WIDTH_DEN;
+  if(sc<0.5) sc=0.5; if(sc>WIDTH_SCMAX) sc=WIDTH_SCMAX;
+  return WIDTH_BASE*sc;
 }
+// Back-compat shim: a couple of call sites still pass a segment count.
+function thicknessForSegments(n){ return WIDTH_BASE; }
 function snakeRadius(s){
-  // Head hitbox: thickness × HITBOX_BASE(0.95) × _hbs(1.07) × _hhs(1.18) ≈ ×1.20
-  return thicknessForSegments(segmentsForSize(s.length||40))*0.95*1.07*1.18;
+  // Head hitbox — slightly larger than the body, like slither.io's fang reach
+  return snakeThickness(s.length||40)*1.15;
 }
 function snakeBodyR(s){
-  // Body segment hitbox: thickness × HITBOX_BASE only (no head scale bonus)
-  return thicknessForSegments(segmentsForSize(s.length||40))*0.95;
+  // Body segment hitbox = the drawn body radius, so what you see is what kills
+  return snakeThickness(s.length||40);
 }
 
 // Swept segment→circle hit test: did segment p1→p2 pass through circle (c, radius r)?
@@ -5563,19 +5583,20 @@ function killCheck(){
       var _iFaceThem=_myDot>0.2588;
       var _theyFaceMe=_theirDot>0.2588;
 
-      // Referee: engage when at least one snake faces the other (prevents double-kill)
-      if(_iFaceThem || _theyFaceMe){
+      // Referee owns EVERY head contact — not just facing ones. Exactly one deterministic
+      // outcome per pair (both clients agree who the referee is), so two snakes can never
+      // die together in a head-to-head. This is the key fix for "both snakes dying".
+      {
         var _h2=_hoHash(myId,pid);
         var _iAmRef=(_h2===0)===(myId<pid);
-        if(!_iAmRef){ continue; } // non-ref ALWAYS waits — prevents double-kill
+        if(!_iAmRef){ continue; } // non-ref ALWAYS waits for the ref's kill broadcast
 
-        // Both facing within 75° → true H2H → bigger wins; one facing → rammer loses
+        // Winner: bigger wins; equal size → rammer (the one facing) loses; dead tie → ping.
         var _iWin;
-        if(_iFaceThem && _theyFaceMe){
-          _iWin=myR>pR ? true : myR<pR ? false : ((_pingEma||999)<=((p.ping||999)));
-        } else {
-          _iWin=!_iFaceThem; // I face them → I lose; they face me → I win
-        }
+        if(myR>pR)      _iWin=true;
+        else if(myR<pR) _iWin=false;
+        else if(_iFaceThem!==_theyFaceMe) _iWin=!_iFaceThem;
+        else _iWin=((_pingEma||999)<=((p.ping||999)));
 
         if(!_iWin){
           var _msg=(_iFaceThem&&_theyFaceMe)?'Eliminated by '+p.name+' (H2H — larger snake wins)':'Eliminated by '+p.name;
@@ -5606,12 +5627,17 @@ function killCheck(){
           continue;
         }
       }
-      // Neither facing (tangential side-graze) — fall through to body check
+      // Every path in the head-contact block above returns or continues, so execution
+      // never reaches the body check below for a peer whose head is touching mine.
     }
 
-    // My head vs their body — skip segs 1-2 (adjacent to head, prevent desync false-kills)
+    // My head vs their body. Skip segments that lie within THEIR head radius — those are
+    // the head/neck region (governed by the referee above), not the body. Counting them
+    // here is exactly what let an H2H double-kill slip through the body check.
     for(var j=3;j<p.segs.length;j++){
       var bs=p.segs[j]; if(!bs) break;
+      var _nhx=bs.x-px, _nhy=bs.y-py;
+      if(_nhx*_nhx+_nhy*_nhy < pR*pR) continue; // head zone — referee's job, not a body kill
       var _dx=player.x-bs.x, _dy=player.y-bs.y;
       if(_dx*_dx+_dy*_dy < bodyCombR2){
         killPlayer('Eliminated by '+p.name,pid); return;
@@ -5632,6 +5658,8 @@ function killCheck(){
     if(dst(player.x,player.y,rpx,rpy)<(rpR+myR)*1.07) continue; // H2H handled above
     for(var rk=3;rk<player.segs.length;rk++){
       var rsa=player.segs[rk]; if(!rsa) break;
+      var _mhx=rsa.x-player.x, _mhy=rsa.y-player.y;
+      if(_mhx*_mhx+_mhy*_mhy < myR*myR) continue; // my head zone — not a body kill
       var _rdx=rpx-rsa.x, _rdy=rpy-rsa.y;
       if(_rdx*_rdx+_rdy*_rdy < rCombR2){
         _sentKillTs[rpid]=_now;
@@ -6090,13 +6118,9 @@ function drawS(s){
   var W2SX=function(wx){ return (wx-s.x)*Z+hx; };
   var W2SY=function(wy){ return (wy-s.y)*Z+hy; };
 
-  // Visual radius: continuous MS thickness (no integer rounding) so width grows every food
-  var _szC=Math.max(40,s.length||100);
-  var _nC=(_szC<=100)?(8+(_szC-40)*(18/60)):(26+(_szC-100)*0.08); // continuous segs
-  var _Rw=(7.5+0.55*Math.sqrt(_nC))*1.43; if(_nC>26) _Rw+=Math.pow(_nC-26,0.7)*0.17*1.43;
-  _Rw=Math.max(10,_Rw);
-  var R   = _Rw * Z;                                // screen-px radius at current zoom
-  var BW  = R*1.9;                                  // body stroke width in screen px
+  // Visual radius = body hitbox thickness, so what you see is exactly what kills.
+  var R   = snakeThickness(s.length||100) * Z;      // screen-px radius at current zoom
+  var BW  = R*2.0;                                  // body stroke width in screen px
   // Display segmentsForSize(length) body segments — matches MoneySlither tail length
   var _maxDraw = segmentsForSize(s.length||40);
   var pts=[{x:hx,y:hy}];
