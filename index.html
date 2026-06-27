@@ -5887,7 +5887,8 @@ function killCheck(){
     // My head vs their body. Skip segments that lie within THEIR head radius — those are
     // the head/neck region (governed by the referee above), not the body. Counting them
     // here is exactly what let an H2H double-kill slip through the body check.
-    for(var j=3;j<p.segs.length;j++){
+    var _pMaxSeg=segmentsForSize(p.length||40);
+    for(var j=3;j<p.segs.length&&j<_pMaxSeg;j++){
       var bs=p.segs[j]; if(!bs) break;
       var _nhx=bs.x-px, _nhy=bs.y-py;
       if(_nhx*_nhx+_nhy*_nhy < pR*pR) continue; // head zone — referee's job, not a body kill
@@ -5909,7 +5910,8 @@ function killCheck(){
     var rpR=snakeRadius(rp2);
     var rCombR=snakeBodyR(rp2)+myBodyR, rCombR2=rCombR*rCombR;
     if(dst(player.x,player.y,rpx,rpy)<(rpR+myR)*1.07) continue; // H2H handled above
-    for(var rk=3;rk<player.segs.length;rk++){
+    var _myMaxSeg=segmentsForSize(player.length||40);
+    for(var rk=3;rk<player.segs.length&&rk<_myMaxSeg;rk++){
       var rsa=player.segs[rk]; if(!rsa) break;
       var _mhx=rsa.x-player.x, _mhy=rsa.y-player.y;
       if(_mhx*_mhx+_mhy*_mhy < myR*myR) continue; // my head zone — not a body kill
@@ -6250,8 +6252,9 @@ function draw(){
       ctx.globalAlpha=0.35; ctx.strokeStyle='#14F195';
       ctx.shadowColor='#14F195'; ctx.shadowBlur=6;
       ctx.lineWidth=snakeBodyR(player)*_Z*2; ctx.lineJoin='round'; ctx.lineCap='round';
+      var _myDbgMax=segmentsForSize(player.length||40);
       ctx.beginPath(); ctx.moveTo(_dW2X(_mSegs[1].x),_dW2Y(_mSegs[1].y));
-      for(var _mi=2;_mi<_mSegs.length;_mi++){
+      for(var _mi=2;_mi<_mSegs.length&&_mi<_myDbgMax;_mi++){
         var _ms=_mSegs[_mi],_msp=_mSegs[_mi-1]; if(!_ms||!_msp) break;
         ctx.lineTo(_dW2X(_ms.x),_dW2Y(_ms.y));
       }
@@ -6286,8 +6289,9 @@ function draw(){
         ctx.globalAlpha=0.35; ctx.strokeStyle=_pc;
         ctx.shadowColor=_pc; ctx.shadowBlur=6;
         ctx.lineWidth=snakeBodyR(_dp)*_Z*2; ctx.lineJoin='round'; ctx.lineCap='round';
+        var _dpDbgMax=segmentsForSize(_dp.length||40);
         ctx.beginPath(); ctx.moveTo(_dW2X(_dps[1].x),_dW2Y(_dps[1].y));
-        for(var _dj=2;_dj<_dps.length;_dj++){
+        for(var _dj=2;_dj<_dps.length&&_dj<_dpDbgMax;_dj++){
           var _dps2=_dps[_dj],_dps1=_dps[_dj-1]; if(!_dps2||!_dps1) break;
           ctx.lineTo(_dW2X(_dps2.x),_dW2Y(_dps2.y));
         }
