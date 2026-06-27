@@ -994,29 +994,9 @@ canvas{display:block;width:100%;height:100%;}
 </header>
 
 <div class="main">
-  <div class="sidebar">
-    <div class="prize-box">
-      <div class="prize-label">Live Prize Pool</div>
-      <div class="prize-amt" id="prizeAmt">0.000</div>
-      <div class="prize-sub">SOL &middot; <span id="prizeUSD">$0.00</span></div>
-    </div>
-    <div id="activeLobbyBadge" style="display:none;justify-content:center;"></div>
-    <div class="cashout-hint"><strong>[Q] Instant Cashout</strong><br>Hold Q for 1 second while alive.<br><strong>10% fee</strong> on every cashout.</div>
-    <div>
-      <div class="s-title" style="margin-bottom:6px">Fee Split (10%)</div>
-      <div class="fee-box">
-        <div class="fee-row"><span class="fee-lbl">You receive</span><span class="fv-you">90%</span></div>
-        <div class="fee-row"><span class="fee-lbl">Creator fee</span><span class="fv-house">10%</span></div>
-      </div>
-    </div>
-    <div class="s-title">Live Standings</div>
-    <div id="leaderboard"></div>
-    <div class="s-title" style="margin-top:auto">Your Stats</div>
-    <div class="stat-row"><span class="stat-lbl">Games</span><span class="stat-val" id="sGames">0</span></div>
-    <div class="stat-row"><span class="stat-lbl">Cashouts</span><span class="stat-val" id="sCashouts">0</span></div>
-    <div class="stat-row"><span class="stat-lbl">Total Earned</span><span class="stat-val" id="sEarned">0.0000</span></div>
-    <div class="stat-row"><span class="stat-lbl">Balance</span><span class="stat-val" id="sBalance">&#8212;</span></div>
-  </div>
+  <!-- sidebar removed -->
+  <div style="display:none" id="activeLobbyBadge"></div>
+  <div style="display:none"><span id="prizeAmt"></span><span id="prizeUSD"></span><span id="leaderboard"></span><span id="sGames"></span><span id="sCashouts"></span><span id="sEarned"></span><span id="sBalance"></span></div>
 
   <div class="canvas-wrap" id="canvasWrap">
     <canvas id="gc"></canvas>
