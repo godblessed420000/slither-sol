@@ -5510,7 +5510,7 @@ function update(_dt){
           _st._segAccum=(_st._segAccum||0)+Math.hypot(_st.x-(_st._lpx||_st.x),_st.y-(_st._lpy||_st.y));
           _st._lpx=_st.x; _st._lpy=_st.y;
           if(_st._segAccum>=POINT_DIST){ _st._segAccum-=POINT_DIST; _st.segs.unshift({x:_st.x,y:_st.y}); }
-          var _smaxS=segmentsForSize(_st.length||40)+60; if(_st.segs.length>_smaxS)_st.segs.length=_smaxS;
+          var _smaxS=Math.floor(segmentsForSize(_st.length||40)+60); if(isFinite(_smaxS)&&_smaxS>0&&_st.segs.length>_smaxS)_st.segs.length=_smaxS;
         }
         camX=_st.x; camY=_st.y;
       } else {
@@ -5600,8 +5600,8 @@ function update(_dt){
       p._segAccum=(p._segAccum||0)+Math.hypot(p.x-(p._lpx||p.x),p.y-(p._lpy||p.y));
       p._lpx=p.x; p._lpy=p.y;
       if(p._segAccum>=POINT_DIST){ p._segAccum-=POINT_DIST; p.segs.unshift({x:p.x,y:p.y}); }
-      var maxS=segmentsForSize(p.length||40)+60;
-      if(p.segs.length>maxS) p.segs.length=maxS;
+      var maxS=Math.floor(segmentsForSize(p.length||40)+60);
+      if(isFinite(maxS)&&maxS>0&&p.segs.length>maxS) p.segs.length=maxS;
     }
     // CT bots move separately — only real remote players exist in peers[]
   }
@@ -5730,9 +5730,9 @@ function _hoHash(a,b){
 // width/length grow smoothly every orb. Above 100 the snake keeps lengthening at a
 // visible rate (0.25 seg per size unit ≈ +4 world-units of tail per orb).
 function segmentsForSize(sz){
-  sz=Math.max(40,Number(sz)||40);
+  sz=Math.max(40,Math.min(Number(sz)||40,100000));
   var n=(sz<=100)?(8+(sz-40)*(26-8)/(100-40)):(26+(sz-100)*0.25);
-  return Math.max(8,n);
+  return Math.max(8,Math.min(Math.floor(n),50000));
 }
 // Unified body thickness (world-radius) — single source of truth for hitbox, body
 // collision, visual width, and zoom. Linear-in-length like slither.io's scale factor.
