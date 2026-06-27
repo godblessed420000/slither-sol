@@ -1575,7 +1575,7 @@ var WIDTH_SCMAX = 6.0;       // max scale, like slither.io's 6× cap
 var ZOOM_PX     = 20;        // controls auto-zoom level (higher = zoomed in more)
 var BODY_SCALE  = 0.65;      // visual-only width multiplier; <1.0 = thinner snake, doesn't affect zoom or hitbox
 var BOOST_MULT        = 2.7;
-var BOOST_MASS_DRAIN  = 8/60;   // length units lost per frame while boosting (≈8 units/sec)
+var BOOST_MASS_DRAIN  = 3/60;   // length units lost per frame while boosting (≈3 units/sec)
 var TURN_RATE        = 0.16;
 var CIRCLE_RADIUS_WU = 46;   // auto-circle radius in world units (≈screen px at zoom 1×) — damnbruh RADIUS_PX concept
 var SEG_MULT   = 4;        // segments per length unit — lower = shorter tail
@@ -5535,10 +5535,9 @@ function update(_dt){
     _boostMassAccum = 0; // reset when not boosting
   }
   // No passive recharge — boost refills only from eating orbs or getting kills
-  var _segBuf = (boosting && boostE>0) ? 6 : 60;
-  moveS(player, player.angle, spd, _segBuf);
-  // Hard trim after move so tail shrinks immediately during boost
-  var _tgt = segmentsForSize(player.length||40) + _segBuf;
+  moveS(player, player.angle, spd);
+  // Enforce segment cap
+  var _tgt = segmentsForSize(player.length||40) + 60;
   while(player.segs.length > _tgt) player.segs.pop();
 
   player.headR = snakeRadius(player); // unified radius: matches hitbox and body visual
@@ -5617,7 +5616,7 @@ function update(_dt){
   }
 }
 
-function moveS(s,angle,spd,segBuf){
+function moveS(s,angle,spd){
   s.angle=angle;
   var _cx=Math.cos(angle), _cy=Math.sin(angle);
   var px=s.x, py=s.y;
@@ -5626,8 +5625,7 @@ function moveS(s,angle,spd,segBuf){
   // Add body segments at POINT_DIST (1.6 wu) intervals — matches MoneySlither exactly
   var d0=s._segAccum||0, total=d0+spd;
   var newK=Math.floor(total/POINT_DIST);
-  var _buf=segBuf!=null?segBuf:60;
-  var _maxS=Math.max(segmentsForSize(s.length||40)+_buf,8);
+  var _maxS=Math.max(segmentsForSize(s.length||40)+60,80);
   for(var j=1;j<=newK;j++){
     var t=(j*POINT_DIST-d0)/spd; // fraction into current frame where this seg falls
     var sx=((px+_cx*spd*t)%WORLD+WORLD)%WORLD, sy=((py+_cy*spd*t)%WORLD+WORLD)%WORLD;
@@ -6315,10 +6313,8 @@ function drawS(s){
   // Visual radius scaled by BODY_SCALE for thinner look; hitbox (snakeRadius) is unchanged.
   var R   = snakeThickness(s.length||100) * Z * BODY_SCALE;  // screen-px radius at current zoom
   var BW  = R*2.0;                                            // body stroke width in screen px
-  // Display segmentsForSize(length) body segments; shrink tail while boosting
-  var _isBst = s.isMe ? (boosting && boostE>0) : !!s.boosting;
+  // Display segmentsForSize(length) body segments — matches MoneySlither tail length
   var _maxDraw = segmentsForSize(s.length||40);
-  if(_isBst) _maxDraw = Math.max(6, Math.round(_maxDraw * 0.45));
   var pts=[{x:hx,y:hy}];
   for(var i=1;i<s.segs.length&&i<_maxDraw;i++){
     var _sg=s.segs[i]; if(!_sg) break;
