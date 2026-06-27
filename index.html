@@ -5821,7 +5821,7 @@ function killCheck(){
     var pR=snakeRadius(p);
     var pBodyR=snakeBodyR(p);
     var h2hCombR=(myR+pR)*1.07;
-    var bodyCombR2=(myR+pBodyR)*(myR+pBodyR);
+    var bodyCombR2=(myBodyR+pBodyR)*(myBodyR+pBodyR);
     var headGap=dst(player.x,player.y,px,py);
 
     // Head proximity: static overlap OR swept (catches boosting tunnels)
@@ -5907,7 +5907,7 @@ function killCheck(){
     if(_sentKillTs[rpid]&&_now-_sentKillTs[rpid]<2000) continue;
     var rpx=(rp2.targetX!=null)?rp2.targetX:rp2.x, rpy=(rp2.targetY!=null)?rp2.targetY:rp2.y;
     var rpR=snakeRadius(rp2);
-    var rCombR=rpR+myBodyR, rCombR2=rCombR*rCombR;
+    var rCombR=snakeBodyR(rp2)+myBodyR, rCombR2=rCombR*rCombR;
     if(dst(player.x,player.y,rpx,rpy)<(rpR+myR)*1.07) continue; // H2H handled above
     for(var rk=3;rk<player.segs.length;rk++){
       var rsa=player.segs[rk]; if(!rsa) break;
@@ -6249,7 +6249,7 @@ function draw(){
     if(_mSegs.length>2 && _mSegs[1]){
       ctx.globalAlpha=0.35; ctx.strokeStyle='#14F195';
       ctx.shadowColor='#14F195'; ctx.shadowBlur=6;
-      ctx.lineWidth=_myRs*2; ctx.lineJoin='round'; ctx.lineCap='round';
+      ctx.lineWidth=snakeBodyR(player)*_Z*2; ctx.lineJoin='round'; ctx.lineCap='round';
       ctx.beginPath(); ctx.moveTo(_dW2X(_mSegs[1].x),_dW2Y(_mSegs[1].y));
       for(var _mi=2;_mi<_mSegs.length;_mi++){
         var _ms=_mSegs[_mi],_msp=_mSegs[_mi-1]; if(!_ms||!_msp) break;
@@ -6285,7 +6285,7 @@ function draw(){
       if(_dps.length>2 && _dps[1]){
         ctx.globalAlpha=0.35; ctx.strokeStyle=_pc;
         ctx.shadowColor=_pc; ctx.shadowBlur=6;
-        ctx.lineWidth=_dpRs*2; ctx.lineJoin='round'; ctx.lineCap='round';
+        ctx.lineWidth=snakeBodyR(_dp)*_Z*2; ctx.lineJoin='round'; ctx.lineCap='round';
         ctx.beginPath(); ctx.moveTo(_dW2X(_dps[1].x),_dW2Y(_dps[1].y));
         for(var _dj=2;_dj<_dps.length;_dj++){
           var _dps2=_dps[_dj],_dps1=_dps[_dj-1]; if(!_dps2||!_dps1) break;
