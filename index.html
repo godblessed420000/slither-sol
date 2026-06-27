@@ -8837,13 +8837,14 @@ function addFriendSocIdx(i){
   addFriendSoc(p.name,p.addr,p.color);
 }
 function addFriendSoc(name,addr,color){
+  if(!name){toast('Could not add friend: missing name','error');return;}
   if(friendsList.some(function(f){return f.name===name;})){toast(name+' already a friend','error');return;}
   var safeAddr=addr||'';
   var short=safeAddr.length>=8?safeAddr.slice(0,4)+'…'+safeAddr.slice(-4):safeAddr;
   friendsList.push({id:'f'+Date.now(),name:name,addr:short,fullAddr:safeAddr,status:'online',color:color||'#9945FF',inGame:false,tier:null});
   _saveFriends();
   toast('Added '+name+' as friend!');
-  var inp=document.getElementById('socSearchInp'); if(inp) doSocialSearch(inp.value);
+  switchSocTab('friends');
 }
 
 function renderProfileTab(){
