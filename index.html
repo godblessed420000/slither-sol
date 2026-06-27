@@ -4119,6 +4119,29 @@ function _wpHandleMsg(msg) {
     return;
   }
 
+  // ── Incoming 1v1 challenge ───────────────────────────────────────────────
+  if (type === 'challenge') {
+    if (!_wpMyId || d.to !== _wpMyId) return;
+    var chName=d.n||('P_'+cid.slice(0,4));
+    var chStake=d.stake||1;
+    var ex2=document.getElementById('challengeModal'); if(ex2) ex2.remove();
+    var cdiv=document.createElement('div');
+    cdiv.id='challengeModal';
+    cdiv.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:9999;display:flex;align-items:center;justify-content:center;';
+    cdiv.innerHTML=
+      '<div style="background:#0d1117;border:1px solid rgba(160,32,240,.5);border-radius:16px;padding:28px 24px;min-width:270px;text-align:center;box-shadow:0 0 40px rgba(160,32,240,.3);">'+
+      '<div style="font-size:.9rem;font-weight:700;color:#a020f0;margin-bottom:6px;">⚔️ 1V1 Challenge!</div>'+
+      '<div style="font-size:.7rem;color:#fff;margin-bottom:4px;"><b>'+chName+'</b> challenged you!</div>'+
+      '<div style="font-size:.6rem;color:#ffd700;margin-bottom:18px;">$'+chStake+' stake · '+Math.round((d.dur||60)/60)+' min</div>'+
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">'+
+        '<button onclick="document.getElementById(\'challengeModal\').remove()" style="background:transparent;border:1px solid #2a2a3a;color:#666;padding:10px;border-radius:8px;cursor:pointer;font-size:.65rem;">Decline</button>'+
+        '<button onclick="_acceptChallenge(\''+cid.replace(/'/g,'')+"',"+chStake+')" style="background:linear-gradient(135deg,#a020f0,#ff2d9b);border:none;color:#fff;padding:10px;border-radius:8px;cursor:pointer;font-size:.65rem;font-weight:700;">Accept!</button>'+
+      '</div></div>';
+    document.body.appendChild(cdiv);
+    toast('⚔️ '+chName+' challenged you to a $'+chStake+' 1v1!','info');
+    return;
+  }
+
   // ── Friend request accepted by the other side ─────────────────────────────
   if (type === 'fr_accept') {
     if (!_wpMyId || d.to !== _wpMyId) return; // not for us
@@ -8545,7 +8568,7 @@ function inviteFromSearch(pid) {
 }
 
 // ════════════════ 1V1 ME BRO ════════════════
-var _1v1Stake=1, _1v1Dur=60;
+var _1v1Stake=1, _1v1Dur=60, _1v1Target=null;
 
 function open1v1(){
   var m=document.getElementById('modal1v1'); if(m) m.classList.remove('hidden');
@@ -8592,12 +8615,28 @@ function _upd1v1Btn(){
 }
 function _confirm1v1(){
   if(!userProfile){ toast('Sign in to post a 1v1 challenge','error'); return; }
-  var solAmt=_1v1Stake/(SOL_USD||200);
-  toast('🎯 1v1 challenge posted! $'+_1v1Stake+' stake · '+Math.round(_1v1Dur/60)+'min window','info');
+  var target=_1v1Target; _1v1Target=null;
   close1v1();
-  // Start the game immediately as their "run"
+  if(target&&target.fullAddr&&target.fullAddr.length>=32&&_wpWs&&_wpWs.readyState===WebSocket.OPEN){
+    _wpWs.send(JSON.stringify({type:'challenge',clientId:_wpMyId,tier:'presence',
+      data:{to:target.fullAddr,n:_wpMyName(),color:_playerColor,stake:_1v1Stake,dur:_1v1Dur}}));
+    toast('⚔️ Challenge sent to '+target.name+'! $'+_1v1Stake+' stake','info');
+  } else {
+    toast('🎯 1v1 challenge posted! $'+_1v1Stake+' stake · '+Math.round(_1v1Dur/60)+'min window','info');
+  }
   menuSelCard(_1v1Stake<=1?1:_1v1Stake<=5?5:10);
   setTimeout(doJoinGame, 400);
+}
+
+function _acceptChallenge(fromAddr, stake){
+  var modal=document.getElementById('challengeModal'); if(modal) modal.remove();
+  if(_wpWs&&_wpWs.readyState===WebSocket.OPEN&&fromAddr){
+    _wpWs.send(JSON.stringify({type:'ch_accept',clientId:_wpMyId,tier:'presence',
+      data:{to:fromAddr,n:_wpMyName(),color:_playerColor}}));
+  }
+  toast('⚔️ Challenge accepted! Joining lobby…','info');
+  menuSelCard(stake<=1?1:stake<=5?5:10);
+  setTimeout(doJoinGame,400);
 }
 
 // ════════════════ SOCIAL MODAL (Leaderboard / Search / Profile / Friends) ════════════════
@@ -8755,7 +8794,11 @@ function showPlayerProfile(pJSON){
       '</div>'+
     '</div>';
 }
-function _pp1v1(){ if(!_ppViewData) return; toast('⚔️ 1V1 challenge sent to '+_ppViewData.name,'info'); }
+function _pp1v1(){
+  if(!_ppViewData) return;
+  _1v1Target=_ppViewData;
+  open1v1();
+}
 function _ppAddFriend(){
   if(!_ppViewData) return;
   var addr=_ppViewData.fullAddr||'', name=_ppViewData.name, color=_ppViewData.color;
