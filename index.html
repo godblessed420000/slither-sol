@@ -1717,9 +1717,17 @@ function _toastFallbackCopy(text, btn) {
   }
 }
 
+var _sharedAC=null;
+function _getAC(){
+  try{
+    if(!_sharedAC||_sharedAC.state==='closed') _sharedAC=new(window.AudioContext||window.webkitAudioContext)();
+    if(_sharedAC.state==='suspended') _sharedAC.resume();
+    return _sharedAC;
+  }catch(e){ return null; }
+}
 function playJoinDing(){
   try{
-    var ac=new(window.AudioContext||window.webkitAudioContext)();
+    var ac=_getAC(); if(!ac) return;
     var o=ac.createOscillator(), g=ac.createGain();
     o.connect(g); g.connect(ac.destination);
     o.type='sine';
@@ -4026,7 +4034,7 @@ function _wpConnect() {
 
 function _playCashSound(){
   try{
-    var ac=new(window.AudioContext||window.webkitAudioContext)();
+    var ac=_getAC(); if(!ac) return;
     function _note(freq,start,dur,gain){
       var o=ac.createOscillator(), g=ac.createGain();
       o.connect(g); g.connect(ac.destination);
