@@ -5588,7 +5588,7 @@ function update(_dt){
     spd *= BOOST_MULT;
     boostE = Math.max(0, boostE - 0.25 * _dt);
     // Mass loss while boosting — drain length and immediately trim tail
-    if(player.length > 20){
+    if(player.length > 18){
       _boostMassAccum += BOOST_MASS_DRAIN * _dt;
       if(_boostMassAccum >= 1){
         _boostMassAccum -= 1;
