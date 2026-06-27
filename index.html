@@ -8607,6 +8607,7 @@ var _socTab='lb';
 var _frSubTab='friends';
 var _ppCache={};
 var _ppViewData=null; // current profile open — read by _ppAddFriend/_pp1v1/etc
+var _socResults=[]; // last doSocialSearch results — indexed by fr-add-btn onclick
 
 function openLeaderboard(){
   var el=document.getElementById('lbModal'); if(el) el.classList.remove('hidden');
@@ -8810,23 +8811,27 @@ function doSocialSearch(q){
       found.push({name:ph.name,color:ph.color||'#9945FF',addr:cid,isMe:false,status:'offline'});
   });
   if(found.length===0){ res.innerHTML='<div style="text-align:center;padding:24px;color:var(--dim);font-size:.65rem;">No players found matching "'+q+'"</div>'; return; }
-  res.innerHTML=found.map(function(p){
+  _socResults=found;
+  res.innerHTML=found.map(function(p,i){
     var short=p.addr?p.addr.slice(0,8)+'…':'';
     var sc=p.status==='online'?'var(--green)':p.status==='ingame'?'var(--gold)':'var(--dim)';
     var alreadyFriend=p.isMe||friendsList.some(function(f){return f.name===p.name;});
-    var _pAddrE=(p.addr||'').replace(/'/g,'&#39;');
     var _clickable=p.addr&&p.addr.length>=32&&!p.isMe;
     return '<div class="fr-row">'+
-      '<div class="fr-av" style="background:'+p.color+'22;color:'+p.color+';border:1px solid '+p.color+'44;'+(_clickable?'cursor:pointer':'')+'"'+(_clickable?' onclick="_openProfile(\''+_pAddrE+'\')"':'')+'>'+( p.name[0]||'?')+'</div>'+
-      '<div style="flex:1;'+(_clickable?'cursor:pointer':'')+'"'+(_clickable?' onclick="_openProfile(\''+_pAddrE+'\')"':'')+'>'+
+      '<div class="fr-av" style="background:'+p.color+'22;color:'+p.color+';border:1px solid '+p.color+'44;'+(_clickable?'cursor:pointer':'')+'"'+(_clickable?' onclick="_openProfile(_socResults['+i+'].addr)"':'')+'>'+( p.name[0]||'?')+'</div>'+
+      '<div style="flex:1;'+(_clickable?'cursor:pointer':'')+'"'+(_clickable?' onclick="_openProfile(_socResults['+i+'].addr)"':'')+'>'+
         '<div class="fr-name">'+p.name+(p.isMe?' <span style="color:var(--green);font-size:.52rem;">(you)</span>':'')+'</div>'+
         '<div style="font-size:.55rem;margin-top:2px;"><span style="color:'+sc+'">●</span> '+p.status+(short?' &nbsp;·&nbsp; <span style="color:var(--dim)">'+short+'</span>':'')+'</div>'+
       '</div>'+
-      (!alreadyFriend?'<button class="fr-add-btn" onclick="addFriendSoc(\''+p.name+'\',\''+p.addr+'\',\''+p.color+'\')">+ Add</button>':'<span style="font-size:.52rem;color:var(--dim);">'+(p.isMe?'':'✓ Friend')+'</span>')+
+      (!alreadyFriend?'<button class="fr-add-btn" onclick="addFriendSocIdx('+i+')">+ Add</button>':'<span style="font-size:.52rem;color:var(--dim);">'+(p.isMe?'':'✓ Friend')+'</span>')+
     '</div>';
   }).join('');
 }
 
+function addFriendSocIdx(i){
+  var p=_socResults[i]; if(!p) return;
+  addFriendSoc(p.name,p.addr,p.color);
+}
 function addFriendSoc(name,addr,color){
   if(friendsList.some(function(f){return f.name===name;})){toast(name+' already a friend','error');return;}
   var safeAddr=addr||'';
