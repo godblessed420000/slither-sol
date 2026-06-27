@@ -5592,7 +5592,7 @@ function update(_dt){
       _boostMassAccum += BOOST_MASS_DRAIN * _dt;
       if(_boostMassAccum >= 1){
         _boostMassAccum -= 1;
-        player.length--;
+        player.length = Math.max(18, player.length - 1);
         player.widthBonus = Math.max(0, (player.widthBonus||0) - 0.60);
       }
     }
