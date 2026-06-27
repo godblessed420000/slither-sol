@@ -5874,7 +5874,10 @@ function _exitSpectate(){
   showStart();
 }
 function draw(){
-  ctx.clearRect(0,0,gc.width,gc.height);
+  // Pre-fill entire canvas red so zooming out never shows a black void — the red
+  // matches the outside-arena colour, so extreme edges look correct at any zoom.
+  ctx.fillStyle='#cc0000';
+  ctx.fillRect(0,0,gc.width,gc.height);
   ctx.save();
   ctx.translate(gc.width/2, gc.height/2);
   ctx.scale(CAM_ZOOM, CAM_ZOOM);
