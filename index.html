@@ -1575,7 +1575,7 @@ var WIDTH_SCMAX = 6.0;       // max scale, like slither.io's 6× cap
 var ZOOM_PX     = 20;        // controls auto-zoom level (higher = zoomed in more)
 var BODY_SCALE  = 0.65;      // visual-only width multiplier; <1.0 = thinner snake, doesn't affect zoom or hitbox
 var BOOST_MULT        = 2.7;
-var BOOST_MASS_DRAIN  = 3/60;   // length units lost per frame while boosting (≈3 units/sec)
+var BOOST_MASS_DRAIN  = 8/60;   // length units lost per frame while boosting (≈8 units/sec)
 var TURN_RATE        = 0.16;
 var CIRCLE_RADIUS_WU = 46;   // auto-circle radius in world units (≈screen px at zoom 1×) — damnbruh RADIUS_PX concept
 var SEG_MULT   = 4;        // segments per length unit — lower = shorter tail
@@ -5522,7 +5522,7 @@ function update(_dt){
   if(boosting && boostE>0 && !_boostLocked){
     spd *= BOOST_MULT;
     boostE = Math.max(0, boostE - 0.25 * _dt);
-    // Mass loss: ~1 length unit per second (≈15 mass pts/sec)
+    // Mass loss while boosting — drain length and immediately trim tail
     _boostMassAccum += BOOST_MASS_DRAIN * _dt;
     if(_boostMassAccum >= 1){
       _boostMassAccum -= 1;
@@ -5536,8 +5536,9 @@ function update(_dt){
   }
   // No passive recharge — boost refills only from eating orbs or getting kills
   moveS(player, player.angle, spd);
-  // Enforce segment cap — trim if length decreased (e.g. boost shrink)
-  var _tgt = segmentsForSize(player.length||40) + 60;
+  // Enforce segment cap — tight buffer while boosting so tail visibly shrinks
+  var _segBuf = boosting ? 6 : 60;
+  var _tgt = segmentsForSize(player.length||40) + _segBuf;
   while(player.segs.length > _tgt) player.segs.pop();
 
   player.headR = snakeRadius(player); // unified radius: matches hitbox and body visual
