@@ -6435,7 +6435,7 @@ function drawS(s){
       dist+=Math.sqrt(ddx*ddx+ddy*ddy);
       if(dist>=freq){
         dist=0;
-        var fade=Math.max(0, 1-(j/n)*1.1);
+        var fade=1.0;
         var tx=ddx/(Math.sqrt(ddx*ddx+ddy*ddy)||1);
         var ty=ddy/(Math.sqrt(ddx*ddx+ddy*ddy)||1);
         fn(pts[j].x, pts[j].y, tx, ty, fade);
@@ -6469,8 +6469,8 @@ function drawS(s){
     // ICE BEAD BODY — chain of glowing circles from tail to head
     ctx.shadowColor='#00d4ff'; ctx.shadowBlur=10;
     for(var j=n-1;j>=0;j-=3){
-      var t2=j/n; var br=BW*0.52*(1-t2*0.22);
-      ctx.globalAlpha=Math.max(0.28, 0.88*(1-t2*0.55));
+      var t2=j/n; var br=BW*0.52;
+      ctx.globalAlpha=0.88;
       ctx.beginPath(); ctx.arc(pts[j].x,pts[j].y,br,0,Math.PI*2);
       ctx.fillStyle='#061820'; ctx.fill();
       ctx.strokeStyle='#00d4ff'; ctx.lineWidth=3; ctx.stroke();
@@ -6895,8 +6895,8 @@ function drawS(s){
     // GOLD PLATE BODY — overlapping circles from tail to head
     ctx.shadowColor='#ffd700'; ctx.shadowBlur=8;
     for(var j=n-1;j>=0;j-=3){
-      var t2=j/n; var pr2=BW*0.52*(1-t2*0.22);
-      ctx.globalAlpha=Math.max(0.28, 0.88*(1-t2*0.55));
+      var t2=j/n; var pr2=BW*0.52;
+      ctx.globalAlpha=0.88;
       ctx.beginPath(); ctx.arc(pts[j].x,pts[j].y,pr2,0,Math.PI*2);
       ctx.fillStyle='#5a3a00'; ctx.fill();
       ctx.strokeStyle='#ffd700'; ctx.lineWidth=2.8; ctx.stroke();
@@ -7095,8 +7095,8 @@ function drawS(s){
     // DRAGON SCALE BODY — overlapping crimson scales tail to head
     ctx.shadowColor='#ff3300'; ctx.shadowBlur=14;
     for(var j=n-1;j>=0;j-=3){
-      var t2=j/n; var pr2=BW*0.54*(1-t2*0.20);
-      ctx.globalAlpha=Math.max(0.30,0.92*(1-t2*0.50));
+      var t2=j/n; var pr2=BW*0.54;
+      ctx.globalAlpha=0.92;
       ctx.beginPath(); ctx.arc(pts[j].x,pts[j].y,pr2,0,Math.PI*2);
       ctx.fillStyle='#1a0200'; ctx.fill();
       ctx.strokeStyle='#cc2200'; ctx.lineWidth=3.2; ctx.stroke();
@@ -7194,8 +7194,8 @@ function drawS(s){
     _path(); ctx.strokeStyle='#cceeff'; ctx.lineWidth=BW*1.14; ctx.globalAlpha=0.16; ctx.stroke();
     ctx.shadowBlur=0;
     for(var j=n-1;j>=0;j-=3){
-      var t2=j/n; var pr2=BW*0.54*(1-t2*0.18);
-      ctx.globalAlpha=Math.max(0.22,0.86*(1-t2*0.44));
+      var t2=j/n; var pr2=BW*0.54;
+      ctx.globalAlpha=0.86;
       ctx.beginPath(); ctx.arc(pts[j].x,pts[j].y,pr2,0,Math.PI*2);
       ctx.fillStyle='#060d18'; ctx.fill();
       ctx.strokeStyle='#66ccee'; ctx.lineWidth=2.6; ctx.stroke();
@@ -7392,8 +7392,8 @@ function drawS(s){
     // BIOLUMINESCENT SCALE BODY
     ctx.shadowColor='#00aacc'; ctx.shadowBlur=16;
     for(var j=n-1;j>=0;j-=3){
-      var t2=j/n; var pr2=BW*0.55*(1-t2*0.18);
-      ctx.globalAlpha=Math.max(0.28,0.90*(1-t2*0.48));
+      var t2=j/n; var pr2=BW*0.55;
+      ctx.globalAlpha=0.90;
       ctx.beginPath(); ctx.arc(pts[j].x,pts[j].y,pr2,0,Math.PI*2);
       ctx.fillStyle='#030c18'; ctx.fill();
       ctx.strokeStyle='#00aacc'; ctx.lineWidth=3.0; ctx.stroke();
