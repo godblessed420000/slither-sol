@@ -7774,10 +7774,10 @@ function renderFriendsPanel(){
           :isPend
             ?'<span style="font-size:.15rem;color:var(--gold);">⏳ Sent</span>'
             :'<button class="f-btn invite" onclick="wpSendFriendReq(\''+caddrEsc+'\',\''+cnEsc+'\')">+ Add</button>';
-        return '<div class="friend-item">'
+        return '<div class="friend-item" style="cursor:pointer" onclick="_openProfile(\''+caddrEsc+'\')">'
           +'<div class="f-avatar" style="background:'+p.color+'22;color:'+p.color+';border:1.5px solid '+p.color+'15">'+p.n[0].toUpperCase()+'</div>'
           +'<div class="f-info"><div class="f-name">'+p.n+'</div><div class="f-status online">'+short3+'</div>'+pStats+'</div>'
-          +'<div class="f-actions">'
+          +'<div class="f-actions" onclick="event.stopPropagation()">'
           +'<button class="f-btn send" onclick="openSendModal(\''+caddrEsc+'\',\''+cnEsc+'\')" title="Send SOL">&#128184;</button>'
           +actionBtn
           +'</div></div>';
@@ -7915,10 +7915,10 @@ function sendFriendReq(){
       var aBtn=isFr2
         ?'<span style="font-size:.15rem;color:var(--green);">&#10003; Friend</span>'
         :'<button class="f-btn invite" onclick="wpSendFriendReq(\''+cEsc+'\',\''+nEsc2+'\')">+ Add</button>';
-      return '<div class="friend-item" style="background:rgba(215,215,215,.03);border-radius:6px;padding:6px;">'
+      return '<div class="friend-item" style="background:rgba(215,215,215,.03);border-radius:6px;padding:6px;cursor:pointer" onclick="_openProfile(\''+cEsc+'\')">'
         +'<div class="f-avatar" style="background:'+p2.color+'22;color:'+p2.color+';border:1.5px solid '+p2.color+'44">'+p2.n[0].toUpperCase()+'</div>'
         +'<div class="f-info"><div class="f-name">'+p2.n+'</div><div class="f-status online">Online · '+srt2+'</div></div>'
-        +'<div class="f-actions">'+aBtn+'</div></div>';
+        +'<div class="f-actions" onclick="event.stopPropagation()">'+aBtn+'</div></div>';
     }).join('');
     if(res) res.innerHTML=html2;
   } else {
@@ -8441,14 +8441,14 @@ async function doSearch() {
         if(peer2.games)  sparts2.push(peer2.games+' games');
         if(peer2.earned) sparts2.push((+peer2.earned).toFixed(2)+' SOL');
         var statsMeta = srt2 + (sparts2.length ? ' · '+sparts2.join(' · ') : '');
-        return '<div class="sr-item">'
+        return '<div class="sr-item" style="cursor:pointer" onclick="_openProfile(\''+pEsc+'\')">'
           +'<div class="sr-avatar" style="background:'+p.color+'22;color:'+p.color+';border:1.5px solid '+p.color+'44">'+p.n[0].toUpperCase()+'</div>'
           +'<div class="sr-info">'
           +'<div class="sr-name">'+p.n+' <span style="font-size:.5rem;color:var(--green);">● Live</span></div>'
           +'<div class="sr-meta">'+statsMeta+'</div>'
           +'</div>'
           +'<span class="sr-status online">Online</span>'
-          +'<div class="sr-actions">'
+          +'<div class="sr-actions" onclick="event.stopPropagation()">'
           +(isFriend2
               ? '<span style="font-size:.15rem;color:var(--green);">&#10003; Friend</span>'
               : isPend2
@@ -8674,6 +8674,25 @@ function renderLB(){
   if(ft) ft.textContent='🟢 Live · '+entries.length+' player'+(entries.length!==1?'s':'')+' online · Refreshes every 3s';
 }
 
+function _openProfile(addr){
+  var live=_wpPeers[addr]||{};
+  var hist=_playerHistory[addr]||{};
+  var fl=friendsList.find(function(f){return (f.fullAddr||'')===addr;});
+  var pd={
+    name:(live.n||hist.name||(fl&&fl.name)||addr.slice(0,4)+'…'+addr.slice(-4)),
+    color:(live.color||hist.color||(fl&&fl.color)||'#9945FF'),
+    fullAddr:addr,
+    games: live.games||(fl&&fl.games)||0,
+    kills: live.kills||(fl&&fl.kills)||0,
+    earned:live.earned||(fl&&fl.earned)||0,
+    wins:  live.wins||(fl&&fl.wins)||0,
+    isMe:  addr===_wpMyId
+  };
+  var m=document.getElementById('lbModal');
+  if(m&&m.classList.contains('hidden')) openLeaderboard();
+  showPlayerProfile(pd);
+}
+
 function showPlayerProfile(pJSON){
   var p=typeof pJSON==='string'?JSON.parse(pJSON):pJSON;
   _socTab='player';
@@ -8786,10 +8805,14 @@ function doSocialSearch(q){
     var short=p.addr?p.addr.slice(0,8)+'…':'';
     var sc=p.status==='online'?'var(--green)':p.status==='ingame'?'var(--gold)':'var(--dim)';
     var alreadyFriend=p.isMe||friendsList.some(function(f){return f.name===p.name;});
+    var _pAddrE=(p.addr||'').replace(/'/g,'&#39;');
+    var _clickable=p.addr&&p.addr.length>=32&&!p.isMe;
     return '<div class="fr-row">'+
-      '<div class="fr-av" style="background:'+p.color+'22;color:'+p.color+';border:1px solid '+p.color+'44">'+(p.name[0]||'?')+'</div>'+
-      '<div style="flex:1"><div class="fr-name">'+p.name+(p.isMe?' <span style="color:var(--green);font-size:.52rem;">(you)</span>':'')+'</div>'+
-      '<div style="font-size:.55rem;margin-top:2px;"><span style="color:'+sc+'">●</span> '+p.status+(short?' &nbsp;·&nbsp; <span style="color:var(--dim)">'+short+'</span>':'')+'</div></div>'+
+      '<div class="fr-av" style="background:'+p.color+'22;color:'+p.color+';border:1px solid '+p.color+'44;'+(_clickable?'cursor:pointer':'')+'"'+(_clickable?' onclick="_openProfile(\''+_pAddrE+'\')"':'')+'>'+( p.name[0]||'?')+'</div>'+
+      '<div style="flex:1;'+(_clickable?'cursor:pointer':'')+'"'+(_clickable?' onclick="_openProfile(\''+_pAddrE+'\')"':'')+'>'+
+        '<div class="fr-name">'+p.name+(p.isMe?' <span style="color:var(--green);font-size:.52rem;">(you)</span>':'')+'</div>'+
+        '<div style="font-size:.55rem;margin-top:2px;"><span style="color:'+sc+'">●</span> '+p.status+(short?' &nbsp;·&nbsp; <span style="color:var(--dim)">'+short+'</span>':'')+'</div>'+
+      '</div>'+
       (!alreadyFriend?'<button class="fr-add-btn" onclick="addFriendSoc(\''+p.name+'\',\''+p.addr+'\',\''+p.color+'\')">+ Add</button>':'<span style="font-size:.52rem;color:var(--dim);">'+(p.isMe?'':'✓ Friend')+'</span>')+
     '</div>';
   }).join('');
@@ -8924,11 +8947,13 @@ function _frRow(f){
   var col=f.color||'#9945FF';
   var sc=f.status==='ingame'?'var(--gold)':f.status==='online'?'var(--green)':'var(--dim)';
   var stxt=f.status==='ingame'?'In Game':f.status==='online'?'Online':'Offline';
-  return '<div class="fr-row">'+
+  var _fa=(f.fullAddr||'').replace(/'/g,'&#39;');
+  var _click=_fa.length>=32;
+  return '<div class="fr-row"'+(_click?' style="cursor:pointer" onclick="_openProfile(\''+_fa+'\')"':'')+'>'+
     '<div class="fr-av" style="background:'+col+'22;color:'+col+';border:1px solid '+col+'44">'+(f.name[0]||'?')+'</div>'+
     '<div style="flex:1"><div class="fr-name">'+f.name+'</div>'+
     '<div style="font-size:.55rem;margin-top:2px;color:'+sc+';">● '+stxt+(f.tier?' · $'+f.tier+' lobby':'')+'</div></div>'+
-    '<button class="fr-rm-btn" onclick="removeFrSoc(\''+f.id+'\')">Remove</button>'+
+    '<button class="fr-rm-btn" onclick="event.stopPropagation();removeFrSoc(\''+f.id+'\')">Remove</button>'+
   '</div>';
 }
 
