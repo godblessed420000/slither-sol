@@ -4064,7 +4064,8 @@ function _wpHandleMsg(msg) {
       games:   d.games  || 0,
       kills:   d.kills  || 0,
       earned:  d.earned || 0,
-      wins:    d.wins   || 0
+      wins:    d.wins   || 0,
+      lobbyTier: d.lobbyTier != null ? d.lobbyTier : null
     };
     // Reply once so they know we exist — defer during gameplay to avoid blocking game loop
     if (isNew && !d.reply && _wpWs && _wpWs.readyState === WebSocket.OPEN) {
@@ -4768,16 +4769,17 @@ function _checkLobbyNotifs(d){
     _notifPrev[t]=curr;
   });
 }
-// Single fetch — serves both lobby card counts AND join notifications
+// Count lobby players from presence peers (replaces broken CORS fetch to /counts)
 function _pollLobbyCounts(){
-  fetch('https://ws.slither-sol.com/counts',{cache:'no-store'})
-    .then(function(r){return r.ok?r.json():null;})
-    .then(function(d){
-      if(!d) return;
-      ['free',1,5,10].forEach(function(k){ if(d[k]!=null) tierOnline[k]=d[k]; });
-      _checkLobbyNotifs(d);
-      if(!gameRunning) refreshCards();
-    }).catch(function(){});
+  var d={'free':0,1:0,5:0,10:0};
+  Object.keys(_wpPeers).forEach(function(cid){
+    var p=_wpPeers[cid]; if(!p) return;
+    var t=p.lobbyTier;
+    if(t==='free'||t===1||t===5||t===10) d[t]=(d[t]||0)+1;
+  });
+  ['free',1,5,10].forEach(function(k){ tierOnline[k]=d[k]||0; });
+  _checkLobbyNotifs(d);
+  if(!gameRunning) refreshCards();
 }
 // Lobby card timer — stopped when entering a game
 function _startLobbyCountPoll(){
