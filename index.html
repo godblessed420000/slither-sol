@@ -495,6 +495,36 @@ canvas{display:block;width:100%;height:100%;}
 .btn-search{background:rgba(215,215,215,.06);border:1px solid var(--border);color:var(--text);padding:6px 12px;border-radius:4px;font-size:.6rem;font-family:'Orbitron',monospace;cursor:pointer;display:flex;align-items:center;gap:5px;animation:walletBorder 2s linear infinite;}
 .btn-search:hover{border-color:var(--purple);color:var(--purple);}
 
+/* ══ 1V1 ME BRO ══ */
+.btn-1v1{width:100%;padding:13px;border-radius:14px;border:none;cursor:pointer;font-family:'Orbitron',monospace;font-size:.78rem;font-weight:900;letter-spacing:2px;color:#fff;background:linear-gradient(135deg,#a020f0,#ff2d9b);box-shadow:0 0 22px rgba(200,50,255,.55),0 0 6px rgba(255,45,155,.4);transition:all .18s;margin:2px 0;}
+.btn-1v1:hover{box-shadow:0 0 36px rgba(200,50,255,.9),0 0 14px rgba(255,45,155,.7);transform:translateY(-1px);}
+/* 1V1 modal */
+.modal-1v1{position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:500;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(8px);}
+.modal-1v1.hidden{display:none;}
+.box-1v1{background:linear-gradient(160deg,#0d0820,#120828);border:1px solid rgba(160,32,240,.5);border-radius:20px;padding:28px 26px;width:360px;max-width:96vw;display:flex;flex-direction:column;gap:16px;box-shadow:0 0 60px rgba(160,32,240,.35);}
+.hdr-1v1{text-align:center;font-family:'Orbitron',monospace;}
+.hdr-1v1 h2{font-size:1rem;font-weight:900;letter-spacing:3px;background:linear-gradient(90deg,#bf5fff,#ff2d9b);-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+.hdr-1v1 p{font-size:.55rem;color:var(--dim);letter-spacing:1.5px;margin-top:3px;}
+.lbl-1v1{font-family:'Orbitron',monospace;font-size:.52rem;letter-spacing:2px;color:var(--dim);margin-bottom:4px;}
+.stake-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.stake-btn{padding:12px;border-radius:10px;border:1px solid rgba(160,32,240,.35);background:rgba(160,32,240,.08);color:var(--text);font-family:'Orbitron',monospace;font-size:.75rem;font-weight:700;cursor:pointer;transition:all .15s;}
+.stake-btn.active{border-color:#a020f0;background:rgba(160,32,240,.28);color:#fff;box-shadow:0 0 12px rgba(160,32,240,.4);}
+.stake-btn:hover:not(.active){border-color:rgba(160,32,240,.6);background:rgba(160,32,240,.14);}
+.stake-custom{width:100%;padding:10px 14px;border-radius:10px;border:1px solid rgba(160,32,240,.35);background:rgba(255,255,255,.04);color:var(--text);font-family:'Share Tech Mono',monospace;font-size:.72rem;outline:none;}
+.stake-custom:focus{border-color:#a020f0;}
+.dur-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;}
+.dur-btn{padding:10px;border-radius:10px;border:1px solid rgba(160,32,240,.35);background:rgba(160,32,240,.08);color:var(--text);font-family:'Orbitron',monospace;font-size:.68rem;font-weight:700;cursor:pointer;transition:all .15s;}
+.dur-btn.active{border-color:#a020f0;background:rgba(160,32,240,.28);color:#fff;box-shadow:0 0 12px rgba(160,32,240,.4);}
+.dur-btn:hover:not(.active){border-color:rgba(160,32,240,.6);}
+.rules-1v1{background:rgba(255,180,0,.07);border:1px solid rgba(255,180,0,.3);border-radius:10px;padding:12px 14px;font-size:.58rem;line-height:1.8;color:var(--text);}
+.rules-1v1 b{color:var(--gold);}
+.chk-1v1{display:flex;align-items:center;gap:10px;font-size:.6rem;cursor:pointer;color:var(--dim);}
+.chk-1v1 input{width:16px;height:16px;cursor:pointer;accent-color:#a020f0;}
+.btns-1v1{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.cancel-1v1{padding:11px;border-radius:10px;border:1px solid var(--border);background:transparent;color:var(--dim);font-family:'Orbitron',monospace;font-size:.6rem;cursor:pointer;letter-spacing:1px;}
+.confirm-1v1{padding:11px;border-radius:10px;border:none;background:linear-gradient(135deg,#a020f0,#ff2d9b);color:#fff;font-family:'Orbitron',monospace;font-size:.6rem;font-weight:700;cursor:pointer;letter-spacing:1px;transition:opacity .15s;}
+.confirm-1v1:disabled{opacity:.4;cursor:not-allowed;}
+
 /* ══ SERVER CARDS ══ */
 .server-card{flex:1;background:var(--panel);border:2px solid var(--border);border-radius:7px;padding:5px 6px;display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;transition:border-color .2s,box-shadow .2s,transform .15s;}
 .server-card:hover{transform:translateY(-2px);}
@@ -1186,6 +1216,8 @@ canvas{display:block;width:100%;height:100%;}
       </div>
 
       <button id="joinBtn" onclick="doJoinGame()" class="m3-join-btn btn" disabled>&#9654; JOIN GAME</button>
+
+      <button class="btn-1v1" onclick="open1v1()">⚔️ 1V1 ME BRO</button>
 
       <div class="m3-srv-row">
         <div class="server-card m3-srv-card" id="srv-us" onclick="selectServer('us')">
@@ -8426,6 +8458,53 @@ function inviteFromSearch(pid) {
   toast('Invite sent to '+p.name+'! Code: '+code);
 }
 
+// ════════════════ 1V1 ME BRO ════════════════
+var _1v1Stake=1, _1v1Dur=60;
+
+function open1v1(){
+  var m=document.getElementById('modal1v1'); if(m) m.classList.remove('hidden');
+  _sel1v1Stake(1); _sel1v1Dur(60);
+  var chk=document.getElementById('chk1v1'); if(chk) chk.checked=false;
+  var inp=document.getElementById('s1v1-custom'); if(inp) inp.value='';
+  _upd1v1Btn();
+}
+function close1v1(){
+  var m=document.getElementById('modal1v1'); if(m) m.classList.add('hidden');
+}
+function _sel1v1Stake(amt){
+  _1v1Stake=amt;
+  [1,5,10,25].forEach(function(v){ var b=document.getElementById('s1v1-'+v); if(b) b.classList.toggle('active',v===amt); });
+  var inp=document.getElementById('s1v1-custom'); if(inp) inp.value='';
+  _upd1v1Btn();
+}
+function _sel1v1Custom(val){
+  var v=parseFloat(val);
+  if(!isNaN(v)&&v>0){ _1v1Stake=v; [1,5,10,25].forEach(function(x){ var b=document.getElementById('s1v1-'+x); if(b) b.classList.remove('active'); }); }
+  _upd1v1Btn();
+}
+function _sel1v1Dur(sec){
+  _1v1Dur=sec;
+  [60,120,180].forEach(function(v){ var b=document.getElementById('d1v1-'+v); if(b) b.classList.toggle('active',v===sec); });
+  _upd1v1Btn();
+}
+function _upd1v1Btn(){
+  var chk=document.getElementById('chk1v1');
+  var btn=document.getElementById('confirm1v1Btn');
+  if(!btn) return;
+  var mins=Math.round(_1v1Dur/60);
+  btn.textContent='CONFIRM $'+_1v1Stake+' · '+mins+'MIN';
+  btn.disabled=!(chk&&chk.checked&&_1v1Stake>0);
+}
+function _confirm1v1(){
+  if(!userProfile){ toast('Sign in to post a 1v1 challenge','error'); return; }
+  var solAmt=_1v1Stake/(SOL_USD||200);
+  toast('🎯 1v1 challenge posted! $'+_1v1Stake+' stake · '+Math.round(_1v1Dur/60)+'min window','info');
+  close1v1();
+  // Start the game immediately as their "run"
+  menuSelCard(_1v1Stake<=1?1:_1v1Stake<=5?5:10);
+  setTimeout(doJoinGame, 400);
+}
+
 // ════════════════ SOCIAL MODAL (Leaderboard / Search / Profile / Friends) ════════════════
 var lbTab='earned';
 var _lbRefreshTimer=null;
@@ -8956,6 +9035,47 @@ window.addEventListener('load', function() {
 <!-- shop removed -->
 <div style="display:none" id="shopFloatBtn"></div>
 <div style="display:none" id="shopModal"><div id="shopGrid"></div></div>
+
+<!-- ══ 1V1 ME BRO MODAL ══ -->
+<div class="modal-1v1 hidden" id="modal1v1">
+  <div class="box-1v1">
+    <div class="hdr-1v1">
+      <h2>⚔️ 1V1 ME BRO</h2>
+      <p>POST YOUR RUN</p>
+    </div>
+    <div>
+      <div class="lbl-1v1">STAKE</div>
+      <div class="stake-grid">
+        <button class="stake-btn active" id="s1v1-1"   onclick="_sel1v1Stake(1)">$1</button>
+        <button class="stake-btn"        id="s1v1-5"   onclick="_sel1v1Stake(5)">$5</button>
+        <button class="stake-btn"        id="s1v1-10"  onclick="_sel1v1Stake(10)">$10</button>
+        <button class="stake-btn"        id="s1v1-25"  onclick="_sel1v1Stake(25)">$25</button>
+      </div>
+      <input class="stake-custom" id="s1v1-custom" type="number" min="0.5" step="0.5" placeholder="$ Custom amount" oninput="_sel1v1Custom(this.value)">
+    </div>
+    <div>
+      <div class="lbl-1v1">DURATION</div>
+      <div class="dur-row">
+        <button class="dur-btn active" id="d1v1-60"  onclick="_sel1v1Dur(60)">1:00</button>
+        <button class="dur-btn"        id="d1v1-120" onclick="_sel1v1Dur(120)">2:00</button>
+        <button class="dur-btn"        id="d1v1-180" onclick="_sel1v1Dur(180)">3:00</button>
+      </div>
+    </div>
+    <div class="rules-1v1">
+      • Your run starts the moment you confirm.<br>
+      • One attempt. Your kill count is <b>FINAL</b>.<br>
+      • Refunds automatically if no one accepts in 24h.
+    </div>
+    <label class="chk-1v1">
+      <input type="checkbox" id="chk1v1" onchange="_upd1v1Btn()">
+      I understand my score is final
+    </label>
+    <div class="btns-1v1">
+      <button class="cancel-1v1" onclick="close1v1()">CANCEL</button>
+      <button class="confirm-1v1" id="confirm1v1Btn" disabled onclick="_confirm1v1()">CONFIRM $1 · 1MIN</button>
+    </div>
+  </div>
+</div>
 
 <!-- ══ DISCORD BUTTON ══ -->
 <a id="discordBtn" href="https://discord.gg/2Ez7wNRZ" target="_blank" rel="noopener" title="Join our Discord">
