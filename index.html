@@ -427,7 +427,38 @@ canvas{display:block;width:100%;height:100%;}
 /* ══ GLOBAL LEADERBOARD MODAL ══ */
 .lb-modal{position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:400;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px);}
 .lb-modal.hidden{display:none;}
-.lb-box{background:var(--panel);border:1px solid var(--gold);border-radius:14px;width:560px;max-width:95vw;display:flex;flex-direction:column;overflow:hidden;max-height:88vh;animation:lbBoxFlash 2s linear infinite;}
+.lb-box{background:var(--panel);border:1px solid var(--gold);border-radius:14px;width:680px;max-width:96vw;display:flex;flex-direction:column;overflow:hidden;max-height:90vh;animation:lbBoxFlash 2s linear infinite;}
+/* Social modal tabs */
+.soc-tabs{display:flex;border-bottom:1px solid var(--border);background:rgba(0,0,0,.18);}
+.soc-tab{flex:1;padding:11px 4px;font-size:.52rem;font-family:'Orbitron',monospace;background:transparent;border:none;color:var(--dim);cursor:pointer;letter-spacing:.5px;text-transform:uppercase;transition:all .2s;border-bottom:2px solid transparent;}
+.soc-tab.active{color:var(--gold);background:rgba(215,175,0,.08);border-bottom-color:var(--gold);}
+.soc-tab:hover:not(.active){color:var(--text);background:rgba(215,215,215,.03);}
+/* Profile tab */
+.prof-hero{display:flex;align-items:center;gap:14px;padding:14px 18px;border-bottom:1px solid var(--border);}
+.prof-av{width:50px;height:50px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.4rem;font-weight:900;border:2px solid;flex-shrink:0;}
+.prof-section{margin:10px 14px;background:rgba(215,215,215,.02);border:1px solid var(--border);border-radius:10px;overflow:hidden;}
+.prof-sec-hdr{display:flex;align-items:center;gap:8px;padding:10px 14px;font-family:'Orbitron',monospace;font-size:.58rem;font-weight:700;letter-spacing:1px;border-bottom:1px solid var(--border);background:rgba(215,215,215,.03);}
+.prof-grid{display:grid;grid-template-columns:1fr 1fr;}
+.prof-stat{padding:12px 16px;border-right:1px solid var(--border);border-bottom:1px solid var(--border);}
+.prof-stat:nth-child(even){border-right:none;}
+.prof-stat:nth-last-child(-n+2){border-bottom:none;}
+.prof-stat-lbl{font-size:.46rem;color:var(--dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:5px;}
+.prof-stat-val{font-family:'Orbitron',monospace;font-size:1.05rem;font-weight:900;}
+/* Search & friends */
+.soc-search-wrap{padding:12px 16px;border-bottom:1px solid var(--border);}
+.soc-search-inp{width:100%;background:rgba(215,215,215,.05);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:10px 14px;font-family:'Share Tech Mono',monospace;font-size:.72rem;outline:none;transition:border-color .15s;}
+.soc-search-inp:focus{border-color:var(--gold);}
+.fr-subtabs{display:flex;padding:10px 14px;gap:7px;}
+.fr-subtab{flex:1;padding:8px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--dim);font-family:'Orbitron',monospace;font-size:.48rem;cursor:pointer;transition:all .15s;letter-spacing:.3px;}
+.fr-subtab.active{background:rgba(215,175,0,.12);border-color:var(--gold);color:var(--gold);}
+.fr-row{display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid rgba(215,215,215,.04);transition:background .15s;}
+.fr-row:hover{background:rgba(215,215,215,.02);}
+.fr-av{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.85rem;font-weight:700;flex-shrink:0;}
+.fr-name{font-size:.72rem;font-weight:700;color:var(--text);}
+.fr-rm-btn{background:transparent;border:1px solid var(--red);color:var(--red);border-radius:5px;padding:5px 10px;font-size:.48rem;font-family:'Orbitron',monospace;cursor:pointer;transition:all .15s;white-space:nowrap;}
+.fr-rm-btn:hover{background:rgba(255,69,96,.15);}
+.fr-add-btn{background:transparent;border:1px solid var(--green);color:var(--green);border-radius:5px;padding:5px 10px;font-size:.48rem;font-family:'Orbitron',monospace;cursor:pointer;transition:all .15s;white-space:nowrap;}
+.fr-add-btn:hover{background:rgba(20,241,149,.12);}
 .lbm-header{display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--border);background:rgba(215,215,0,.05);}
 .lbm-title{font-family:'Orbitron',monospace;font-size:.9rem;font-weight:900;flex:1;letter-spacing:2px;animation:labelFlash 2s linear infinite;}
 .lbm-tabs{display:flex;border-bottom:1px solid var(--border);}
@@ -8374,37 +8405,44 @@ function inviteFromSearch(pid) {
   toast('Invite sent to '+p.name+'! Code: '+code);
 }
 
-// ════════════════ LEADERBOARD (LIVE) ════════════════
+// ════════════════ SOCIAL MODAL (Leaderboard / Search / Profile / Friends) ════════════════
 var lbTab='earned';
 var _lbRefreshTimer=null;
+var _socTab='lb';
+var _frSubTab='friends';
 
 function openLeaderboard(){
   var el=document.getElementById('lbModal'); if(el) el.classList.remove('hidden');
-  renderLB();
+  switchSocTab('lb');
 }
-
 function closeLeaderboard(){
   var el=document.getElementById('lbModal'); if(el) el.classList.add('hidden');
 }
-
-// Start persistent leaderboard refresh — runs forever after login
 function _startLbTimer(){
-  if(_lbRefreshTimer) return; // already running
-  _lbRefreshTimer=setInterval(renderLB,3000);
+  if(_lbRefreshTimer) return;
+  _lbRefreshTimer=setInterval(function(){ if(_socTab==='lb') renderLB(); },3000);
+}
+
+function switchSocTab(tab){
+  _socTab=tab;
+  document.querySelectorAll('.soc-tab').forEach(function(t){t.classList.remove('active');});
+  var el=document.getElementById('soct'+tab.charAt(0).toUpperCase()+tab.slice(1)); if(el) el.classList.add('active');
+  if(tab==='lb') renderLB();
+  else if(tab==='search') renderSearchTab();
+  else if(tab==='profile') renderProfileTab();
+  else if(tab==='friends') renderFriendsSocTab();
 }
 
 function switchLBTab(tab){
   lbTab=tab;
-  document.querySelectorAll('.lbm-tab').forEach(function(t){t.classList.remove('active');});
-  var el=document.getElementById('lbt'+tab.charAt(0).toUpperCase()+tab.slice(1)); if(el) el.classList.add('active');
   renderLB();
 }
 
 function renderLB(){
   var modal=document.getElementById('lbModal');
-  if(!modal||modal.classList.contains('hidden')) return; // skip DOM work while closed
+  if(!modal||modal.classList.contains('hidden')) return;
+  if(_socTab!=='lb') return;
   var body=document.getElementById('lbmBody'); if(!body) return;
-  // Build from real live peers + self
   var entries=[];
   if(W.connected&&userProfile){
     entries.push({name:_wpMyName()||userProfile.name,color:_playerColor||'#14F195',
@@ -8417,16 +8455,22 @@ function renderLB(){
     entries.push({name:p.n||('P_'+cid.slice(0,4)),color:p.color||'#9945FF',
       games:p.games||0,kills:p.kills||0,earned:p.earned||0,isMe:false});
   });
-  if(lbTab==='earned')      entries.sort(function(a,b){return b.earned-a.earned;});
-  else if(lbTab==='kills')  entries.sort(function(a,b){return b.kills-a.kills;});
-  else                       entries.sort(function(a,b){return b.games-a.games;});
-  var ri=['r1','r2','r3'];
-  var colLabel=lbTab==='earned'?'Earned':lbTab==='kills'?'Kills':'Games Played';
-  var hdr='<div class="lbm-row header"><span>#</span><span>Player</span><span style="text-align:right">'+colLabel+'</span><span style="text-align:right">Games</span></div>';
+  if(lbTab==='earned') entries.sort(function(a,b){return b.earned-a.earned;});
+  else if(lbTab==='kills') entries.sort(function(a,b){return b.kills-a.kills;});
+  else entries.sort(function(a,b){return b.games-a.games;});
+  var ri=['rank-1','rank-2','rank-3'];
+  var colLabel=lbTab==='earned'?'Earned':lbTab==='kills'?'Kills':'Games';
+  var subTabs='<div class="lbm-tabs">'+
+    '<button class="lbm-tab '+(lbTab==='earned'?'active':'')+'" onclick="switchLBTab(\'earned\')">💰 Earnings</button>'+
+    '<button class="lbm-tab '+(lbTab==='kills'?'active':'')+'" onclick="switchLBTab(\'kills\')">⚔️ Kills</button>'+
+    '<button class="lbm-tab '+(lbTab==='games'?'active':'')+'" onclick="switchLBTab(\'games\')">🎮 Games</button>'+
+  '</div>';
   if(entries.length===0){
-    body.innerHTML='<div style="text-align:center;padding:36px 16px;color:var(--dim);font-size:.75rem;line-height:1.8;">No players online right now.<br>Be the first to join a lobby!</div>';
+    body.innerHTML=subTabs+'<div style="text-align:center;padding:36px 16px;color:var(--dim);font-size:.75rem;line-height:1.8;">No players online right now.<br>Be the first to join a lobby!</div>';
+    var ft=document.getElementById('lbFooter'); if(ft) ft.textContent='🟢 Live · 0 players online';
     return;
   }
+  var hdr='<div class="lbm-row header"><span>#</span><span>Player</span><span style="text-align:right">'+colLabel+'</span><span style="text-align:right">Games</span></div>';
   var rows=entries.slice(0,20).map(function(p,i){
     var rank=i+1; var rc=rank<=3?ri[rank-1]:'rank-other';
     var val=lbTab==='earned'?'$'+p.earned.toFixed(2):lbTab==='kills'?p.kills.toLocaleString():p.games.toLocaleString();
@@ -8434,10 +8478,204 @@ function renderLB(){
     var nc=p.isMe?'color:var(--green)':'';
     return '<div class="lbm-row"><div class="lbm-rank-num '+rc+'">'+rank+'</div><div class="lbm-player"><div class="lbm-av" style="background:'+p.color+'22;color:'+p.color+';border:1px solid '+p.color+'44">'+(p.name[0]||'?')+'</div><div><div class="lbm-pname" style="'+nc+'">'+p.name+(p.isMe?' (you)':'')+'</div></div></div><div class="lbm-val '+vc+'">'+val+'</div><div class="lbm-val">'+p.games+'</div></div>';
   }).join('');
-  body.innerHTML=hdr+rows;
-  // Update footer with live count
+  body.innerHTML=subTabs+hdr+rows;
   var ft=document.getElementById('lbFooter');
   if(ft) ft.textContent='🟢 Live · '+entries.length+' player'+(entries.length!==1?'s':'')+' online · Refreshes every 3s';
+}
+
+function renderSearchTab(){
+  var body=document.getElementById('lbmBody'); if(!body) return;
+  var ft=document.getElementById('lbFooter'); if(ft) ft.textContent='Search players by username or Game ID';
+  body.innerHTML='<div class="soc-search-wrap">'+
+    '<input class="soc-search-inp" id="socSearchInp" placeholder="🔍  Search by username or Game ID..." oninput="doSocialSearch(this.value)">'+
+  '</div>'+
+  '<div id="socSearchResults">'+
+    '<div style="text-align:center;padding:40px 16px;color:var(--dim);line-height:2;">'+
+      '<div style="font-size:2.2rem;margin-bottom:8px">🔍</div>'+
+      '<div style="font-size:.82rem;font-weight:700;color:var(--text);font-family:\'Orbitron\',monospace;">Search Players</div>'+
+      '<div style="font-size:.65rem;margin-top:6px;">Start typing to find players by username or Game ID</div>'+
+      '<div style="font-size:.58rem;color:var(--dim);margin-top:10px;">• Username: "john", "player123"<br>• Game ID: "abc123def456..."</div>'+
+    '</div>'+
+  '</div>';
+  setTimeout(function(){ var i=document.getElementById('socSearchInp'); if(i) i.focus(); },80);
+}
+
+function doSocialSearch(q){
+  var res=document.getElementById('socSearchResults'); if(!res) return;
+  q=(q||'').trim().toLowerCase();
+  if(q.length<2){ res.innerHTML='<div style="text-align:center;padding:20px;color:var(--dim);font-size:.65rem;">Keep typing…</div>'; return; }
+  var found=[];
+  if(userProfile){ var mn=(_wpMyName()||'').toLowerCase(); if(mn.includes(q)) found.push({name:_wpMyName(),color:_playerColor||'#14F195',addr:walletAddress||'',isMe:true,status:'online'}); }
+  Object.keys(_wpPeers).forEach(function(cid){
+    var p=_wpPeers[cid]; if(!p) return;
+    if((p.n||'').toLowerCase().includes(q)||cid.toLowerCase().includes(q))
+      found.push({name:p.n||('P_'+cid.slice(0,4)),color:p.color||'#9945FF',addr:cid,isMe:false,status:'online'});
+  });
+  friendsList.forEach(function(f){
+    if(!found.some(function(x){return x.name===f.name;})&&((f.name||'').toLowerCase().includes(q)||(f.fullAddr||'').toLowerCase().includes(q)))
+      found.push({name:f.name,color:f.color||'#9945FF',addr:f.fullAddr||'',isMe:false,status:f.status||'offline'});
+  });
+  if(found.length===0){ res.innerHTML='<div style="text-align:center;padding:24px;color:var(--dim);font-size:.65rem;">No players found matching "'+q+'"</div>'; return; }
+  res.innerHTML=found.map(function(p){
+    var short=p.addr?p.addr.slice(0,8)+'…':'';
+    var sc=p.status==='online'?'var(--green)':p.status==='ingame'?'var(--gold)':'var(--dim)';
+    var alreadyFriend=p.isMe||friendsList.some(function(f){return f.name===p.name;});
+    return '<div class="fr-row">'+
+      '<div class="fr-av" style="background:'+p.color+'22;color:'+p.color+';border:1px solid '+p.color+'44">'+(p.name[0]||'?')+'</div>'+
+      '<div style="flex:1"><div class="fr-name">'+p.name+(p.isMe?' <span style="color:var(--green);font-size:.52rem;">(you)</span>':'')+'</div>'+
+      '<div style="font-size:.55rem;margin-top:2px;"><span style="color:'+sc+'">●</span> '+p.status+(short?' &nbsp;·&nbsp; <span style="color:var(--dim)">'+short+'</span>':'')+'</div></div>'+
+      (!alreadyFriend?'<button class="fr-add-btn" onclick="addFriendSoc(\''+p.name+'\',\''+p.addr+'\',\''+p.color+'\')">+ Add</button>':'<span style="font-size:.52rem;color:var(--dim);">'+(p.isMe?'':'✓ Friend')+'</span>')+
+    '</div>';
+  }).join('');
+}
+
+function addFriendSoc(name,addr,color){
+  if(friendsList.some(function(f){return f.name===name;})){toast(name+' already a friend','error');return;}
+  friendsList.push({id:'f'+Date.now(),name:name,addr:addr.slice(0,8),fullAddr:addr,status:'online',color:color,inGame:false,tier:null});
+  toast('Added '+name+' as friend!');
+  var inp=document.getElementById('socSearchInp'); if(inp) doSocialSearch(inp.value);
+}
+
+function renderProfileTab(){
+  var body=document.getElementById('lbmBody'); if(!body) return;
+  var ft=document.getElementById('lbFooter'); if(ft) ft.textContent='Your player profile';
+  var name=userProfile?_wpMyName():'Guest';
+  var col=_playerColor||'#14F195';
+  var games=(W.stats&&W.stats.games)||0;
+  var wins=(W.stats&&W.stats.wins)||0;
+  var earned=(W.stats&&W.stats.earned)||0;
+  var earnedUSD=earned*(SOL_USD||0);
+  var kills=myKills||0;
+  var winRate=games>0?((wins/games)*100).toFixed(1)+'%':'--';
+  var kpg=games>0?(kills/games).toFixed(1):'--';
+  var earnColor=earnedUSD>=0?'var(--green)':'var(--red)';
+  body.innerHTML=
+    '<div class="prof-hero">'+
+      '<div class="prof-av" style="background:'+col+'22;color:'+col+';border-color:'+col+';">'+name[0].toUpperCase()+'</div>'+
+      '<div><div style="font-family:\'Orbitron\',monospace;font-size:.85rem;font-weight:900;">'+name+'</div>'+
+      '<div style="font-size:.58rem;color:var(--dim);margin-top:3px;">'+(userProfile&&userProfile.email?userProfile.email:'Not signed in')+'</div></div>'+
+    '</div>'+
+    '<div class="prof-section">'+
+      '<div class="prof-sec-hdr">🏆 Game Performance</div>'+
+      '<div class="prof-grid">'+
+        _pstat('Win Rate',winRate,'var(--gold)')+
+        _pstat('Games Won',wins.toLocaleString(),'var(--green)')+
+        _pstat('Games Played',games.toLocaleString(),'var(--text)')+
+        _pstat('Avg Survival','--','var(--gold)')+
+      '</div>'+
+    '</div>'+
+    '<div class="prof-section">'+
+      '<div class="prof-sec-hdr">🎯 Combat &amp; Time</div>'+
+      '<div class="prof-grid">'+
+        _pstat('Total Eliminations',kills.toLocaleString(),'var(--red)')+
+        _pstat('Kills Per Game',kpg,'var(--red)')+
+        _pstat('Total Play Time','--','var(--text)')+
+        _pstat('Total Earned','$'+earnedUSD.toFixed(2),earnColor)+
+      '</div>'+
+    '</div>'+
+    '<div class="prof-section" style="margin-bottom:14px;">'+
+      '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;font-family:\'Orbitron\',monospace;font-size:.62rem;font-weight:700;">'+
+        '<span>📈 Earnings &nbsp;<span style="color:'+earnColor+';">$'+earnedUSD.toFixed(2)+'</span></span>'+
+        '<span style="background:rgba(215,215,215,.07);border:1px solid var(--border);border-radius:5px;padding:3px 10px;font-size:.48rem;color:var(--dim);">All Time</span>'+
+      '</div>'+
+      '<canvas id="earningsChart" height="110" style="width:100%;display:block;padding:0 14px 12px;box-sizing:border-box;"></canvas>'+
+    '</div>';
+  setTimeout(drawEarningsChart,60);
+}
+
+function _pstat(lbl,val,col){
+  return '<div class="prof-stat"><div class="prof-stat-lbl">'+lbl+'</div><div class="prof-stat-val" style="color:'+col+';">'+val+'</div></div>';
+}
+
+function drawEarningsChart(){
+  var c=document.getElementById('earningsChart'); if(!c) return;
+  c.width=c.offsetWidth||600;
+  var ctx2=c.getContext('2d'); if(!ctx2) return;
+  var CW=c.width, CH=c.height;
+  var earned=(W.stats&&W.stats.earned)||0;
+  var earnedUSD=earned*(SOL_USD||0);
+  var n=40, pts=[];
+  for(var i=0;i<n;i++){
+    var t=i/(n-1);
+    var noise=(Math.random()-0.48)*Math.max(Math.abs(earnedUSD)*0.12,0.5);
+    pts.push(earnedUSD*t+noise);
+  }
+  pts[n-1]=earnedUSD;
+  var minV=Math.min.apply(null,pts); var maxV=Math.max.apply(null,pts);
+  var range=(maxV-minV)||1;
+  var pad=8;
+  function toY(v){return CH-pad-((v-minV)/range)*(CH-pad*2);}
+  function toX(i){return (i/(n-1))*CW;}
+  var lineCol=earnedUSD>=0?'#14F195':'#FF4560';
+  var grad=ctx2.createLinearGradient(0,0,0,CH);
+  grad.addColorStop(0,earnedUSD>=0?'rgba(20,241,149,0.35)':'rgba(255,69,96,0.35)');
+  grad.addColorStop(1,'rgba(0,0,0,0)');
+  ctx2.beginPath(); ctx2.moveTo(toX(0),toY(pts[0]));
+  for(var j=1;j<n;j++) ctx2.lineTo(toX(j),toY(pts[j]));
+  ctx2.lineTo(CW,CH); ctx2.lineTo(0,CH); ctx2.closePath();
+  ctx2.fillStyle=grad; ctx2.fill();
+  ctx2.beginPath(); ctx2.moveTo(toX(0),toY(pts[0]));
+  for(var k=1;k<n;k++) ctx2.lineTo(toX(k),toY(pts[k]));
+  ctx2.strokeStyle=lineCol; ctx2.lineWidth=2; ctx2.lineJoin='round'; ctx2.stroke();
+  var zy=toY(0);
+  if(zy>pad&&zy<CH-pad){
+    ctx2.beginPath(); ctx2.moveTo(0,zy); ctx2.lineTo(CW,zy);
+    ctx2.strokeStyle='rgba(215,215,215,0.12)'; ctx2.lineWidth=1; ctx2.setLineDash([4,4]); ctx2.stroke();
+    ctx2.setLineDash([]);
+  }
+}
+
+function renderFriendsSocTab(){
+  var body=document.getElementById('lbmBody'); if(!body) return;
+  var ft=document.getElementById('lbFooter'); if(ft) ft.textContent='Your friends list';
+  var tabs='<div class="fr-subtabs">'+
+    '<button class="fr-subtab '+(_frSubTab==='friends'?'active':'')+'" onclick="_socFrTab(\'friends\')">👥 Friends</button>'+
+    '<button class="fr-subtab '+(_frSubTab==='blocked'?'active':'')+'" onclick="_socFrTab(\'blocked\')">✕ Blocked</button>'+
+    '<button class="fr-subtab '+(_frSubTab==='pending'?'active':'')+'" onclick="_socFrTab(\'pending\')">⏱ Pending</button>'+
+  '</div>'+
+  '<div style="padding:0 14px 10px;"><input class="soc-search-inp" id="frSearchInp" placeholder="Search friends..." oninput="_filterFrSoc(this.value)" style="font-size:.65rem;padding:7px 12px;"></div>';
+  var list='';
+  if(_frSubTab==='friends'){
+    if(friendsList.length===0){
+      list='<div style="text-align:center;padding:32px 16px;color:var(--dim);font-size:.68rem;">No friends yet.<br><span style="color:var(--purple);">Use the Search tab to find players!</span></div>';
+    } else {
+      var sorted=[].concat(
+        friendsList.filter(function(f){return f.status==='ingame';}),
+        friendsList.filter(function(f){return f.status==='online'&&f.status!=='ingame';}),
+        friendsList.filter(function(f){return f.status!=='ingame'&&f.status!=='online';})
+      );
+      list=sorted.map(function(f){ return _frRow(f); }).join('');
+    }
+  } else {
+    list='<div style="text-align:center;padding:32px 16px;color:var(--dim);font-size:.68rem;">No '+(_frSubTab==='blocked'?'blocked players':'pending requests')+'.</div>';
+  }
+  body.innerHTML=tabs+'<div id="frListWrap">'+list+'</div>';
+}
+
+function _frRow(f){
+  var col=f.color||'#9945FF';
+  var sc=f.status==='ingame'?'var(--gold)':f.status==='online'?'var(--green)':'var(--dim)';
+  var stxt=f.status==='ingame'?'In Game':f.status==='online'?'Online':'Offline';
+  return '<div class="fr-row">'+
+    '<div class="fr-av" style="background:'+col+'22;color:'+col+';border:1px solid '+col+'44">'+(f.name[0]||'?')+'</div>'+
+    '<div style="flex:1"><div class="fr-name">'+f.name+'</div>'+
+    '<div style="font-size:.55rem;margin-top:2px;color:'+sc+';">● '+stxt+(f.tier?' · $'+f.tier+' lobby':'')+'</div></div>'+
+    '<button class="fr-rm-btn" onclick="removeFrSoc(\''+f.id+'\')">Remove</button>'+
+  '</div>';
+}
+
+function _socFrTab(t){ _frSubTab=t; renderFriendsSocTab(); }
+
+function removeFrSoc(id){
+  friendsList=friendsList.filter(function(f){return f.id!==id;});
+  renderFriendsSocTab(); toast('Friend removed');
+}
+
+function _filterFrSoc(q){
+  var wrap=document.getElementById('frListWrap'); if(!wrap) return;
+  q=(q||'').toLowerCase();
+  var list=q?friendsList.filter(function(f){return (f.name||'').toLowerCase().includes(q);}):friendsList;
+  wrap.innerHTML=list.length?list.map(function(f){return _frRow(f);}).join(''):'<div style="text-align:center;padding:20px;color:var(--dim);font-size:.65rem;">No matches</div>';
 }
 
 // ════════════════ 3-COL MENU HELPERS ════════════════
@@ -8832,17 +9070,18 @@ window.addEventListener('load', function() {
 <div class="lb-modal hidden" id="lbModal">
   <div class="lb-box">
     <div class="lbm-header">
-      <span style="font-size:1.3rem">🏆</span>
-      <span class="lbm-title">Global Leaderboard</span>
-      <button onclick="closeLeaderboard()" style="background:transparent;border:none;color:var(--dim);cursor:pointer;font-size:1.1rem;padding:2px 6px;border-radius:4px;">✕</button>
+      <span style="font-size:1.1rem">👥</span>
+      <span class="lbm-title">Social</span>
+      <button onclick="closeLeaderboard()" style="background:transparent;border:none;color:var(--dim);cursor:pointer;font-size:1.1rem;padding:2px 8px;border-radius:4px;line-height:1;">✕</button>
     </div>
-    <div class="lbm-tabs">
-      <button class="lbm-tab active" id="lbtEarned"  onclick="switchLBTab('earned')">💰 Earnings</button>
-      <button class="lbm-tab" id="lbtKills"  onclick="switchLBTab('kills')">⚔️ Kills</button>
-      <button class="lbm-tab" id="lbtGames"  onclick="switchLBTab('games')">🎮 Games</button>
+    <div class="soc-tabs">
+      <button class="soc-tab active" id="soctLb"      onclick="switchSocTab('lb')">🏆 Leaderboard</button>
+      <button class="soc-tab"        id="soctSearch"  onclick="switchSocTab('search')">🔍 Search</button>
+      <button class="soc-tab"        id="soctProfile" onclick="switchSocTab('profile')">👤 Profile</button>
+      <button class="soc-tab"        id="soctFriends" onclick="switchSocTab('friends')">👥 Friends</button>
     </div>
     <div class="lbm-body" id="lbmBody"></div>
-    <div class="lbm-footer" id="lbFooter">🟢 Live · Open to load players</div>
+    <div class="lbm-footer" id="lbFooter">🟢 Live</div>
   </div>
 </div>
 
