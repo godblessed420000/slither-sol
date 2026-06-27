@@ -5535,9 +5535,9 @@ function update(_dt){
     _boostMassAccum = 0; // reset when not boosting
   }
   // No passive recharge — boost refills only from eating orbs or getting kills
-  moveS(player, player.angle, spd);
-  // Enforce segment cap — tight buffer while boosting so tail visibly shrinks
-  var _segBuf = boosting ? 6 : 60;
+  var _segBuf = (boosting && boostE>0) ? 6 : 60;
+  moveS(player, player.angle, spd, _segBuf);
+  // Hard trim after move so tail shrinks immediately during boost
   var _tgt = segmentsForSize(player.length||40) + _segBuf;
   while(player.segs.length > _tgt) player.segs.pop();
 
@@ -5617,7 +5617,7 @@ function update(_dt){
   }
 }
 
-function moveS(s,angle,spd){
+function moveS(s,angle,spd,segBuf){
   s.angle=angle;
   var _cx=Math.cos(angle), _cy=Math.sin(angle);
   var px=s.x, py=s.y;
@@ -5626,7 +5626,8 @@ function moveS(s,angle,spd){
   // Add body segments at POINT_DIST (1.6 wu) intervals — matches MoneySlither exactly
   var d0=s._segAccum||0, total=d0+spd;
   var newK=Math.floor(total/POINT_DIST);
-  var _maxS=Math.max(segmentsForSize(s.length||40)+60,80);
+  var _buf=segBuf!=null?segBuf:60;
+  var _maxS=Math.max(segmentsForSize(s.length||40)+_buf,8);
   for(var j=1;j<=newK;j++){
     var t=(j*POINT_DIST-d0)/spd; // fraction into current frame where this seg falls
     var sx=((px+_cx*spd*t)%WORLD+WORLD)%WORLD, sy=((py+_cy*spd*t)%WORLD+WORLD)%WORLD;
