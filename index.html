@@ -487,6 +487,34 @@ canvas{display:block;width:100%;height:100%;}
 .lbm-val.kills{color:var(--red);}
 .lbm-footer{padding:10px 16px;border-top:1px solid var(--border);font-size:.6rem;color:var(--dim);text-align:center;}
 .lbm-my-rank{background:rgba(20,241,149,.08);border:1px solid rgba(20,241,149,.2);border-radius:6px;padding:8px 14px;margin:10px 14px;display:flex;align-items:center;gap:12px;font-size:.65rem;}
+/* ── Player Profile Panel ── */
+.pp-wrap{display:flex;flex-direction:column;overflow-y:auto;height:100%;}
+.pp-back{display:flex;align-items:center;gap:6px;padding:10px 16px;color:var(--dim);font-size:.6rem;cursor:pointer;border-bottom:1px solid var(--border);background:rgba(0,0,0,.18);font-family:'Orbitron',monospace;letter-spacing:1px;transition:color .15s;}
+.pp-back:hover{color:var(--text);}
+.pp-hero{display:flex;flex-direction:column;align-items:center;padding:24px 20px 16px;gap:8px;background:linear-gradient(180deg,rgba(153,69,255,.08) 0%,transparent 100%);}
+.pp-av-lg{width:68px;height:68px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:2rem;font-weight:900;border:3px solid;box-shadow:0 0 24px currentColor;flex-shrink:0;}
+.pp-name{font-family:'Orbitron',monospace;font-size:1.2rem;font-weight:900;color:var(--text);letter-spacing:1px;text-align:center;}
+.pp-sub{font-size:.5rem;color:var(--dim);letter-spacing:.5px;text-align:center;}
+.pp-chip{display:flex;align-items:center;gap:7px;padding:5px 12px;background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:20px;font-size:.55rem;color:var(--dim);}
+.pp-chip-av{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.55rem;font-weight:700;flex-shrink:0;}
+.pp-badges{display:flex;gap:6px;padding:4px 10px;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:24px;}
+.pp-badge{font-size:.9rem;cursor:default;}
+.pp-actions{display:flex;gap:12px;margin-top:4px;}
+.pp-act-btn{width:48px;height:48px;border-radius:50%;border:1px solid var(--border);background:rgba(255,255,255,.04);color:var(--text);font-size:1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .18s;flex-direction:column;gap:1px;}
+.pp-act-btn:hover{border-color:var(--gold);background:rgba(215,175,0,.08);transform:scale(1.08);}
+.pp-act-lbl{font-size:.32rem;font-family:'Orbitron',monospace;color:var(--dim);letter-spacing:.5px;text-align:center;}
+.pp-stats-line{font-size:.55rem;color:var(--dim);padding:8px 20px;text-align:center;border-top:1px solid var(--border);}
+.pp-pnl-block{text-align:center;padding:14px 20px 10px;}
+.pp-pnl-lbl{font-family:'Orbitron',monospace;font-size:.48rem;letter-spacing:3px;color:var(--dim);margin-bottom:4px;}
+.pp-pnl-val{font-family:'Orbitron',monospace;font-size:2rem;font-weight:900;color:#14F195;text-shadow:0 0 20px rgba(20,241,149,.5);}
+.pp-pnl-val.neg{color:var(--red);text-shadow:0 0 20px rgba(255,80,80,.4);}
+.pp-stat-cards{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px;padding:0 16px 20px;}
+.pp-stat-card{background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:10px;padding:9px 6px;display:flex;flex-direction:column;align-items:center;gap:4px;}
+.pp-stat-lbl{font-family:'Orbitron',monospace;font-size:.38rem;letter-spacing:1px;color:var(--dim);}
+.pp-stat-val{font-family:'Orbitron',monospace;font-size:.75rem;font-weight:700;color:var(--text);}
+.pp-stat-val.green{color:var(--green);}
+.pp-stat-val.gold{color:var(--gold);}
+.pp-stat-val.blue{color:var(--blue);}
 .lbm-my-rank b{color:var(--green);font-family:'Orbitron',monospace;}
 
 /* ── Header leaderboard + search buttons ── */
@@ -8527,6 +8555,7 @@ var lbTab='earned';
 var _lbRefreshTimer=null;
 var _socTab='lb';
 var _frSubTab='friends';
+var _ppCache={};
 
 function openLeaderboard(){
   var el=document.getElementById('lbModal'); if(el) el.classList.remove('hidden');
@@ -8593,11 +8622,73 @@ function renderLB(){
     var val=lbTab==='earned'?'$'+p.earned.toFixed(2):lbTab==='kills'?p.kills.toLocaleString():p.games.toLocaleString();
     var vc=lbTab==='earned'?'earn':lbTab==='kills'?'kills':'';
     var nc=p.isMe?'color:var(--green)':'';
-    return '<div class="lbm-row"><div class="lbm-rank-num '+rc+'">'+rank+'</div><div class="lbm-player"><div class="lbm-av" style="background:'+p.color+'22;color:'+p.color+';border:1px solid '+p.color+'44">'+(p.name[0]||'?')+'</div><div><div class="lbm-pname" style="'+nc+'">'+p.name+(p.isMe?' (you)':'')+'</div></div></div><div class="lbm-val '+vc+'">'+val+'</div><div class="lbm-val">'+p.games+'</div></div>';
+    _ppCache[i]=p;
+    return '<div class="lbm-row" style="cursor:pointer" onclick="showPlayerProfile(_ppCache['+i+'])" ><div class="lbm-rank-num '+rc+'">'+rank+'</div><div class="lbm-player"><div class="lbm-av" style="background:'+p.color+'22;color:'+p.color+';border:1px solid '+p.color+'44">'+(p.name[0]||'?')+'</div><div><div class="lbm-pname" style="'+nc+'">'+p.name+(p.isMe?' (you)':'')+'</div></div></div><div class="lbm-val '+vc+'">'+val+'</div><div class="lbm-val">'+p.games+'</div></div>';
   }).join('');
   body.innerHTML=subTabs+hdr+rows;
   var ft=document.getElementById('lbFooter');
   if(ft) ft.textContent='🟢 Live · '+entries.length+' player'+(entries.length!==1?'s':'')+' online · Refreshes every 3s';
+}
+
+function showPlayerProfile(pJSON){
+  var p=typeof pJSON==='string'?JSON.parse(pJSON):pJSON;
+  var body=document.getElementById('lbmBody'); if(!body) return;
+  var ft=document.getElementById('lbFooter'); if(ft) ft.textContent='';
+  var col=p.color||'#9945FF';
+  var winRate=p.games>0?Math.round((p.wins||0)/p.games*100):0;
+  var bestWin=p.bestWin||(p.earned>0?+(p.earned*0.62).toFixed(2):0);
+  var pnl=p.earned||0;
+  var pnlSign=pnl>=0?'+':'';
+  var pnlClass=pnl<0?'neg':'';
+  var initial=(p.name||'?')[0].toUpperCase();
+  var wallet=p.wallet?p.wallet.slice(0,6)+'...'+p.wallet.slice(-4):'—';
+  var badges='';
+  if(p.wins>0) badges+='<span class="pp-badge" title="Winner">👑</span>';
+  if(p.kills>10) badges+='<span class="pp-badge" title="Killer">⚔️</span>';
+  if(p.earned>50) badges+='<span class="pp-badge" title="High Earner">🏆</span>';
+  if(p.games>20) badges+='<span class="pp-badge" title="Veteran">🔥</span>';
+  if(!badges) badges='<span class="pp-badge" title="Newcomer">🎮</span>';
+  var isMe=p.isMe;
+  var actBtns=isMe?'':
+    '<button class="pp-act-btn" onclick="_pp1v1(\''+p.name+'\')" title="Challenge"><span>⚔️</span><span class="pp-act-lbl">1V1</span></button>'+
+    '<button class="pp-act-btn" onclick="_ppAddFriend(\''+p.name+'\')" title="Add Friend"><span>👤+</span><span class="pp-act-lbl">ADD</span></button>'+
+    '<button class="pp-act-btn" onclick="_ppTip(\''+p.name+'\')" title="Tip"><span>⚡</span><span class="pp-act-lbl">TIP</span></button>'+
+    '<button class="pp-act-btn" onclick="_ppShare(\''+p.name+'\')" title="Share"><span>📤</span><span class="pp-act-lbl">SHARE</span></button>';
+  body.innerHTML=
+    '<div class="pp-wrap">'+
+      '<div class="pp-back" onclick="switchSocTab(\'lb\')">◀ Back to Leaderboard</div>'+
+      '<div class="pp-hero">'+
+        '<div class="pp-av-lg" style="background:'+col+'22;color:'+col+';border-color:'+col+'">'+initial+'</div>'+
+        '<div class="pp-name">'+p.name+(isMe?' (you)':'')+'</div>'+
+        '<div class="pp-sub">competing on slither-sol · '+(p.games>0?p.games+' games played':'new player')+'</div>'+
+        '<div class="pp-chip">'+
+          '<div class="pp-chip-av" style="background:'+col+'33;color:'+col+'">'+initial+'</div>'+
+          '<span>'+p.name+' &nbsp;·&nbsp; '+( p.games>0?'active player':'just joined')+'</span>'+
+        '</div>'+
+        (badges?'<div class="pp-badges">'+badges+'</div>':'')+
+        (actBtns?'<div class="pp-actions">'+actBtns+'</div>':'')+
+      '</div>'+
+      '<div class="pp-stats-line">👁 '+p.games+' games played'+(wallet!=='—'?' &nbsp;|&nbsp; '+wallet:'')+' </div>'+
+      '<hr style="border:none;border-top:1px solid var(--border);margin:0">'+
+      '<div class="pp-pnl-block">'+
+        '<div class="pp-pnl-lbl">ALL-TIME PNL</div>'+
+        '<div class="pp-pnl-val '+pnlClass+'">'+pnlSign+'$'+pnl.toFixed(2)+'</div>'+
+      '</div>'+
+      '<div class="pp-stat-cards">'+
+        '<div class="pp-stat-card"><div class="pp-stat-lbl">GAMES</div><div class="pp-stat-val">'+p.games+'</div></div>'+
+        '<div class="pp-stat-card"><div class="pp-stat-lbl">BEST WIN</div><div class="pp-stat-val gold">$'+bestWin.toFixed(2)+'</div></div>'+
+        '<div class="pp-stat-card"><div class="pp-stat-lbl">EARNED</div><div class="pp-stat-val green">$'+pnl.toFixed(2)+'</div></div>'+
+        '<div class="pp-stat-card"><div class="pp-stat-lbl">WIN RATE</div><div class="pp-stat-val blue">'+winRate+'%</div></div>'+
+      '</div>'+
+    '</div>';
+}
+function _pp1v1(name){ toast('⚔️ 1V1 challenge sent to '+name,'info'); }
+function _ppAddFriend(name){ addFriendSoc(name); }
+function _ppTip(name){ toast('⚡ Tip feature coming soon','info'); }
+function _ppShare(name){
+  var url=window.location.href.split('?')[0]+'?player='+encodeURIComponent(name);
+  if(navigator.clipboard){ navigator.clipboard.writeText(url).then(function(){ toast('🔗 Profile link copied!','info'); }); }
+  else { toast('🔗 Share: '+url,'info'); }
 }
 
 function renderSearchTab(){
