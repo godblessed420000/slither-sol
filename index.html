@@ -4592,7 +4592,13 @@ function initCanvas(){
   gc=document.getElementById('gc'); mm=document.getElementById('minimap');
   ctx=gc.getContext('2d'); mctx=mm.getContext('2d');
   resizeC(); window.addEventListener('resize',resizeC);
-  gc.addEventListener('wheel', function(e){ e.preventDefault(); }, {passive:false});
+  // Scroll wheel / trackpad zoom — up = zoom in, down = zoom out. Per-event step capped
+  // so high-res trackpads don't jump; _zoomOffset is added to the auto-zoom each frame.
+  gc.addEventListener('wheel', function(e){
+    e.preventDefault();
+    var step=Math.max(-0.2,Math.min(0.2,e.deltaY*0.0015));
+    _zoomOffset=Math.max(-2.0,Math.min(2.0,_zoomOffset-step));
+  }, {passive:false});
 }
 function resizeC(){
   var wrap=document.getElementById('canvasWrap');
@@ -5277,7 +5283,8 @@ function update(_dt){
 
   if(!player||!player.alive){
     if(_spectating){
-      CAM_ZOOM=0.75;
+      // Spectate base zoom + the user's scroll-wheel offset, so scroll works here too.
+      CAM_ZOOM=Math.max(0.25,Math.min(MAX_ZOOM,0.75+_zoomOffset));
       var _sNow=performance.now(),_sExtCap=BASE_SPEED*BOOST_MULT*60;
       var _st=_specTargetId?peers.find(function(p){return p.remoteId===_specTargetId;}):null;
       if(_st&&_st.alive){
@@ -5405,8 +5412,10 @@ function update(_dt){
   //   • 4× thicker → 2× bigger on screen, while the camera gently pulls back.
   // (The old 22/snakeRadius made screen_radius constant, cancelling all width growth.)
   var _zCur=snakeThickness(player.length||100);
-  var _tarZ=Math.max(0.42,Math.min(1.9, ZOOM_PX/Math.sqrt(_zCur*WIDTH_BASE)));
-  CAM_ZOOM=CAM_ZOOM+(_tarZ-CAM_ZOOM)*0.04; // smooth lerp ~1s to adapt
+  var _autoZ=Math.max(0.42,Math.min(1.9, ZOOM_PX/Math.sqrt(_zCur*WIDTH_BASE)));
+  // Add the user's scroll-wheel offset on top of the auto-fit zoom, then clamp.
+  var _tarZ=Math.max(0.25,Math.min(MAX_ZOOM, _autoZ+_zoomOffset));
+  CAM_ZOOM=CAM_ZOOM+(_tarZ-CAM_ZOOM)*0.18; // snappier lerp so scroll feels responsive
 
   camX=player.x; camY=player.y;
   var isFreeGame=(activeTier==='free');
@@ -5837,7 +5846,7 @@ function _updateSpecHud(){
 function startSpectating(){
   var alivePeers=peers.filter(function(p){return p.alive&&p.isRemote;});
   _spectating=true;
-  _zoomOffset=-0.30; // pre-zoomed out: 0.92 + (-0.30) = 0.62 overview; scroll in/out same as gameplay
+  _zoomOffset=-0.30; // pre-zoomed out: 0.75 + (-0.30) = 0.45 overview; scroll in/out works the same
   if(alivePeers.length){
     _specTargetId=alivePeers[0].remoteId;
     camX=alivePeers[0].x; camY=alivePeers[0].y;
