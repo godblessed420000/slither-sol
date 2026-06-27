@@ -1138,10 +1138,14 @@ canvas{display:block;width:100%;height:100%;}
 
       <div class="m3-logo">SLITHER<span class="m3-logo-sol">.SOL</span></div>
 
-      <div class="m3-name-row">
+      <div class="m3-name-row" onclick="_menuNameEdit()" title="Click to change name" style="cursor:pointer;">
         <span class="m3-name-dot" id="menuColorDot" style="color:#14F195;font-size:1.1rem;">&#9679;</span>
         <span id="menuPlayerName" class="m3-player-name">Player</span>
-        <button class="m3-edit-btn" onclick="openShop()" title="Customize">&#9998;</button>
+        <input id="menuNameInput" type="text" maxlength="14" placeholder="Enter name…"
+          style="display:none;flex:1;background:transparent;border:none;border-bottom:1px solid var(--green);color:var(--text);font-family:'Share Tech Mono',monospace;font-size:.72rem;outline:none;padding:2px 4px;"
+          onclick="event.stopPropagation()"
+          onblur="_menuNameSave()"
+          onkeydown="if(event.key==='Enter'){_menuNameSave();} if(event.key==='Escape'){_menuNameCancel();}">
       </div>
 
       <div class="m3-bet-row">
@@ -8493,13 +8497,34 @@ function updateMenuFriends() {
   if(sp) sp.textContent=cnt||'--';
 }
 
-function saveMenuName(){
-  var inp=document.getElementById('menuNameInput'); if(!inp) return;
-  var val=inp.value.trim().slice(0,14); if(!val) return;
-  if(userProfile) userProfile.name=val;
-  _currentName=val;
-  var pn=document.getElementById('menuPlayerName'); if(pn) pn.textContent=val;
-  toast('Name updated to '+val);
+function _menuNameEdit(){
+  var pn=document.getElementById('menuPlayerName');
+  var inp=document.getElementById('menuNameInput');
+  if(!pn||!inp) return;
+  inp.value=pn.textContent;
+  pn.style.display='none';
+  inp.style.display='';
+  inp.focus(); inp.select();
+}
+function _menuNameSave(){
+  var pn=document.getElementById('menuPlayerName');
+  var inp=document.getElementById('menuNameInput');
+  if(!pn||!inp) return;
+  var val=inp.value.trim().slice(0,14);
+  if(val){
+    if(userProfile) userProfile.name=val;
+    _currentName=val;
+    pn.textContent=val;
+    toast('Name updated to '+val);
+  }
+  inp.style.display='none';
+  pn.style.display='';
+}
+function _menuNameCancel(){
+  var pn=document.getElementById('menuPlayerName');
+  var inp=document.getElementById('menuNameInput');
+  if(inp) inp.style.display='none';
+  if(pn) pn.style.display='';
 }
 
 function _refreshMenuOnShow(){
