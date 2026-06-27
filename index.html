@@ -5506,9 +5506,12 @@ function update(_dt){
           var _sda=_st.targetAngle-_st.angle;
           while(_sda>Math.PI)_sda-=Math.PI*2; while(_sda<-Math.PI)_sda+=Math.PI*2;
           _st.angle+=_sda*_LERP;
-          _st._segAccum=(_st._segAccum||0)+Math.hypot(_st.x-(_st._lpx||_st.x),_st.y-(_st._lpy||_st.y));
+          var _slpx=(_st._lpx||_st.x),_slpy=(_st._lpy||_st.y);
+          var _sdx=_st.x-_slpx,_sdy=_st.y-_slpy,_sMv=Math.hypot(_sdx,_sdy);
           _st._lpx=_st.x; _st._lpy=_st.y;
-          if(_st._segAccum>=POINT_DIST){ _st._segAccum-=POINT_DIST; _st.segs.unshift({x:_st.x,y:_st.y}); }
+          var _sd0=_st._segAccum||0,_stot=_sd0+_sMv,_snK=Math.floor(_stot/POINT_DIST);
+          if(_snK>0&&_sMv>0){for(var _si=1;_si<=_snK;_si++){var _stt=(_si*POINT_DIST-_sd0)/_sMv;_st.segs.unshift({x:_slpx+_sdx*_stt,y:_slpy+_sdy*_stt});}}
+          _st._segAccum=_stot-_snK*POINT_DIST;
           var _smaxS=Math.floor(segmentsForSize(_st.length||40)+60); if(isFinite(_smaxS)&&_smaxS>0&&_st.segs.length>_smaxS)_st.segs.length=_smaxS;
         }
         camX=_st.x; camY=_st.y;
@@ -5599,9 +5602,12 @@ function update(_dt){
       var da2=p.targetAngle-p.angle;
       while(da2>Math.PI) da2-=Math.PI*2; while(da2<-Math.PI) da2+=Math.PI*2;
       p.angle += da2*_la;
-      p._segAccum=(p._segAccum||0)+Math.hypot(p.x-(p._lpx||p.x),p.y-(p._lpy||p.y));
+      var _plpx=(p._lpx||p.x),_plpy=(p._lpy||p.y);
+      var _pdx=p.x-_plpx,_pdy=p.y-_plpy,_pMv=Math.hypot(_pdx,_pdy);
       p._lpx=p.x; p._lpy=p.y;
-      if(p._segAccum>=POINT_DIST){ p._segAccum-=POINT_DIST; p.segs.unshift({x:p.x,y:p.y}); }
+      var _pd0=p._segAccum||0,_ptot=_pd0+_pMv,_pnK=Math.floor(_ptot/POINT_DIST);
+      if(_pnK>0&&_pMv>0){for(var _pi=1;_pi<=_pnK;_pi++){var _ptt=(_pi*POINT_DIST-_pd0)/_pMv;p.segs.unshift({x:_plpx+_pdx*_ptt,y:_plpy+_pdy*_ptt});}}
+      p._segAccum=_ptot-_pnK*POINT_DIST;
       var maxS=Math.floor(segmentsForSize(p.length||40)+60);
       if(isFinite(maxS)&&maxS>0&&p.segs.length>maxS) p.segs.length=maxS;
     }
