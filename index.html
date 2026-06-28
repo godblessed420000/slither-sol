@@ -4614,6 +4614,7 @@ var _inGameSession=false; // true from launchGame() until showStart() — email 
 var _staleFrame=0; // frame counter for stale-peer eviction (runs every 60 frames)
 var _lastLoopT=0;  // last loop timestamp for delta-time calculation
 var _loopActive=false; // true while a loop() rAF chain is running — guards against double-launch
+var _rafHandle=null; // rAF handle returned by requestAnimationFrame — used to cancel on rejoin
 var _lastPosSend=0; // last position-publish timestamp (rAF-driven, ~60fps)
 var _preRejoinAvgSegs=0; // snapshot of peer avg segs taken just before _wsJoin() clears peers[]
 var _boostExhaustedUntil=0; // performance.now() timestamp when the 3s exhaustion penalty expires
@@ -4972,8 +4973,8 @@ function resizeC(){
   if(!wrap||!gc) return;
   var w=wrap.clientWidth, h=wrap.clientHeight;
   if(gc.width!==w||gc.height!==h){ gc.width=w; gc.height=h; }
-  // Re-center mouse so snake doesn't jerk on resize
-  mouseX=gc.width/2; mouseY=gc.height/2;
+  // Re-center mouse on resize — but NOT during gameplay (would override spawn-angle alignment)
+  if(!gameRunning) { mouseX=gc.width/2; mouseY=gc.height/2; }
 }
 
 function enterLobby(tier,e) {
@@ -5204,7 +5205,12 @@ function launchGame() {
   _cacheHudEls(); // cache all HUD refs once — avoids getElementById each frame
   lbInt=setInterval(updateLB,1200); // leaderboard update — 1.2s is plenty (was 800ms)
   _wsPingLoop(); // start real RTT measurement (was never called before — was showing fake ping)
-  updateLB(); if(!_loopActive) loop();
+  updateLB();
+  // Cancel any pending RAF then start a single fresh loop — prevents double-loop on rejoin
+  // and revives the loop if it died from an exception (can't rely on _loopActive alone)
+  if(_rafHandle) cancelAnimationFrame(_rafHandle);
+  _rafHandle=null; _loopActive=false; _lastLoopT=0;
+  loop();
 }
 
 function mkSnake(x,y,color,name,isMe,startLength){
@@ -5585,7 +5591,7 @@ document.addEventListener('visibilitychange',function(){
 });
 
 function loop(){
-  if(!gameRunning&&!_spectating){ _loopActive=false; return; }
+  if(!gameRunning&&!_spectating){ _loopActive=false; _rafHandle=null; return; }
   _loopActive=true;
   var _lt = performance.now();
   // Normalize to 60fps: dt=1.0 at 60fps, 0.5 at 120fps, 2.0 at 30fps.
@@ -5604,7 +5610,7 @@ function loop(){
     } catch(e) {}
   }
   draw();
-  requestAnimationFrame(loop);
+  _rafHandle = requestAnimationFrame(loop);
 }
 
 function update(_dt){
@@ -6250,8 +6256,8 @@ function startSpectating(){
   var sh=document.getElementById('specHud'); if(sh) sh.style.display='flex';
   _updateSpecHud();
   // Only launch a new loop if one isn't already running (e.g. called from within loop→killPlayer).
-  // If _loopActive is true the existing rAF chain picks up _spectating=true automatically.
-  if(!_loopActive) requestAnimationFrame(loop);
+  // If _rafHandle is set, the existing rAF chain picks up _spectating=true automatically.
+  if(!_rafHandle) _rafHandle = requestAnimationFrame(loop);
 }
 function _switchSpecTarget(dir){
   var alivePeers=peers.filter(function(p){return p.alive&&p.isRemote;});
