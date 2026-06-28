@@ -5156,6 +5156,8 @@ function launchGame() {
   }
   spawnPlayer();
   if(player) _smoothLen=player.length; // zoom starts at actual snake size — no mismatch
+  // Align virtual mouse to spawn angle so REJOIN button click position doesn't steer snake into wall
+  if(player && gc) { mouseX=gc.width/2+Math.cos(player.angle)*gc.width*0.4; mouseY=gc.height/2+Math.sin(player.angle)*gc.height*0.4; }
   // No AI bots — remote players come entirely via Ably
   peers = peers.filter(function(p){ return p.isRemote&&p.alive; });
   // Seed food from server list (authoritative) — fall back to local spawn if server hasn't sent yet
