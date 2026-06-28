@@ -3381,7 +3381,7 @@ function _wsConnect(onReady) {
     if (onReady) onReady();
   };
   _ws.onmessage = function(e) {
-    try { _wsHandleMsg(JSON.parse(e.data)); } catch(ex) {}
+    try { _wsHandleMsg(JSON.parse(e.data)); } catch(ex) { console.error('[ws] msg error:', ex); }
   };
   _ws.onclose = function() {
     clearTimeout(_wsConnTimer);
@@ -3396,6 +3396,17 @@ function _wsConnect(onReady) {
         // Server v4 sends `start` back, but if we're already in-game the
         // handler has `if (gameRunning) return` so it's safely ignored.
         _wsConnect(function() {
+          // Clear stale peer state so the fresh state snapshots rebuild everything correctly.
+          // Without this, _recentLeaves entries from before the drop permanently block
+          // peer recreation after reconnect.
+          _recentLeaves = {};
+          _processedDies = {};
+          Object.keys(_remoteMap).forEach(function(id) {
+            var rp = _remoteMap[id];
+            if (rp) { rp.alive = false; rp.segs = []; }
+          });
+          _remoteMap = {};
+          peers = peers.filter(function(p) { return !p.isRemote; });
           _ws.send(JSON.stringify({
             type:'join', clientId:_wsClientId, tier:_currentTier,
             data:{ n:_currentName, color:_currentColor }
@@ -3405,11 +3416,11 @@ function _wsConnect(onReady) {
           if (!gameRunning) {
             _lobbyPingTimer = setInterval(function() {
               if (gameRunning) { clearInterval(_lobbyPingTimer); _lobbyPingTimer = null; return; }
-              if (_ablyChannel) {
-                try { _ablyChannel.publish('join', { n: _currentName, color: _currentColor, reply: true }); } catch(_) {}
-              }
               if (_ws && _ws.readyState === WebSocket.OPEN) {
                 try { _ws.send(JSON.stringify({ type:'join', clientId:_wsClientId, tier:_currentTier, data:{ n:_currentName, color:_currentColor, reply:true } })); } catch(_) {}
+              }
+              if (_ablyChannel) {
+                try { _ablyChannel.publish('join', { n: _currentName, color: _currentColor, reply: true }); } catch(_) {}
               }
             }, 4000);
           }
@@ -4018,12 +4029,14 @@ function _wsJoin(tier) {
     // Re-announce every 6s so late-joiners discover us.
     clearInterval(_lobbyPingTimer);
     _lobbyPingTimer = setInterval(function() {
-      // Always re-announce so mid-game joiners can discover us via _ablyVerifiedPeers.
-      // Pos at 50fps shows our position; this join is what makes us visible/killable.
-      if (!_ablyChannel) { clearInterval(_lobbyPingTimer); _lobbyPingTimer = null; return; }
-      try { _ablyChannel.publish('join', { n: _currentName, color: _currentColor, reply: true }); } catch(_) {}
+      // WS re-announce first — works regardless of Ably connection status.
+      // This is the primary mechanism for late-joiners to discover us.
       if (_ws && _ws.readyState === WebSocket.OPEN) {
         try { _ws.send(JSON.stringify({ type:'join', clientId:_wsClientId, tier:_currentTier, data:{ n:_currentName, color:_currentColor, reply:true } })); } catch(_) {}
+      }
+      // Ably re-announce is secondary (only when connected)
+      if (_ablyChannel) {
+        try { _ablyChannel.publish('join', { n: _currentName, color: _currentColor, reply: true }); } catch(_) {}
       }
     }, 6000);
   }
