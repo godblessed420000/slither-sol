@@ -3599,9 +3599,111 @@ function _wsHandleMsg(msg, fromAbly) {
 
   // start: server fires immediately when this player joins the live arena
   if (type === 'start') {
+    if (d.spawn) _serverSpawn = d.spawn;
+    if (d.food)  _serverFood  = d.food;
+    if (d.world) { _targetWorld = d.world; WORLD = d.world; WORLD_R = d.world / 2; }
     if (gameRunning) return; // already in-game — safe to ignore
     clearInterval(lobbyTimer); lobbyTimer = null;
     launchGame();
+    return;
+  }
+
+  // state: authoritative server snapshot — buffer for interpolation
+  if (type === 'state') {
+    if (!gameRunning && !_spectating) return;
+    var _sNow = performance.now();
+    // Build snapshot indexed by clientId
+    var _snap = { t: _sNow, snakes: {}, world: d.world };
+    for (var _sni = 0; _sni < (d.snakes||[]).length; _sni++) {
+      var _snd = d.snakes[_sni]; _snap.snakes[_snd.id] = _snd;
+    }
+    _stateBuffer.push(_snap);
+    if (_stateBuffer.length > 12) _stateBuffer.shift();
+
+    // Update arena size
+    if (d.world && Math.abs(d.world - _targetWorld) > 1) _targetWorld = d.world;
+
+    // Sync server food (preserve client-side death food)
+    if (d.food && gameRunning) {
+      var _df2 = food.filter(function(f){ return f.isDeath; });
+      food = _df2.concat(d.food.map(function(f){ return {x:f.x,y:f.y,r:f.r,color:f.c,value:f.v,id:f.id}; }));
+    }
+
+    // Reconcile local player length/position from server (soft correction)
+    if (d.snakes && gameRunning && player && player.alive) {
+      for (var _sci = 0; _sci < d.snakes.length; _sci++) {
+        var _sc = d.snakes[_sci];
+        if (_sc.id !== _wsClientId) continue;
+        var _rdx = _sc.x - player.x, _rdy = _sc.y - player.y;
+        if (_rdx*_rdx + _rdy*_rdy > 2500) { // >50 wu off — nudge back
+          player.x += _rdx * 0.1; player.y += _rdy * 0.1;
+        }
+        if (_sc.l && Math.abs(_sc.l - player.length) > 5) player.length = _sc.l;
+        break;
+      }
+    }
+
+    // Create/update remote peers from snapshot, handle server-authoritative deaths
+    if (d.snakes && gameRunning) {
+      for (var _psi = 0; _psi < d.snakes.length; _psi++) {
+        var _psn = d.snakes[_psi];
+        if (_psn.id === _wsClientId) continue;
+        var _prp = _remoteMap[_psn.id];
+        if (!_psn.alive) {
+          // Server says dead — process if not already handled
+          if (_prp && _prp.alive && !_processedDies[_psn.id]) {
+            _processedDies[_psn.id] = true;
+            var _dvS2 = _prp.segs.slice(), _dvL2 = _prp.length;
+            _prp.alive = false; _prp.segs = [];
+            kFeed(_prp.name + ' was eliminated!');
+            if (!_killerScatteredFor[_psn.id]) _scatterDeathFood(_dvS2, _dvL2);
+            _recentLeaves[_psn.id] = Date.now();
+            delete _remoteMap[_psn.id];
+            peers = peers.filter(function(p){ return p !== _prp; });
+            if (gameRunning) _updateArenaSize();
+          }
+          continue;
+        }
+        if (!_prp && !_recentLeaves[_psn.id]) {
+          // Create new peer
+          var _plb = _lobbyPeers[_psn.id] || {};
+          var _puc = peers.map(function(p){ return p.color; });
+          var _prc = _plb.color || PC.find(function(c){ return _puc.indexOf(c)<0; }) || PC[1];
+          var _pil = _psn.l || 100, _pia = _psn.a || 0;
+          delete _processedDies[_psn.id]; delete _recentLeaves[_psn.id];
+          _prp = { x:_psn.x, y:_psn.y, angle:_pia, segs:[], length:_pil,
+            color:_prc, name:_plb.n||('P_'+_psn.id.slice(0,4)),
+            skin:'default', isMe:false, isRemote:true, alive:true,
+            remoteId:_psn.id, joinTs:Date.now(),
+            headR:snakeRadius(_pil), lastT:_sNow,
+            _lpx:_psn.x, _lpy:_psn.y, _segAccum:0 };
+          var _pis = segmentsForSize(_pil);
+          for (var _pii=0; _pii<_pis; _pii++)
+            _prp.segs.push({x:_psn.x-Math.cos(_pia)*_pii*POINT_DIST, y:_psn.y-Math.sin(_pia)*_pii*POINT_DIST});
+          _remoteMap[_psn.id] = _prp; peers.push(_prp); _updateArenaSize();
+          var _prnm = _prp.name;
+          setTimeout(function(){ playJoinDing(); kFeed(_prnm + ' is in the game!'); }, 0);
+        } else if (_prp) {
+          _prp.lastT = _sNow;
+          if (_psn.l) { _prp.length = _psn.l; _prp.headR = snakeRadius(_psn.l); }
+          _prp.boosting = !!_psn.b;
+        }
+      }
+    }
+
+    // Handle server die/eat events
+    if (d.events) {
+      for (var _evi = 0; _evi < d.events.length; _evi++) {
+        var _ev = d.events[_evi];
+        if (_ev.e === 'die' && _ev.id === _wsClientId && player && player.alive) {
+          var _kNow = Date.now();
+          if (!_killNotifyTs['__self__'] || _kNow - _killNotifyTs['__self__'] > 2000) {
+            _killNotifyTs['__self__'] = _kNow;
+            killPlayer('Eliminated', _ev.killed_by || null);
+          }
+        }
+      }
+    }
     return;
   }
 
@@ -4488,6 +4590,10 @@ var _loopActive=false; // true while a loop() rAF chain is running — guards ag
 var _lastPosSend=0; // last position-publish timestamp (rAF-driven, ~60fps)
 var _preRejoinAvgSegs=0; // snapshot of peer avg segs taken just before _wsJoin() clears peers[]
 var _boostExhaustedUntil=0; // performance.now() timestamp when the 3s exhaustion penalty expires
+var _stateBuffer=[];   // server state snapshots [{t, snakes:{id:data}, world}] for interpolation
+var _serverSpawn=null; // spawn position provided by server in 'start' message
+var _serverFood=null;  // initial food list from server 'start' message
+var _INTERP_DELAY=100; // ms behind real-time to render remote snakes (absorbs network jitter)
 var _mmFrame=0; // minimap throttle — redrawn every 3 game frames, not every frame
 var _fcBuckets={}; // reused food-color-bucket dict — avoids {} alloc + GC every draw()
 var camX=0,camY=0,mouseX=400,mouseY=300,boosting=false,boostE=100;
@@ -4994,7 +5100,7 @@ function launchGame() {
   if(tb){ tb.style.display='none'; }
   var alb=document.getElementById('activeLobbyBadge');
   if(alb){ alb.style.display='none'; }
-  score=0; myKills=0; killSOL=0; boostE=100; boosting=false; cashingOut=false; qDown=false; _zoomOffset=0; _zoomScale=1.0; CAM_ZOOM=1.0; _smoothLen=100; _autoCircle=false; _hudScoreV=''; _hudSubV=''; _hudEarnV=''; _boostMassAccum=0;
+  score=0; myKills=0; killSOL=0; boostE=100; boosting=false; cashingOut=false; qDown=false; _zoomOffset=0; _zoomScale=1.0; CAM_ZOOM=1.0; _smoothLen=100; _autoCircle=false; _hudScoreV=''; _hudSubV=''; _hudEarnV=''; _boostMassAccum=0; _stateBuffer=[];
   _updateArenaSize(); WORLD = _targetWorld; WORLD_R = WORLD / 2; // snap immediately at game start; later joins/leaves lerp gradually
   // Restore W.balance from on-chain if it was zeroed by a previous death or is stale.
   // refreshBalance() won't sync during gameplay (gameRunning guard), so we must do it here.
@@ -5024,10 +5130,16 @@ function launchGame() {
   if(player) _smoothLen=player.length; // zoom starts at actual snake size — no mismatch
   // No AI bots — remote players come entirely via Ably
   peers = peers.filter(function(p){ return p.isRemote&&p.alive; });
-  // Seed 35 orbs near the map center, then fill the rest randomly
-  var _cx=WORLD/2, _cy=WORLD/2;
-  for(var _cf=0;_cf<35;_cf++) addFood(_cx+(Math.random()-.5)*WORLD*0.22, _cy+(Math.random()-.5)*WORLD*0.22);
-  spawnFood(MAX_FOOD); moneyDrops=[]; _claimedDrops={}; gameRunning=true; _cashoutInProgress=false;
+  // Seed food from server list (authoritative) — fall back to local spawn if server hasn't sent yet
+  if (_serverFood && _serverFood.length > 0) {
+    food = _serverFood.map(function(f){ return {x:f.x,y:f.y,r:f.r,color:f.c,value:f.v,id:f.id}; });
+    _serverFood = null;
+  } else {
+    var _cx=WORLD/2, _cy=WORLD/2;
+    for(var _cf=0;_cf<35;_cf++) addFood(_cx+(Math.random()-.5)*WORLD*0.22, _cy+(Math.random()-.5)*WORLD*0.22);
+    spawnFood(MAX_FOOD);
+  }
+  moneyDrops=[]; _claimedDrops={}; gameRunning=true; _cashoutInProgress=false;
   _spectating=false; _specTargetId=null; var _shEl=document.getElementById('specHud'); if(_shEl) _shEl.style.display='none';
   _hideMobileBar(); // hide wallet bar during gameplay — HUD shows score/balance
   var _hee=document.getElementById('headerEmailEl'); if(_hee) _hee.style.display='none';
@@ -5098,7 +5210,8 @@ function spawnPlayer(){
     }
     if(minD>bestDist){ bestDist=minD; bestX=_tx; bestY=_ty; }
   }
-  sx=bestX; sy=bestY;
+  if (_serverSpawn) { sx=_serverSpawn.x; sy=_serverSpawn.y; _serverSpawn=null; }
+  else { sx=bestX; sy=bestY; }
   var pn=userProfile?userProfile.name.split(' ')[0].slice(0,14):'YOU';
   _preRejoinAvgSegs=0; // reset
   player=mkSnake(sx,sy,_playerColor,pn,true,350); // start a bit longer
@@ -5411,16 +5524,10 @@ function _startBgWorker(){
       update(_hdt);
       if(gameRunning&&player&&player.alive&&_ws&&_ws.readyState===WebSocket.OPEN){
         try{
-          _posSeq++;
-          _posMsg.clientId=_wsClientId;
-          var _hpd=_posMsg.data;
-          _hpd.x=+player.x.toFixed(1);_hpd.y=+player.y.toFixed(1);
-          _hpd.a=+player.angle.toFixed(3);_hpd.l=player.length;
-          _hpd.s=score;_hpd.b=boosting?1:0;
-          _hpd.n=(_posSeq%5===1)?player.name:undefined;
-          _hpd.color=(_posSeq%5===1)?player.color:undefined;
-          _hpd.sk=(_posSeq%5===1)?(_activeSkin||'default'):undefined;
-          _ws.send(JSON.stringify(_posMsg));
+          _ws.send(JSON.stringify({
+            type:'input', clientId:_wsClientId, tier:_currentTier,
+            data:{a:+player.angle.toFixed(3),b:boosting?1:0}
+          }));
         }catch(e){}
       }
     };
@@ -5453,25 +5560,14 @@ function loop(){
   var _dt = _lastLoopT ? Math.min((_lt - _lastLoopT) / 16.667, 2.5) : 1.0;
   _lastLoopT = _lt;
   update(_dt);
-  // Publish position every ~16ms (≈60fps) tightly coupled to the render frame
+  // Send input to server every ~16ms (≈60fps) — server owns physics, client sends direction only
   if (gameRunning && player && player.alive && _ws && _ws.readyState === WebSocket.OPEN && _lt - _lastPosSend >= 16) {
     _lastPosSend = _lt;
     try {
-      _posSeq++;
-      _posMsg.clientId = _wsClientId;
-      var _pd = _posMsg.data;
-      _pd.x = +player.x.toFixed(1);
-      _pd.y = +player.y.toFixed(1);
-      _pd.a = +player.angle.toFixed(3);
-      _pd.l = player.length;
-      _pd.s = score;
-      _pd.b = boosting ? 1 : 0;
-      _pd.n     = (_posSeq % 5 === 1) ? player.name  : undefined;
-      _pd.color = (_posSeq % 5 === 1) ? player.color : undefined;
-      _pd.sk    = (_posSeq % 5 === 1) ? (_activeSkin||'default') : undefined;
-      _pd.wb    = (_posSeq % 5 === 1) ? Math.round(player.widthBonus||0) : undefined;
-      _pd.pg    = (_posSeq % 5 === 1) ? Math.round(_pingEma||0) : undefined; // ping for server-tick priority tiebreak
-      _ws.send(JSON.stringify(_posMsg));
+      _ws.send(JSON.stringify({
+        type:'input', clientId:_wsClientId, tier:_currentTier,
+        data:{ a:+player.angle.toFixed(3), b:boosting?1:0 }
+      }));
     } catch(e) {}
   }
   draw();
@@ -5607,43 +5703,55 @@ function update(_dt){
 
   player.headR = snakeRadius(player); // unified radius: matches hitbox and body visual
 
-  // ── Remote players: dead reckoning + LERP toward predicted position ──
-  var rNow = performance.now(); // one call per frame — shared across all remote peers
-  var extCap = BASE_SPEED * BOOST_MULT * 60; // constant — hoist outside loop
-  // Frame-rate-independent lerp alpha: same time-constant at 30fps, 60fps, or 120fps
-  var _la = 1 - Math.pow(1 - _LERP, _dt);
+  // ── Remote players: snapshot interpolation (server-authoritative, 100ms buffer) ──
+  var rNow = performance.now();
+  var _rT = rNow - _INTERP_DELAY; // render this far behind real time
+  // Find the two snapshots that bracket _rT
+  var _sb = _stateBuffer;
+  var _s1 = null, _s2 = null;
+  for (var _bi = 0; _bi < _sb.length - 1; _bi++) {
+    if (_sb[_bi].t <= _rT && _sb[_bi+1].t >= _rT) { _s1 = _sb[_bi]; _s2 = _sb[_bi+1]; break; }
+  }
+  // Fall back to latest two if none bracket _rT (buffer not full yet or all snapshots are old)
+  if (!_s1 && _sb.length >= 2) { _s1 = _sb[_sb.length-2]; _s2 = _sb[_sb.length-1]; }
+  else if (!_s1 && _sb.length === 1) { _s1 = _sb[0]; _s2 = _sb[0]; }
+
   for(var i=0; i<peers.length; i++){
     var p=peers[i]; if(!p.alive) continue;
     if(p.isRemote){
-      if(p.targetX===undefined) continue;
-      // Dead reckoning: extrapolate where they are RIGHT NOW from last known velocity
-      var elapsed = rNow - (p.lastT || rNow);
-      var predX = p.targetX + (p.velX||0) * elapsed;
-      var predY = p.targetY + (p.velY||0) * elapsed;
-      // Cap extrapolation to ~1 update interval of max movement
-      predX = Math.min(p.targetX+extCap, Math.max(p.targetX-extCap, predX));
-      predY = Math.min(p.targetY+extCap, Math.max(p.targetY-extCap, predY));
-      p.x += (predX - p.x) * _la;
-      p.y += (predY - p.y) * _la;
-      var da2=p.targetAngle-p.angle;
-      while(da2>Math.PI) da2-=Math.PI*2; while(da2<-Math.PI) da2+=Math.PI*2;
-      p.angle += da2*_la;
-      var _plpx=(p._lpx||p.x),_plpy=(p._lpy||p.y);
-      var _pdx=p.x-_plpx,_pdy=p.y-_plpy,_pMv=Math.hypot(_pdx,_pdy);
+      if (!_s1) continue; // no snapshots yet — wait
+      var _d1 = _s1.snakes[p.remoteId];
+      var _d2 = _s2 ? _s2.snakes[p.remoteId] : _d1;
+      if (!_d1) continue;
+      if (!_d2) _d2 = _d1;
+      // Interpolation fraction 0-1 between the two bracketing snapshots
+      var _frac = (_s1 === _s2 || _s2.t === _s1.t) ? 1.0
+        : Math.max(0, Math.min(1, (_rT - _s1.t) / (_s2.t - _s1.t)));
+      var _nx = _d1.x + (_d2.x - _d1.x) * _frac;
+      var _ny = _d1.y + (_d2.y - _d1.y) * _frac;
+      var _nda = _d2.a - _d1.a;
+      while(_nda >  Math.PI) _nda -= Math.PI*2;
+      while(_nda < -Math.PI) _nda += Math.PI*2;
+      var _na = _d1.a + _nda * _frac;
+      // Reconstruct body segments from interpolated head movement (arc-length resampling)
+      var _plpx=(p._lpx||p.x), _plpy=(p._lpy||p.y);
+      p.x = _nx; p.y = _ny; p.angle = _na;
+      var _pdx=p.x-_plpx, _pdy=p.y-_plpy, _pMv=Math.hypot(_pdx,_pdy);
       p._lpx=p.x; p._lpy=p.y;
       var _pd0=p._segAccum||0,_ptot=_pd0+_pMv,_pnK=Math.floor(_ptot/POINT_DIST);
       if(_pnK>0&&_pMv>0){for(var _pi=1;_pi<=_pnK;_pi++){var _ptt=(_pi*POINT_DIST-_pd0)/_pMv;p.segs.unshift({x:_plpx+_pdx*_ptt,y:_plpy+_pdy*_ptt});}}
       p._segAccum=_ptot-_pnK*POINT_DIST;
       var maxS=Math.floor(segmentsForSize(p.length||40)+60);
       if(isFinite(maxS)&&maxS>0&&p.segs.length>maxS) p.segs.length=maxS;
+      if(_d2.l) { p.length=_d2.l; p.headR=snakeRadius(p); }
     }
     // CT bots move separately — only real remote players exist in peers[]
   }
   _ctUpdateBots(_dt);
 
   eatFood(); killCheck(); _ctKillCheck(); checkMoneyDrops();
-  // Replenish food — cap at 5 spawns/frame to avoid a spike when many items are eaten at once
-  var _fAdd=0; while(food.length<MAX_FOOD&&_fAdd<5){ addFood(); _fAdd++; }
+  // Food is managed server-side; state snapshots sync the list each tick.
+  // Death food (isDeath:true) is still spawned client-side and preserved in the merge.
   // Enforce absolute max-segs cap
   if(player && player.alive){
     var _maxS = getMaxSegs();
