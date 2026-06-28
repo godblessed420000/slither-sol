@@ -5598,7 +5598,11 @@ function update(_dt){
       var _sp=peers[_si];
       if(_sp.isRemote && _sp.alive && _sp.lastT && _staleNow - _sp.lastT > 3000){
         _sp.alive=false; _sp.segs=[];
-        if(_sp.remoteId){ _recentLeaves[_sp.remoteId]=Date.now(); delete _remoteMap[_sp.remoteId]; }
+        // In server-authoritative mode do NOT set _recentLeaves here — the server
+        // will re-include this snake in state snapshots if the player is still active
+        // (e.g. after a brief network hiccup), and blocking recreation makes them
+        // permanently invisible. Leave/death events from the server set _recentLeaves.
+        if(_sp.remoteId){ delete _remoteMap[_sp.remoteId]; }
         peers.splice(_si,1);
         _staleChanged=true;
       }
