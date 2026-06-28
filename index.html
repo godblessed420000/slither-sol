@@ -5239,12 +5239,13 @@ function spawnPlayer(){
     if(minD>bestDist){ bestDist=minD; bestX=_tx; bestY=_ty; }
   }
   var _spawnL=100;
-  if (_serverSpawn) { sx=_serverSpawn.x; sy=_serverSpawn.y; _spawnL=_serverSpawn.l||100; _serverSpawn=null; }
+  var _spawnA=null;
+  if (_serverSpawn) { sx=_serverSpawn.x; sy=_serverSpawn.y; _spawnL=_serverSpawn.l||100; _spawnA=_serverSpawn.a||null; _serverSpawn=null; }
   else { sx=bestX; sy=bestY; }
   var pn=userProfile?userProfile.name.split(' ')[0].slice(0,14):'YOU';
   _preRejoinAvgSegs=0; // reset
   player=mkSnake(sx,sy,_playerColor,pn,true,_spawnL);
-  player.angle=Math.atan2(cy-sy, cx-sx); // face world center — avoids charging straight into boundary
+  player.angle=(_spawnA!==null)?_spawnA:Math.atan2(cy-sy, cx-sx); // use server angle; fallback: face world center
   player.skin=_activeSkin;
   player.spawnTs=Date.now(); // grace period start — immune for 3s after spawn
 }
