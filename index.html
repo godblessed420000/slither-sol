@@ -6469,28 +6469,6 @@ function draw(){
 
   if(_elCashoutQhint){ var _qh=qDown&&cashingOut?'Cashing out... '+Math.round(Math.min((performance.now()-qStart)/CASHOUT_MS*100,100))+'%':'Hold Q to cashout'; if(_qh!==_elCashoutQhint._last){ _elCashoutQhint.textContent=_qh; _elCashoutQhint._last=_qh; } }
 
-  // ── DEBUG HUD (always visible — remove after fix confirmed) ──────────────
-  if(gameRunning || _spectating){
-    var _dbPeers = peers ? peers.filter(function(p){return p.isRemote&&p.alive;}).length : 0;
-    var _dbMap   = _remoteMap ? Object.keys(_remoteMap).length : 0;
-    var _dbRL    = _recentLeaves ? Object.keys(_recentLeaves).length : 0;
-    var _dbId    = _wsClientId ? _wsClientId.slice(0,10) : 'none';
-    ctx.save();
-    ctx.font = 'bold 13px monospace';
-    ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-    var _dbLines = [
-      'PEERS: ' + _dbPeers,
-      'RMAP:  ' + _dbMap,
-      'RLVS:  ' + _dbRL,
-      'ID:    ' + _dbId
-    ];
-    ctx.fillStyle = 'rgba(0,0,0,0.75)';
-    ctx.fillRect(4, 130, 180, _dbLines.length * 18 + 8);
-    ctx.fillStyle = '#14F195';
-    for(var _dbi=0; _dbi<_dbLines.length; _dbi++)
-      ctx.fillText(_dbLines[_dbi], 10, 134 + _dbi*18);
-    ctx.restore();
-  }
 }
 
 // ── Snake renderer — drawn ENTIRELY in screen pixels ──
