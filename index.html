@@ -1574,8 +1574,8 @@ var WIDTH_DEN   = 700;       // visible width growth per orb without getting too
 var WIDTH_SCMAX = 6.0;       // max scale, like slither.io's 6× cap
 var ZOOM_PX     = 20;        // controls auto-zoom level (higher = zoomed in more)
 var BODY_SCALE  = 0.63;      // visual + hitbox scale — change one place to resize both
-var BOOST_MULT        = 2.7;
-var BOOST_MASS_DRAIN  = 35/60;  // length units lost per frame while boosting (≈35 units/sec)
+var BOOST_MULT        = 3.0;
+var BOOST_MASS_DRAIN  = 20/60;  // length units lost per frame while boosting (≈20 units/sec)
 var TURN_RATE        = 0.16;
 var CIRCLE_RADIUS_WU = 46;   // auto-circle radius in world units (≈screen px at zoom 1×) — damnbruh RADIUS_PX concept
 var SEG_MULT   = 4;        // segments per length unit — lower = shorter tail
@@ -5294,7 +5294,7 @@ function onTouch(e){
 }
 function onKD(e){
   if(_chatOpen) return; // all keys go to chat input while chat is open
-  if(e.code==='Space'&&gameRunning){ e.preventDefault(); if(player&&player.length>8) boosting=true; return; }
+  if(e.code==='Space'&&gameRunning){ e.preventDefault(); if(player&&player.length>20) boosting=true; return; }
   if(e.key.toLowerCase()==='q'&&!qDown&&gameRunning&&player&&player.alive){ qDown=true; qStart=performance.now(); startCharge(); }
   if(e.key==='F8'){ e.preventDefault(); _ctTogglePanel(); return; }
   if(e.key.toLowerCase()==='t'&&gameRunning&&player&&player.alive){ e.preventDefault(); _openChat(); }
@@ -5364,7 +5364,7 @@ function _initJoystick(){
   // ── Boost ─────────────────────────────────────
   bBtn.addEventListener('touchstart',function(e){
     e.preventDefault(); bBtn.classList.add('active');
-    if(player&&player.length>8) boosting=true;
+    if(player&&player.length>20) boosting=true;
   },{passive:false});
   bBtn.addEventListener('touchend',function(e){
     e.preventDefault(); bBtn.classList.remove('active'); boosting=false;
