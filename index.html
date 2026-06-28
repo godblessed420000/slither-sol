@@ -5684,6 +5684,24 @@ function update(_dt){
       var _shsu=_spPeer?'Size: '+(_spPeer.length||0):'';
       if(_elHudSub&&_shsu!==_hudSubV){_elHudSub.textContent=_shsu;_hudSubV=_shsu;}
     }
+    // Run remote peer physics during spectating so snake bodies stay visible
+    for(var _spi=0;_spi<peers.length;_spi++){
+      var _spp=peers[_spi]; if(!_spp.alive||!_spp.isRemote) continue;
+      var _spda=(_spp.targetAngle||0)-_spp.angle;
+      while(_spda>Math.PI)_spda-=Math.PI*2;
+      while(_spda<-Math.PI)_spda+=Math.PI*2;
+      _spp.angle+=Math.sign(_spda)*Math.min(Math.abs(_spda),TURN_RATE*_dt);
+      var _spSpd=BASE_SPEED*_dt*(_spp.boosting?BOOST_MULT:1);
+      var _splpx=_spp.x,_splpy=_spp.y;
+      _spp.x+=Math.cos(_spp.angle)*_spSpd;
+      _spp.y+=Math.sin(_spp.angle)*_spSpd;
+      var _spdx=_spp.x-_splpx,_spdy=_spp.y-_splpy,_spMv=Math.hypot(_spdx,_spdy);
+      var _spd0=_spp._segAccum||0,_sptot=_spd0+_spMv,_spnK=Math.floor(_sptot/POINT_DIST);
+      if(_spnK>0&&_spMv>0){for(var _spii=1;_spii<=_spnK;_spii++){var _sptt=(_spii*POINT_DIST-_spd0)/_spMv;_spp.segs.unshift({x:_splpx+_spdx*_sptt,y:_splpy+_spdy*_sptt});}}
+      _spp._segAccum=_sptot-_spnK*POINT_DIST;
+      var _spMax=Math.floor(segmentsForSize(_spp.length||40)+60);
+      if(isFinite(_spMax)&&_spMax>0&&_spp.segs.length>_spMax)_spp.segs.length=_spMax;
+    }
     return;
   }
 
