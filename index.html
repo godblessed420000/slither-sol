@@ -6287,7 +6287,7 @@ function draw(){
   // lineWidth is in world-space coords, so dividing by CAM_ZOOM keeps lines a
   // constant 1.2px on screen. Fill at full opacity so cells stay visible when zoomed out.
   {
-    var _hR=35, _hH=_hR*Math.sqrt(3), _hCS=_hR*1.5;
+    var _hR=35/CAM_ZOOM, _hH=_hR*Math.sqrt(3), _hCS=_hR*1.5; // scale by 1/zoom so on-screen hex count stays constant
     ctx.fillStyle='#1a1a1a';          // full-opacity fill: contrast = 11 against #0f0f0f
     ctx.strokeStyle='#262626';        // brighter stroke: contrast = 23 — always legible
     ctx.lineWidth=1.2/CAM_ZOOM;       // constant 1.2 screen-px wide regardless of zoom
