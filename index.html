@@ -3605,10 +3605,12 @@ function _wsHandleMsg(msg, fromAbly) {
     if (gameRunning) return; // already in-game — safe to ignore
     clearInterval(lobbyTimer); lobbyTimer = null;
     launchGame();
-    // Immediately create placeholder peers for all known lobby players so they're
-    // visible right away. State snapshots (arriving within 40ms) will correct positions.
+    // Immediately create placeholder peers for WS-confirmed lobby players so they're
+    // visible right away. Ably-only entries are skipped — they may be stale presence
+    // ghosts. State snapshots (arriving within 40ms) will correct positions.
     Object.keys(_lobbyPeers).forEach(function(_spCid) {
       if (_spCid === _wsClientId || _remoteMap[_spCid]) return;
+      if (!_lobbyPeers[_spCid].fromWS) return; // skip Ably-only / stale presence entries
       delete _recentLeaves[_spCid];
       var _spLb = _lobbyPeers[_spCid];
       var _spUc = peers.map(function(p){ return p.color; });
@@ -3754,11 +3756,15 @@ function _wsHandleMsg(msg, fromAbly) {
       delete _recentLeaves[cid];  // allow pos messages from this new session through
     }
     var isNew = !_lobbyPeers[cid];
-    _lobbyPeers[cid] = { n: d.n || ('P_'+cid.slice(0,4)), color: d.color || PC[1] };
+    // fromWS=true marks this player as confirmed by the game server (not just Ably presence).
+    // Only WS-confirmed players get placeholder peers — Ably presence can have stale members.
+    var _prevLp = _lobbyPeers[cid] || {};
+    _lobbyPeers[cid] = { n: d.n || ('P_'+cid.slice(0,4)), color: d.color || PC[1],
+                         fromWS: _prevLp.fromWS || !fromAbly };
     if (!gameRunning) renderSlots();
-    // In game: ensure peer exists — creates or updates placeholder so player is visible
-    // immediately. State snapshot (within 40ms) corrects the position.
-    if (gameRunning && !_remoteMap[cid]) {
+    // In game: create placeholder peer only for WS-confirmed players so Ably ghost
+    // members (stale presence entries) don't appear as phantom snakes.
+    if (gameRunning && !_remoteMap[cid] && !fromAbly) {
       delete _recentLeaves[cid];
       var _jlb = _lobbyPeers[cid];
       var _juc = peers.map(function(p){ return p.color; });
