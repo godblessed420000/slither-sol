@@ -3605,6 +3605,24 @@ function _wsHandleMsg(msg, fromAbly) {
     if (gameRunning) return; // already in-game — safe to ignore
     clearInterval(lobbyTimer); lobbyTimer = null;
     launchGame();
+    // Immediately create placeholder peers for all known lobby players so they're
+    // visible right away. State snapshots (arriving within 40ms) will correct positions.
+    Object.keys(_lobbyPeers).forEach(function(_spCid) {
+      if (_spCid === _wsClientId || _remoteMap[_spCid]) return;
+      delete _recentLeaves[_spCid];
+      var _spLb = _lobbyPeers[_spCid];
+      var _spUc = peers.map(function(p){ return p.color; });
+      var _spRc = _spLb.color || PC.find(function(c){ return _spUc.indexOf(c)<0; }) || PC[1];
+      var _spRp = { x:WORLD/2, y:WORLD/2, angle:0, targetAngle:0, segs:[], length:100,
+        color:_spRc, name:_spLb.n||('P_'+_spCid.slice(0,4)),
+        skin:'default', isMe:false, isRemote:true, alive:true,
+        remoteId:_spCid, joinTs:Date.now(),
+        headR:snakeRadius({length:100}), lastT:performance.now(), _segAccum:0 };
+      var _spIs = segmentsForSize(100);
+      for (var _spI=0; _spI<_spIs; _spI++) _spRp.segs.push({x:WORLD/2-_spI*POINT_DIST, y:WORLD/2});
+      _remoteMap[_spCid] = _spRp; peers.push(_spRp);
+    });
+    if (Object.keys(_lobbyPeers).length > 0) _updateArenaSize();
     return;
   }
 
@@ -3738,6 +3756,22 @@ function _wsHandleMsg(msg, fromAbly) {
     var isNew = !_lobbyPeers[cid];
     _lobbyPeers[cid] = { n: d.n || ('P_'+cid.slice(0,4)), color: d.color || PC[1] };
     if (!gameRunning) renderSlots();
+    // In game: ensure peer exists — creates or updates placeholder so player is visible
+    // immediately. State snapshot (within 40ms) corrects the position.
+    if (gameRunning && !_remoteMap[cid]) {
+      delete _recentLeaves[cid];
+      var _jlb = _lobbyPeers[cid];
+      var _juc = peers.map(function(p){ return p.color; });
+      var _jrc = _jlb.color || PC.find(function(c){ return _juc.indexOf(c)<0; }) || PC[1];
+      var _jrp = { x:WORLD/2, y:WORLD/2, angle:0, targetAngle:0, segs:[], length:100,
+        color:_jrc, name:_jlb.n||('P_'+cid.slice(0,4)),
+        skin:'default', isMe:false, isRemote:true, alive:true,
+        remoteId:cid, joinTs:Date.now(),
+        headR:snakeRadius({length:100}), lastT:performance.now(), _segAccum:0 };
+      var _jis = segmentsForSize(100);
+      for (var _jii=0; _jii<_jis; _jii++) _jrp.segs.push({x:WORLD/2-_jii*POINT_DIST, y:WORLD/2});
+      _remoteMap[cid] = _jrp; peers.push(_jrp); _updateArenaSize();
+    }
     var _jn=d.n||'A player', _jr=d.reply, _jNew=isNew;
     setTimeout(function(){
       if (_jNew && !_jr) toast(_jn + ' entered the arena!', 'info');
