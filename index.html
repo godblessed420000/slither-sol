@@ -3671,12 +3671,12 @@ function _wsHandleMsg(msg, fromAbly) {
           var _prc = _plb.color || PC.find(function(c){ return _puc.indexOf(c)<0; }) || PC[1];
           var _pil = _psn.l || 100, _pia = _psn.a || 0;
           delete _processedDies[_psn.id]; delete _recentLeaves[_psn.id];
-          _prp = { x:_psn.x, y:_psn.y, angle:_pia, segs:[], length:_pil,
+          _prp = { x:_psn.x, y:_psn.y, angle:_pia, targetAngle:_pia, segs:[], length:_pil,
             color:_prc, name:_plb.n||('P_'+_psn.id.slice(0,4)),
             skin:'default', isMe:false, isRemote:true, alive:true,
             remoteId:_psn.id, joinTs:Date.now(),
             headR:snakeRadius(_pil), lastT:_sNow,
-            _lpx:_psn.x, _lpy:_psn.y, _segAccum:0 };
+            _segAccum:0 };
           var _pis = segmentsForSize(_pil);
           for (var _pii=0; _pii<_pis; _pii++)
             _prp.segs.push({x:_psn.x-Math.cos(_pia)*_pii*POINT_DIST, y:_psn.y-Math.sin(_pia)*_pii*POINT_DIST});
@@ -3687,6 +3687,17 @@ function _wsHandleMsg(msg, fromAbly) {
           _prp.lastT = _sNow;
           if (_psn.l) { _prp.length = _psn.l; _prp.headR = snakeRadius(_psn.l); }
           _prp.boosting = !!_psn.b;
+          // Drive the physics sim: client turns toward this angle each frame
+          _prp.targetAngle = _psn.a;
+          // Soft position correction — nudge if drifted, hard snap only on respawn
+          var _cdx=_psn.x-_prp.x, _cdy=_psn.y-_prp.y, _cd2=_cdx*_cdx+_cdy*_cdy;
+          if (_cd2 > 160000) { // >400 wu: respawn/teleport
+            _prp.x=_psn.x; _prp.y=_psn.y; _prp.angle=_psn.a; _prp.segs=[]; _prp._segAccum=0;
+            var _ris=segmentsForSize(_psn.l||100);
+            for(var _rii=0;_rii<_ris;_rii++) _prp.segs.push({x:_psn.x-Math.cos(_psn.a)*_rii*POINT_DIST,y:_psn.y-Math.sin(_psn.a)*_rii*POINT_DIST});
+          } else if (_cd2 > 25) { // >5 wu: gentle drift correction
+            _prp.x += _cdx * 0.15; _prp.y += _cdy * 0.15;
+          }
         }
       }
     }
@@ -5703,47 +5714,34 @@ function update(_dt){
 
   player.headR = snakeRadius(player); // unified radius: matches hitbox and body visual
 
-  // ── Remote players: snapshot interpolation (server-authoritative, 100ms buffer) ──
+  // ── Remote players: physics simulation at 60 fps + soft server correction ──
+  // Server snapshots update targetAngle/boosting; client simulates the actual
+  // curved movement each frame using the same turn-rate physics. Body segments
+  // are placed by arc-length resampling along the simulated head path — identical
+  // to local player rendering, so curves are smooth with no angular snapshot joints.
   var rNow = performance.now();
-  var _rT = rNow - _INTERP_DELAY; // render this far behind real time
-  // Find the two snapshots that bracket _rT
-  var _sb = _stateBuffer;
-  var _s1 = null, _s2 = null;
-  for (var _bi = 0; _bi < _sb.length - 1; _bi++) {
-    if (_sb[_bi].t <= _rT && _sb[_bi+1].t >= _rT) { _s1 = _sb[_bi]; _s2 = _sb[_bi+1]; break; }
-  }
-  // Fall back to latest two if none bracket _rT (buffer not full yet or all snapshots are old)
-  if (!_s1 && _sb.length >= 2) { _s1 = _sb[_sb.length-2]; _s2 = _sb[_sb.length-1]; }
-  else if (!_s1 && _sb.length === 1) { _s1 = _sb[0]; _s2 = _sb[0]; }
-
   for(var i=0; i<peers.length; i++){
     var p=peers[i]; if(!p.alive) continue;
     if(p.isRemote){
-      if (!_s1) continue; // no snapshots yet — wait
-      var _d1 = _s1.snakes[p.remoteId];
-      var _d2 = _s2 ? _s2.snakes[p.remoteId] : _d1;
-      if (!_d1) continue;
-      if (!_d2) _d2 = _d1;
-      // Interpolation fraction 0-1 between the two bracketing snapshots
-      var _frac = (_s1 === _s2 || _s2.t === _s1.t) ? 1.0
-        : Math.max(0, Math.min(1, (_rT - _s1.t) / (_s2.t - _s1.t)));
-      var _nx = _d1.x + (_d2.x - _d1.x) * _frac;
-      var _ny = _d1.y + (_d2.y - _d1.y) * _frac;
-      var _nda = _d2.a - _d1.a;
-      while(_nda >  Math.PI) _nda -= Math.PI*2;
-      while(_nda < -Math.PI) _nda += Math.PI*2;
-      var _na = _d1.a + _nda * _frac;
-      // Reconstruct body segments from interpolated head movement (arc-length resampling)
-      var _plpx=(p._lpx||p.x), _plpy=(p._lpy||p.y);
-      p.x = _nx; p.y = _ny; p.angle = _na;
+      // Turn toward latest server angle using identical turn-rate physics
+      var _pda = (p.targetAngle||0) - p.angle;
+      while(_pda >  Math.PI) _pda -= Math.PI*2;
+      while(_pda < -Math.PI) _pda += Math.PI*2;
+      p.angle += Math.sign(_pda) * Math.min(Math.abs(_pda), TURN_RATE * _dt);
+
+      // Move at correct speed (boost-aware)
+      var _pSpd = BASE_SPEED * _dt * (p.boosting ? BOOST_MULT : 1);
+      var _plpx = p.x, _plpy = p.y;
+      p.x += Math.cos(p.angle) * _pSpd;
+      p.y += Math.sin(p.angle) * _pSpd;
+
+      // Arc-length resampling — place segments at exactly POINT_DIST spacing
       var _pdx=p.x-_plpx, _pdy=p.y-_plpy, _pMv=Math.hypot(_pdx,_pdy);
-      p._lpx=p.x; p._lpy=p.y;
-      var _pd0=p._segAccum||0,_ptot=_pd0+_pMv,_pnK=Math.floor(_ptot/POINT_DIST);
+      var _pd0=p._segAccum||0, _ptot=_pd0+_pMv, _pnK=Math.floor(_ptot/POINT_DIST);
       if(_pnK>0&&_pMv>0){for(var _pi=1;_pi<=_pnK;_pi++){var _ptt=(_pi*POINT_DIST-_pd0)/_pMv;p.segs.unshift({x:_plpx+_pdx*_ptt,y:_plpy+_pdy*_ptt});}}
       p._segAccum=_ptot-_pnK*POINT_DIST;
       var maxS=Math.floor(segmentsForSize(p.length||40)+60);
       if(isFinite(maxS)&&maxS>0&&p.segs.length>maxS) p.segs.length=maxS;
-      if(_d2.l) { p.length=_d2.l; p.headR=snakeRadius(p); }
     }
     // CT bots move separately — only real remote players exist in peers[]
   }
