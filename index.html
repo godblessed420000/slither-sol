@@ -4883,6 +4883,7 @@ function _boostOn(e){
   boosting=true;
 }
 function _boostOff(e){ if(e && e.button!=null && e.button!==0) return; boosting=false; }
+var _boostOnTouch=function(e){ if(e.touches&&e.touches.length>1){e.preventDefault();return;} _boostOn(e); };
 var score=0,myKills=0,killSOL=0,pingInt,lbInt;
 var qDown=false,qStart=0,cashingOut=false,cashoutAnimId=null;
 var _autoCircle=false; // Y key — snake spins in a tight circle at max turn rate
@@ -5189,19 +5190,19 @@ function launchGame() {
   gc.removeEventListener('mousedown', _boostOn);
   window.removeEventListener('mouseup',   _boostOff);
   window.removeEventListener('blur',      _boostOff);
-  gc.removeEventListener('touchstart', _boostOn);
+  gc.removeEventListener('touchstart', _boostOnTouch);
   gc.removeEventListener('touchend',   _boostOff);
   gc.removeEventListener('touchcancel',_boostOff);
   gc.addEventListener('mousedown',  _boostOn);
   window.addEventListener('mouseup',    _boostOff);          // catches release anywhere on page
   window.addEventListener('blur',       _boostOff);          // tab switch / alt-tab
-  gc.addEventListener('touchstart', function(e){ if(e.touches.length>1){e.preventDefault();return;} _boostOn(e); }, {passive:false});
+  gc.addEventListener('touchstart', _boostOnTouch, {passive:false});
   gc.addEventListener('touchend',   _boostOff, {passive:false});
   gc.addEventListener('touchcancel',_boostOff, {passive:false}); // OS interrupt / swipe away
   _cacheHudEls(); // cache all HUD refs once — avoids getElementById each frame
   lbInt=setInterval(updateLB,1200); // leaderboard update — 1.2s is plenty (was 800ms)
   _wsPingLoop(); // start real RTT measurement (was never called before — was showing fake ping)
-  updateLB(); loop();
+  updateLB(); if(!_loopActive) loop();
 }
 
 function mkSnake(x,y,color,name,isMe,startLength){
@@ -7856,7 +7857,7 @@ function cleanupL(keepAbly){
   gc.removeEventListener('mousedown', _boostOn);
   window.removeEventListener('mouseup',    _boostOff);
   window.removeEventListener('blur',       _boostOff);
-  gc.removeEventListener('touchstart', _boostOn);
+  gc.removeEventListener('touchstart', _boostOnTouch);
   gc.removeEventListener('touchend',   _boostOff);
   gc.removeEventListener('touchcancel',_boostOff);
   clearInterval(pingInt); clearInterval(lbInt);
