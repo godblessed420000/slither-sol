@@ -3673,8 +3673,9 @@ function _wsHandleMsg(msg, fromAbly) {
           }
           continue;
         }
-        if (!_prp && !_recentLeaves[_psn.id]) {
-          // Create new peer
+        if (!_prp) {
+          // Create new peer — server is authoritative; dead snakes hit `continue` above,
+          // gone snakes are absent from state, so no _recentLeaves guard needed here.
           var _plb = _lobbyPeers[_psn.id] || {};
           var _puc = peers.map(function(p){ return p.color; });
           var _prc = _plb.color || PC.find(function(c){ return _puc.indexOf(c)<0; }) || PC[1];
