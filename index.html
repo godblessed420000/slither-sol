@@ -3307,7 +3307,9 @@ async function payEntryFee(tierKey) {
 // ════════════════ WEBSOCKET LIVE MULTIPLAYER ════════════════
 // Direct WebSocket to Fly.io server in Ashburn VA — replaces Ably for ~10ms NA East ping.
 var _ws             = null;   // WebSocket connection
-var _wsClientId     = null;   // stable local id (wallet addr or guest_timestamp)
+var _wsClientId     = null;   // unique per browser tab/session (never wallet addr — two tabs same wallet would collide)
+// Generate once at page load: random enough that two tabs on the same device never collide.
+var _sessionId = (Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2)).slice(0, 16);
 var _remoteMap      = {};     // clientId → peer object
 var _lobbyPeers     = {};     // clientId → {n,color}
 var _pubTimer       = null;   // position-publish interval
@@ -4011,7 +4013,7 @@ function _wsJoin(tier) {
   _recentLeaves   = {};
   peers = peers.filter(function(p){ return !p.isRemote; });
 
-  _wsClientId   = PRIVY.walletAddress || ('guest_' + Date.now());
+  _wsClientId   = _sessionId; // unique per tab — wallet addr caused collisions when two players share the same account
   _currentTier  = tier;
   _currentName  = userProfile ? userProfile.name.split(' ')[0].slice(0,14) : 'Player';
   _currentColor = _playerColor;
