@@ -3618,18 +3618,11 @@ function _wsHandleMsg(msg, fromAbly) {
     // Update arena size
     if (d.world && Math.abs(d.world - _targetWorld) > 1) _targetWorld = d.world;
 
-    // Sync server food — merge by ID to avoid creating 150 new objects every tick.
-    // Only create objects for food that's genuinely new; remove only what was eaten.
+    // Sync server food (preserve client-side death food).
+    // Server sends food only every 3 ticks so this runs at ~8Hz, not 25Hz.
     if (d.food && gameRunning) {
-      var _sfMap = Object.create(null);
-      for (var _sfi = 0; _sfi < d.food.length; _sfi++) _sfMap[d.food[_sfi].id] = d.food[_sfi];
-      food = food.filter(function(f){ return f.isDeath || _sfMap[f.id]; });
-      var _haveId = Object.create(null);
-      for (var _hfi = 0; _hfi < food.length; _hfi++) { var _hf=food[_hfi]; if (!_hf.isDeath) _haveId[_hf.id]=true; }
-      for (var _nfi = 0; _nfi < d.food.length; _nfi++) {
-        var _nf=d.food[_nfi];
-        if (!_haveId[_nf.id]) food.push({x:_nf.x,y:_nf.y,r:_nf.r,color:_nf.c,value:_nf.v,id:_nf.id});
-      }
+      var _df2 = food.filter(function(f){ return f.isDeath; });
+      food = _df2.concat(d.food.map(function(f){ return {x:f.x,y:f.y,r:f.r,color:f.c,value:f.v,id:f.id}; }));
     }
 
     // Reconcile local player length/position from server (soft correction)
