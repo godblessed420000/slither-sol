@@ -5212,11 +5212,11 @@ function mkSnake(x,y,color,name,isMe,startLength){
          headR:_initHeadR,length:initLen,widthBonus:0,score:0,alive:true,_segAccum:0};
 }
 function getMaxSegs(){ return 600; }
-function grow(s){
+function grow(s,fval){
   s.widthBonus = (s.widthBonus||0) + 0.60;
   if(s.isMe && boosting) return;
   if(snakeRadius(s) >= 50) return; // max visible size cap (headR 50)
-  s.length = (s.length||100) + 10; // +10 size per food — visible growth each orb
+  s.length = (s.length||100) + (fval||1)*2; // matches server: sn.length += f.value * 2
 }
 function spawnPlayer(){
   var cx=WORLD/2, cy=WORLD/2, sx, sy;
@@ -5236,11 +5236,12 @@ function spawnPlayer(){
     }
     if(minD>bestDist){ bestDist=minD; bestX=_tx; bestY=_ty; }
   }
-  if (_serverSpawn) { sx=_serverSpawn.x; sy=_serverSpawn.y; _serverSpawn=null; }
+  var _spawnL=100;
+  if (_serverSpawn) { sx=_serverSpawn.x; sy=_serverSpawn.y; _spawnL=_serverSpawn.l||100; _serverSpawn=null; }
   else { sx=bestX; sy=bestY; }
   var pn=userProfile?userProfile.name.split(' ')[0].slice(0,14):'YOU';
   _preRejoinAvgSegs=0; // reset
-  player=mkSnake(sx,sy,_playerColor,pn,true,350); // start a bit longer
+  player=mkSnake(sx,sy,_playerColor,pn,true,_spawnL);
   player.skin=_activeSkin;
   player.spawnTs=Date.now(); // grace period start — immune for 3s after spawn
 }
@@ -5851,7 +5852,7 @@ function eatFood(){
   var eaten=[];
   for(var i=food.length-1;i>=0;i--){
     var f=food[i];
-    if(player.alive&&dst(player.x,player.y,f.x,f.y)<player.headR+f.r){ score+=f.value; grow(player); boostE=Math.min(100,boostE+8); eaten.push(i); spawnPt(f.x,f.y,f.color); continue; }
+    if(player.alive&&dst(player.x,player.y,f.x,f.y)<player.headR+f.r){ score+=f.value; grow(player,f.value); boostE=Math.min(100,boostE+8); eaten.push(i); spawnPt(f.x,f.y,f.color); continue; }
     for(var j=0;j<peers.length;j++){ if(!peers[j].alive||peers[j].isRemote) continue; if(dst(peers[j].x,peers[j].y,f.x,f.y)<peers[j].headR+f.r){ peers[j].score++; grow(peers[j]); eaten.push(i); break; } }
   }
   // No bots → no duplicate indices; sort descending and splice in one pass
