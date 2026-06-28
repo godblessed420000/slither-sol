@@ -3748,14 +3748,17 @@ function _wsHandleMsg(msg, fromAbly) {
   }
 
   if (type === 'leave') {
-    delete _lobbyPeers[cid];
-    _recentLeaves[cid] = Date.now(); // block late pos messages from recreating this peer
     var rp = _remoteMap[cid];
+    // Ignore stale leave if this peer just joined (reconnect race: old WS heartbeat fires
+    // 15-30s after player reconnected, causing a phantom leave for an active peer)
+    if (rp && rp.joinTs && Date.now() - rp.joinTs < 5000) return;
+    delete _lobbyPeers[cid];
+    _recentLeaves[cid] = Date.now();
     if (rp) {
       rp.alive = false;
       delete _remoteMap[cid];
       peers = peers.filter(function(p){ return p !== rp; });
-      if (gameRunning) _updateArenaSize(); // world shrinks when a player leaves
+      if (gameRunning) _updateArenaSize();
     }
     if (!gameRunning) renderSlots();
     else kFeed((rp ? rp.name : 'A player') + ' left the game');
