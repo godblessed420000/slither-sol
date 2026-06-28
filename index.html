@@ -4607,6 +4607,7 @@ async function doJoinGame() {
 
 // ════════════════ GAME ENGINE ════════════════
 var gc,ctx,mm,mctx,gameRunning=false,player=null,peers=[],food=[],parts=[];
+var _gfxPerfMode=false; // true when 2+ remote peers alive — triggers low-blur rendering
 var moneyDrops   = [];  // {id,x,y,sol,fromId,fromName,fromPubkey,ts}
 var _claimedDrops = {}; // id→'sent'|'collected' dedup for SOL tx and credit
 var _inGameSession=false; // true from launchGame() until showStart() — email hidden the whole time
@@ -6324,7 +6325,7 @@ function draw(){
   // Smooth glow: scale 0→1 over zoom range 0.35→0.75 — no hard cutoff causing FPS cliff
   var _orbFlash = Math.pow(0.5+0.5*Math.sin(performance.now()/350), 2);
   var _glowScale = Math.max(0, Math.min(1, (CAM_ZOOM - 0.35) / 0.40));
-  var _glowBlur = (1 + _orbFlash * 7) * _glowScale; // max blur 8 at full zoom (was 29)
+  var _glowBlur = (1 + _orbFlash * 2) * _glowScale; // max blur 3 at full zoom — cheaper GPU
   var _fk=Object.keys(_fcBuckets);
   for(var ci=0;ci<_fk.length;ci++){
     var col=_fk[ci]; var _fl=_fcBuckets[col]; if(!_fl.length) continue;
@@ -6345,11 +6346,11 @@ function draw(){
       var _df=food[_dfi]; if(!_df.isDeath) continue;
       if(_df.x<vx1||_df.x>vx2||_df.y<vy1||_df.y>vy2) continue;
       var _dfr=_df.r*(1+_orbFlash*0.4);
-      ctx.shadowColor='#FFD700'; ctx.shadowBlur=(22+_dfPulse*36)*_dfBlurMul;
+      ctx.shadowColor='#FFD700'; ctx.shadowBlur=(10+_dfPulse*10)*_dfBlurMul;
       ctx.strokeStyle='rgba(255,215,0,'+(0.55+_dfPulse*0.45).toFixed(2)+')';
       ctx.lineWidth=3.5;
       ctx.beginPath(); ctx.arc(_df.x,_df.y,_dfr+8,0,Math.PI*2); ctx.stroke();
-      ctx.shadowBlur=8*_dfBlurMul;
+      ctx.shadowBlur=4*_dfBlurMul;
       ctx.strokeStyle='rgba(255,255,200,'+(0.3+_dfPulse*0.45).toFixed(2)+')';
       ctx.lineWidth=1.5;
       ctx.beginPath(); ctx.arc(_df.x,_df.y,_dfr+2,0,Math.PI*2); ctx.stroke();
@@ -6363,6 +6364,9 @@ function draw(){
   for(var i=parts.length-1;i>=0;i--){ var p=parts[i]; p.x+=p.vx; p.y+=p.vy; p.life--; if(p.life<=0){ parts[i]=parts[parts.length-1]; parts.length--; continue; } if(p.x<vx1-20||p.x>vx2+20||p.y<vy1-20||p.y>vy2+20) continue; ctx.globalAlpha=p.life/p.max; ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fillStyle=p.color; ctx.fill(); }
   ctx.globalAlpha=1;
   // Draw snakes — viewport-cull remote snakes (head off-screen + no long tail visible)
+  // Perf mode: skip expensive skin blur ops for remote peers when 2+ are alive
+  var _alivePeerCount=0; for(var _pai=0;_pai<peers.length;_pai++){ if(peers[_pai].alive&&peers[_pai].isRemote) _alivePeerCount++; }
+  _gfxPerfMode = _alivePeerCount >= 2;
   for(var i=0;i<peers.length;i++){
     var s=peers[i]; if(!s.alive) continue;
     if(s.x<vx1-300||s.x>vx2+300||s.y<vy1-300||s.y>vy2+300) continue; // cull
@@ -6561,6 +6565,41 @@ function drawS(s){
   var n=pts.length;
 
   var skin = s.skin || 'default';
+
+  // ── Perf fast-path: remote peers with 2+ players → no shadow blur ──
+  if(s.isRemote && _gfxPerfMode){
+    var _skMap={'frost':'#aaeeff','void':'#00ff66','inferno':'#ff5500','toxic':'#39ff14',
+                'galaxy':'#cc44ff','gold':'#ffd700','nova':'#ff2299','dragon':'#ff4422',
+                'cryo':'#88ccff','nebula':'#aa44ff','leviathan':'#00ffcc','synth':'#ff00cc'};
+    var _fc2=_skMap[skin]||s.color||'#14F195';
+    // Body bezier
+    ctx.beginPath(); ctx.moveTo(pts[0].x,pts[0].y);
+    for(var _pj=1;_pj<n-1;_pj++){ var _pmx=(pts[_pj].x+pts[_pj+1].x)/2,_pmy=(pts[_pj].y+pts[_pj+1].y)/2; ctx.quadraticCurveTo(pts[_pj].x,pts[_pj].y,_pmx,_pmy); }
+    if(n>1) ctx.lineTo(pts[n-1].x,pts[n-1].y);
+    ctx.strokeStyle=_fc2; ctx.lineWidth=BW; ctx.stroke();
+    // Head + eyes (default-style, no blur)
+    ctx.beginPath(); ctx.arc(hx,hy,R,0,Math.PI*2); ctx.fillStyle=_fc2; ctx.fill();
+    ctx.strokeStyle='rgba(215,215,215,.22)'; ctx.lineWidth=1.5; ctx.stroke();
+    var _peo=R*0.52,_pebx=hx+fx2*R*0.30,_peby=hy+fy2*R*0.30,_per=R*0.42,_ppr=_per*0.55;
+    var _pe1x=_pebx+sxp*_peo,_pe1y=_peby+syp*_peo,_pe2x=_pebx-sxp*_peo,_pe2y=_peby-syp*_peo;
+    ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(_pe1x,_pe1y,_per,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(_pe2x,_pe2y,_per,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='#111'; var _ppox=_lookDX*_per*0.40,_ppoy=_lookDY*_per*0.40;
+    ctx.beginPath(); ctx.arc(_pe1x+_ppox,_pe1y+_ppoy,_ppr,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(_pe2x+_ppox,_pe2y+_ppoy,_ppr,0,Math.PI*2); ctx.fill();
+    // Name tag
+    var _pfs=11, _pnf='bold 11px Share Tech Mono';
+    if(s._nameCache!==s.name){ s._nameCache=s.name; ctx.font=_pnf; s._tw=ctx.measureText(s.name).width; } else { ctx.font=_pnf; }
+    var _ptw=s._tw,_pny=hy-R-10,_pnp=5,_pnh=14;
+    ctx.fillStyle='rgba(0,0,0,0.72)'; ctx.shadowBlur=0;
+    ctx.beginPath(); var _prr=5,_prx=hx-_ptw/2-_pnp,_pry=_pny-_pnh+2,_prw=_ptw+_pnp*2;
+    ctx.moveTo(_prx+_prr,_pry); ctx.lineTo(_prx+_prw-_prr,_pry); ctx.arcTo(_prx+_prw,_pry,_prx+_prw,_pry+_prr,_prr);
+    ctx.lineTo(_prx+_prw,_pry+_pnh-_prr); ctx.arcTo(_prx+_prw,_pry+_pnh,_prx+_prw-_prr,_pry+_pnh,_prr);
+    ctx.lineTo(_prx+_prr,_pry+_pnh); ctx.arcTo(_prx,_pry+_pnh,_prx,_pry+_pnh-_prr,_prr);
+    ctx.lineTo(_prx,_pry+_prr); ctx.arcTo(_prx,_pry,_prx+_prr,_pry,_prr); ctx.closePath(); ctx.fill();
+    ctx.fillStyle='#ffffff'; ctx.textAlign='center'; ctx.fillText(s.name,hx,_pny);
+    ctx.restore(); return;
+  }
   var isBoosting = s.isMe ? boosting : !!s.boosting;
   var tnow = Date.now();
 
