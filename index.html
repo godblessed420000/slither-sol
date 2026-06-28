@@ -5244,6 +5244,7 @@ function spawnPlayer(){
   var pn=userProfile?userProfile.name.split(' ')[0].slice(0,14):'YOU';
   _preRejoinAvgSegs=0; // reset
   player=mkSnake(sx,sy,_playerColor,pn,true,_spawnL);
+  player.angle=Math.atan2(cy-sy, cx-sx); // face world center — avoids charging straight into boundary
   player.skin=_activeSkin;
   player.spawnTs=Date.now(); // grace period start — immune for 3s after spawn
 }
