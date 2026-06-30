@@ -9575,7 +9575,7 @@ window.addEventListener('load', function() {
   // Try to load the menu background image. If it exists, swap from the gradient
   // fallback to the real photo; if it 404s, the CSS gradient stays.
   var _mbImg=new Image();
-  var _bgV='menu-bg2.webp?v=420';
+  var _bgV='menu-bg2.webp?v=421';
   _mbImg.onload=function(){
     var el=document.getElementById('menuBgImg');
     if(el){ el.style.setProperty('--menu-bg-url','url("'+_bgV+'")'); el.classList.add('hasimg'); }
