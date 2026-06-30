@@ -1492,7 +1492,7 @@ canvas{display:block;width:100%;height:100%;}
 // ════════════════ CONFIG ════════════════
 // ── Build stamp — bump this string on every deploy ───────────────────────────
 // Shown live on the lobby screen. Check via DevTools → Console: GAME_BUILD
-var GAME_BUILD = 'V124';
+var GAME_BUILD = 'V125';
 
 var PRIVY_APP_ID          = 'client-WY6aEf1eS4reRDrBq7ghh8arEiMaKSj1Vk37ZG8CAawEF';
 var HOUSE_WALLET_ADDRESS  = '2QnrdhxXYt8ythhGYHDz6MtTZE1z2bYvbss8z3ZGj2uJ';
@@ -5255,7 +5255,7 @@ function grow(s,fval){
   s.widthBonus = (s.widthBonus||0) + 0.60;
   if(s.isMe && boosting) return;
   if(snakeRadius(s) >= 50) return; // max visible size cap (headR 50)
-  s.length = (s.length||100) + (fval||1)*2; // matches server: sn.length += f.value * 2
+  s.length = (s.length||100) + (fval||1)*3; // matches server: sn.length += f.value * 3
 }
 function spawnPlayer(){
   var cx=WORLD/2, cy=WORLD/2, sx, sy;
