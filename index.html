@@ -1492,7 +1492,7 @@ canvas{display:block;width:100%;height:100%;}
 // ════════════════ CONFIG ════════════════
 // ── Build stamp — bump this string on every deploy ───────────────────────────
 // Shown live on the lobby screen. Check via DevTools → Console: GAME_BUILD
-var GAME_BUILD = 'V120';
+var GAME_BUILD = 'V121';
 
 var PRIVY_APP_ID          = 'client-WY6aEf1eS4reRDrBq7ghh8arEiMaKSj1Vk37ZG8CAawEF';
 var HOUSE_WALLET_ADDRESS  = '2QnrdhxXYt8ythhGYHDz6MtTZE1z2bYvbss8z3ZGj2uJ';
@@ -6379,27 +6379,43 @@ function draw(){
   }
   ctx.shadowBlur=0;
 
-  // ── Death food rings — skip when zoom is too low for rings to be visible ──
+  // ── Death food rings — batched: 2 stroke() calls total regardless of item count ──
+  // Previous per-item approach did 2×shadowBlur+stroke() per orb. With 100-300 death
+  // food orbs visible at high zoom (small snake), that was 200-600 GPU flushes per frame.
   if(CAM_ZOOM >= 0.32){
     var _dfPulse=0.5+0.5*Math.sin(performance.now()/200);
-    // Ramp blur from 0→full over zoom range 0.32→0.70 so it fades in gracefully
-    var _dfBlurMul=CAM_ZOOM>=0.55?Math.min(1,(CAM_ZOOM-0.32)/0.38):0; // no GPU shadow below LOD threshold
-    ctx.save();
+    var _dfBlurMul=CAM_ZOOM>=0.55?Math.min(1,(CAM_ZOOM-0.32)/0.38):0;
+    // Collect visible death food — single pass, no draw calls
+    var _dfVis=[];
     for(var _dfi=0;_dfi<food.length;_dfi++){
       var _df=food[_dfi]; if(!_df.isDeath) continue;
       if(_df.x<vx1||_df.x>vx2||_df.y<vy1||_df.y>vy2) continue;
-      var _dfr=_df.r*(1+_orbFlash*0.4);
-      ctx.shadowColor='#FFD700'; ctx.shadowBlur=(10+_dfPulse*10)*_dfBlurMul;
-      ctx.strokeStyle='rgba(255,215,0,'+(0.55+_dfPulse*0.45).toFixed(2)+')';
-      ctx.lineWidth=3.5;
-      ctx.beginPath(); ctx.arc(_df.x,_df.y,_dfr+8,0,Math.PI*2); ctx.stroke();
-      ctx.shadowBlur=4*_dfBlurMul;
-      ctx.strokeStyle='rgba(255,255,200,'+(0.3+_dfPulse*0.45).toFixed(2)+')';
-      ctx.lineWidth=1.5;
-      ctx.beginPath(); ctx.arc(_df.x,_df.y,_dfr+2,0,Math.PI*2); ctx.stroke();
+      _dfVis.push(_df);
     }
-    ctx.restore();
-    ctx.shadowBlur=0;
+    if(_dfVis.length){
+      ctx.save();
+      var _dfOA='rgba(255,215,0,'+(0.55+_dfPulse*0.45).toFixed(2)+')';
+      var _dfIA='rgba(255,255,200,'+(0.3+_dfPulse*0.45).toFixed(2)+')';
+      // Outer ring — one path, one stroke()
+      ctx.shadowColor='#FFD700'; ctx.shadowBlur=(10+_dfPulse*10)*_dfBlurMul;
+      ctx.strokeStyle=_dfOA; ctx.lineWidth=3.5;
+      ctx.beginPath();
+      for(var _dvi=0;_dvi<_dfVis.length;_dvi++){
+        var _dv=_dfVis[_dvi], _dvr=_dv.r*(1+_dfPulse*0.4)+8;
+        ctx.moveTo(_dv.x+_dvr,_dv.y); ctx.arc(_dv.x,_dv.y,_dvr,0,Math.PI*2);
+      }
+      ctx.stroke();
+      // Inner ring — one path, one stroke()
+      ctx.shadowBlur=4*_dfBlurMul;
+      ctx.strokeStyle=_dfIA; ctx.lineWidth=1.5;
+      ctx.beginPath();
+      for(var _dvi=0;_dvi<_dfVis.length;_dvi++){
+        var _dv=_dfVis[_dvi], _dvr=_dv.r*(1+_dfPulse*0.4)+2;
+        ctx.moveTo(_dv.x+_dvr,_dv.y); ctx.arc(_dv.x,_dv.y,_dvr,0,Math.PI*2);
+      }
+      ctx.stroke();
+      ctx.restore(); ctx.shadowBlur=0;
+    }
   }
 
   // Money drop coins removed — collection still handled by checkMoneyDrops() for real SOL tiers
