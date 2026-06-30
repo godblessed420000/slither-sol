@@ -1492,7 +1492,7 @@ canvas{display:block;width:100%;height:100%;}
 // ════════════════ CONFIG ════════════════
 // ── Build stamp — bump this string on every deploy ───────────────────────────
 // Shown live on the lobby screen. Check via DevTools → Console: GAME_BUILD
-var GAME_BUILD = 'V119';
+var GAME_BUILD = 'V120';
 
 var PRIVY_APP_ID          = 'client-WY6aEf1eS4reRDrBq7ghh8arEiMaKSj1Vk37ZG8CAawEF';
 var HOUSE_WALLET_ADDRESS  = '2QnrdhxXYt8ythhGYHDz6MtTZE1z2bYvbss8z3ZGj2uJ';
@@ -3791,10 +3791,14 @@ function _wsHandleMsg(msg, fromAbly) {
     if (d.money_claim && cid) {
       var _mc = d.money_claim;
       if (_mc && _mc.id) {
+        // Resolve amount from OUR local drop record — never from the inbound message.
+        // Using _mc.solAmt directly lets any room member inflate the amount and drain
+        // the victim's wallet by relaying a crafted claim with an inflated solAmt.
+        var _claimDrop = moneyDrops.find(function(m){ return m.id === _mc.id; });
         moneyDrops = moneyDrops.filter(function(m){ return m.id !== _mc.id; });
-        if (_mc.fromId === _wsClientId && _mc.claimerPubkey && !_claimedDrops[_mc.id]) {
+        if (_claimDrop && _mc.fromId === _wsClientId && _mc.claimerPubkey && !_claimedDrops[_mc.id]) {
           _claimedDrops[_mc.id] = 'sent';
-          _doDropTransfer(_mc.claimerPubkey, +(_mc.solAmt||0));
+          _doDropTransfer(_mc.claimerPubkey, _claimDrop.sol);
         }
         if (_mc.claimerId === _wsClientId) { _claimedDrops[_mc.id] = 'collected'; }
       }
@@ -5139,7 +5143,7 @@ function launchGame() {
   if(tb){ tb.style.display='none'; }
   var alb=document.getElementById('activeLobbyBadge');
   if(alb){ alb.style.display='none'; }
-  score=0; myKills=0; killSOL=0; boostE=100; boosting=false; cashingOut=false; qDown=false; _zoomOffset=0; _zoomScale=1.0; CAM_ZOOM=1.0; _smoothLen=100; _autoCircle=false; _hudScoreV=''; _hudSubV=''; _hudEarnV=''; _boostMassAccum=0; _stateBuffer=[];
+  score=0; myKills=0; killSOL=0; boostE=100; boosting=false; cashingOut=false; qDown=false; _zoomOffset=0; _zoomScale=1.0; CAM_ZOOM=1.0; _smoothLen=100; _autoCircle=false; _hudScoreV=''; _hudSubV=''; _hudEarnV=''; _boostMassAccum=0; _stateBuffer=[]; _boostExhaustedUntil=0;
   _updateArenaSize(); WORLD = _targetWorld; WORLD_R = WORLD / 2; // snap immediately at game start; later joins/leaves lerp gradually
   // Restore W.balance from on-chain if it was zeroed by a previous death or is stale.
   // refreshBalance() won't sync during gameplay (gameRunning guard), so we must do it here.
