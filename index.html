@@ -1492,7 +1492,7 @@ canvas{display:block;width:100%;height:100%;}
 // ════════════════ CONFIG ════════════════
 // ── Build stamp — bump this string on every deploy ───────────────────────────
 // Shown live on the lobby screen. Check via DevTools → Console: GAME_BUILD
-var GAME_BUILD = 'V122';
+var GAME_BUILD = 'V123';
 
 var PRIVY_APP_ID          = 'client-WY6aEf1eS4reRDrBq7ghh8arEiMaKSj1Vk37ZG8CAawEF';
 var HOUSE_WALLET_ADDRESS  = '2QnrdhxXYt8ythhGYHDz6MtTZE1z2bYvbss8z3ZGj2uJ';
@@ -3413,9 +3413,12 @@ function _wsConnect(onReady) {
           }));
           // Only keep re-announce timer while waiting in lobby (not in-game)
           clearInterval(_lobbyPingTimer);
-          if (!gameRunning) {
+          // Only run the lobby ping while waiting to enter (not spectating after death).
+          // Spectating sends join → server spawns snake → server sends start → launchGame()
+          // fires without any user click — the exact auto-respawn bug on border death.
+          if (!gameRunning && !_spectating) {
             _lobbyPingTimer = setInterval(function() {
-              if (gameRunning) { clearInterval(_lobbyPingTimer); _lobbyPingTimer = null; return; }
+              if (gameRunning || _spectating) { clearInterval(_lobbyPingTimer); _lobbyPingTimer = null; return; }
               if (_ws && _ws.readyState === WebSocket.OPEN) {
                 try { _ws.send(JSON.stringify({ type:'join', clientId:_wsClientId, tier:_currentTier, data:{ n:_currentName, color:_currentColor, reply:true } })); } catch(_) {}
               }
@@ -3444,7 +3447,9 @@ window.addEventListener('pagehide', function() {
 // to ~1/s. When they return, immediately re-send join so other clients reset
 // their stale timer and don't evict this player.
 document.addEventListener('visibilitychange', function() {
-  if (document.visibilityState === 'visible' && (gameRunning || _spectating) && _wsClientId && _currentTier) {
+  // Re-announce only while actively in-game. Spectating must NOT re-send join —
+  // the server would spawn a new snake and reply with start, auto-launching the game.
+  if (document.visibilityState === 'visible' && gameRunning && _wsClientId && _currentTier) {
     if (_ws && _ws.readyState === WebSocket.OPEN) {
       try { _ws.send(JSON.stringify({ type:'join', clientId:_wsClientId, tier:_currentTier, data:{ n:_currentName, color:_currentColor, reply:true } })); } catch(_) {}
     }
@@ -3608,12 +3613,16 @@ function _wsHandleMsg(msg, fromAbly) {
     return;
   }
 
-  // start: server fires immediately when this player joins the live arena
+  // start: server fires when this player's join is processed (initial join OR reconnect)
   if (type === 'start') {
     if (d.spawn) _serverSpawn = d.spawn;
     if (d.food)  _serverFood  = d.food;
     if (d.world) { _targetWorld = d.world; WORLD = d.world; WORLD_R = d.world / 2; }
     if (gameRunning) return; // already in-game — safe to ignore
+    // While spectating the server may send start because the WS reconnected and
+    // re-sent a join, or because visibilitychange re-announced presence. Never
+    // auto-launch from that — the player must click the REJOIN button.
+    if (_spectating) return;
     clearInterval(lobbyTimer); lobbyTimer = null;
     launchGame();
     return;
