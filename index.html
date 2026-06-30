@@ -1492,7 +1492,7 @@ canvas{display:block;width:100%;height:100%;}
 // ════════════════ CONFIG ════════════════
 // ── Build stamp — bump this string on every deploy ───────────────────────────
 // Shown live on the lobby screen. Check via DevTools → Console: GAME_BUILD
-var GAME_BUILD = 'V118';
+var GAME_BUILD = 'V119';
 
 var PRIVY_APP_ID          = 'client-WY6aEf1eS4reRDrBq7ghh8arEiMaKSj1Vk37ZG8CAawEF';
 var HOUSE_WALLET_ADDRESS  = '2QnrdhxXYt8ythhGYHDz6MtTZE1z2bYvbss8z3ZGj2uJ';
@@ -3641,8 +3641,15 @@ function _wsHandleMsg(msg, fromAbly) {
       for (var _sci = 0; _sci < d.snakes.length; _sci++) {
         var _sc = d.snakes[_sci];
         if (_sc.id !== _wsClientId) continue;
+        // Server says our snake is dead — don't pull the live client toward a dead ghost.
+        // The rejoin flow will replace the snake with a fresh spawn.
+        if (!_sc.alive) break;
+        // Boost+auto-circle creates a steady-state ~41wu chord-vs-arc divergence.
+        // Use a larger threshold during boost so normal boost physics don't trigger
+        // rubber-banding, while still correcting genuine desync (>120wu off).
+        var _recThresh = boosting ? 120 * 120 : 50 * 50;
         var _rdx = _sc.x - player.x, _rdy = _sc.y - player.y;
-        if (_rdx*_rdx + _rdy*_rdy > 2500) { // >50 wu off — nudge back
+        if (_rdx*_rdx + _rdy*_rdy > _recThresh) {
           player.x += _rdx * 0.1; player.y += _rdy * 0.1;
         }
         if (_sc.l && Math.abs(_sc.l - player.length) > 5) player.length = _sc.l;
@@ -6567,9 +6574,15 @@ function drawS(s){
   // Display segmentsForSize(length) body segments — matches MoneySlither tail length
   var _maxDraw = segmentsForSize(s.length||40);
   var pts=[{x:hx,y:hy}];
+  // Build point list with sub-pixel culling: skip segments that land <1.5px from the
+  // last kept point on screen. Tight auto-circle coils pack 600 segs into a tiny area;
+  // without culling every seg goes through a quadratic bezier and destroys frame rate.
   for(var i=1;i<s.segs.length&&i<_maxDraw;i++){
     var _sg=s.segs[i]; if(!_sg) break;
-    pts.push({x:W2SX(_sg.x),y:W2SY(_sg.y)});
+    var _sx=W2SX(_sg.x), _sy=W2SY(_sg.y);
+    var _lp=pts[pts.length-1], _pdx=_sx-_lp.x, _pdy=_sy-_lp.y;
+    if(_pdx*_pdx+_pdy*_pdy < 2.25) continue; // <1.5px on screen — skip
+    pts.push({x:_sx,y:_sy});
   }
   if(pts.length<2 && s.segs[1]) pts.push({x:W2SX(s.segs[1].x),y:W2SY(s.segs[1].y)});
 
