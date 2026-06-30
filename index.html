@@ -1492,7 +1492,7 @@ canvas{display:block;width:100%;height:100%;}
 // ════════════════ CONFIG ════════════════
 // ── Build stamp — bump this string on every deploy ───────────────────────────
 // Shown live on the lobby screen. Check via DevTools → Console: GAME_BUILD
-var GAME_BUILD = 'V121';
+var GAME_BUILD = 'V122';
 
 var PRIVY_APP_ID          = 'client-WY6aEf1eS4reRDrBq7ghh8arEiMaKSj1Vk37ZG8CAawEF';
 var HOUSE_WALLET_ADDRESS  = '2QnrdhxXYt8ythhGYHDz6MtTZE1z2bYvbss8z3ZGj2uJ';
@@ -4638,6 +4638,7 @@ var _serverFood=null;  // initial food list from server 'start' message
 var _INTERP_DELAY=100; // ms behind real-time to render remote snakes (absorbs network jitter)
 var _mmFrame=0; // minimap throttle — redrawn every 3 game frames, not every frame
 var _fcBuckets={}; // reused food-color-bucket dict — avoids {} alloc + GC every draw()
+var _pBuckets={}; // reused particle-batch dict keyed by color+'|'+alpha-bucket
 var camX=0,camY=0,mouseX=400,mouseY=300,boosting=false,boostE=100;
 var _spectating=false,_specTargetId=null;
 var _scrollLock=false,_scrollLockTO=null; // blocks boost during scroll-zoom
@@ -5694,7 +5695,7 @@ function update(_dt){
           var _sdx=_st.x-_slpx,_sdy=_st.y-_slpy,_sMv=Math.hypot(_sdx,_sdy);
           _st._lpx=_st.x; _st._lpy=_st.y;
           var _sd0=_st._segAccum||0,_stot=_sd0+_sMv,_snK=Math.floor(_stot/POINT_DIST);
-          if(_snK>0&&_sMv>0){for(var _si=1;_si<=_snK;_si++){var _stt=(_si*POINT_DIST-_sd0)/_sMv;_st.segs.unshift({x:_slpx+_sdx*_stt,y:_slpy+_sdy*_stt});}}
+          if(_snK>0&&_sMv>0){var _sns=[];for(var _si=1;_si<=_snK;_si++){var _stt=(_si*POINT_DIST-_sd0)/_sMv;_sns.push({x:_slpx+_sdx*_stt,y:_slpy+_sdy*_stt});}if(_sns.length===1)_st.segs.unshift(_sns[0]);else Array.prototype.unshift.apply(_st.segs,_sns);}
           _st._segAccum=_stot-_snK*POINT_DIST;
           var _smaxS=Math.floor(segmentsForSize(_st.length||40)+60); if(isFinite(_smaxS)&&_smaxS>0&&_st.segs.length>_smaxS)_st.segs.length=_smaxS;
         }
@@ -5729,7 +5730,7 @@ function update(_dt){
       _spp.y+=Math.sin(_spp.angle)*_spSpd;
       var _spdx=_spp.x-_splpx,_spdy=_spp.y-_splpy,_spMv=Math.hypot(_spdx,_spdy);
       var _spd0=_spp._segAccum||0,_sptot=_spd0+_spMv,_spnK=Math.floor(_sptot/POINT_DIST);
-      if(_spnK>0&&_spMv>0){for(var _spii=1;_spii<=_spnK;_spii++){var _sptt=(_spii*POINT_DIST-_spd0)/_spMv;_spp.segs.unshift({x:_splpx+_spdx*_sptt,y:_splpy+_spdy*_sptt});}}
+      if(_spnK>0&&_spMv>0){var _spns=[];for(var _spii=1;_spii<=_spnK;_spii++){var _sptt=(_spii*POINT_DIST-_spd0)/_spMv;_spns.push({x:_splpx+_spdx*_sptt,y:_splpy+_spdy*_sptt});}if(_spns.length===1)_spp.segs.unshift(_spns[0]);else Array.prototype.unshift.apply(_spp.segs,_spns);}
       _spp._segAccum=_sptot-_spnK*POINT_DIST;
       var _spMax=Math.floor(segmentsForSize(_spp.length||40)+60);
       if(isFinite(_spMax)&&_spMax>0&&_spp.segs.length>_spMax)_spp.segs.length=_spMax;
@@ -5820,7 +5821,7 @@ function update(_dt){
       // Arc-length resampling — place segments at exactly POINT_DIST spacing
       var _pdx=p.x-_plpx, _pdy=p.y-_plpy, _pMv=Math.hypot(_pdx,_pdy);
       var _pd0=p._segAccum||0, _ptot=_pd0+_pMv, _pnK=Math.floor(_ptot/POINT_DIST);
-      if(_pnK>0&&_pMv>0){for(var _pi=1;_pi<=_pnK;_pi++){var _ptt=(_pi*POINT_DIST-_pd0)/_pMv;p.segs.unshift({x:_plpx+_pdx*_ptt,y:_plpy+_pdy*_ptt});}}
+      if(_pnK>0&&_pMv>0){var _pns=[];for(var _pi=1;_pi<=_pnK;_pi++){var _ptt=(_pi*POINT_DIST-_pd0)/_pMv;_pns.push({x:_plpx+_pdx*_ptt,y:_plpy+_pdy*_ptt});}if(_pns.length===1)p.segs.unshift(_pns[0]);else Array.prototype.unshift.apply(p.segs,_pns);}
       p._segAccum=_ptot-_pnK*POINT_DIST;
       var maxS=Math.floor(segmentsForSize(p.length||40)+60);
       if(isFinite(maxS)&&maxS>0&&p.segs.length>maxS) p.segs.length=maxS;
@@ -5882,12 +5883,18 @@ function moveS(s,angle,spd){
   var d0=s._segAccum||0, total=d0+spd;
   var newK=Math.floor(total/POINT_DIST);
   var _maxS=Math.max(segmentsForSize(s.length||40)+60,80);
-  for(var j=1;j<=newK;j++){
-    var t=(j*POINT_DIST-d0)/spd; // fraction into current frame where this seg falls
-    var sx=((px+_cx*spd*t)%WORLD+WORLD)%WORLD, sy=((py+_cy*spd*t)%WORLD+WORLD)%WORLD;
-    s.segs.unshift({x:sx,y:sy}); if(s.segs.length>_maxS) s.segs.pop();
+  if(newK>0){
+    // Batch all new segments into one array then splice-in with a single unshift call.
+    // Per-iteration unshift is O(n) per call → O(k*n) total; at boost speed k≈10.
+    var _ns=[];
+    for(var j=1;j<=newK;j++){
+      var t=(j*POINT_DIST-d0)/spd;
+      _ns.push({x:((px+_cx*spd*t)%WORLD+WORLD)%WORLD, y:((py+_cy*spd*t)%WORLD+WORLD)%WORLD});
+    }
+    if(_ns.length===1) s.segs.unshift(_ns[0]); else Array.prototype.unshift.apply(s.segs,_ns);
+    if(s.segs.length>_maxS) s.segs.length=_maxS;
   }
-  s._segAccum=total-newK*POINT_DIST; // remainder (always < POINT_DIST)
+  s._segAccum=total-newK*POINT_DIST;
 }
 
 /* updatePeer removed — no AI bots in this game */
@@ -6420,7 +6427,27 @@ function draw(){
 
   // Money drop coins removed — collection still handled by checkMoneyDrops() for real SOL tiers
 
-  for(var i=parts.length-1;i>=0;i--){ var p=parts[i]; p.x+=p.vx; p.y+=p.vy; p.life--; if(p.life<=0){ parts[i]=parts[parts.length-1]; parts.length--; continue; } if(p.x<vx1-20||p.x>vx2+20||p.y<vy1-20||p.y>vy2+20) continue; ctx.globalAlpha=p.life/p.max; ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fillStyle=p.color; ctx.fill(); }
+  // Particles — update + cull first, then batch-render by (color, alpha-bucket).
+  // Old approach: 1 fill() per particle → 350 GPU flushes/frame during heavy boost.
+  // New approach: group by color+'|'+quantized-alpha → ~10-20 fill() calls total.
+  var _pBkKeys=Object.keys(_pBuckets); for(var _pbki=0;_pbki<_pBkKeys.length;_pbki++) _pBuckets[_pBkKeys[_pbki]].length=0;
+  for(var i=parts.length-1;i>=0;i--){
+    var p=parts[i]; p.x+=p.vx; p.y+=p.vy; p.life--;
+    if(p.life<=0){ parts[i]=parts[parts.length-1]; parts.length--; continue; }
+    if(p.x<vx1-20||p.x>vx2+20||p.y<vy1-20||p.y>vy2+20) continue;
+    var _pa=Math.round(p.life/p.max*10); // 0-10 integer bucket
+    var _pk=p.color+'|'+_pa;
+    if(!_pBuckets[_pk]) _pBuckets[_pk]=[];
+    _pBuckets[_pk].push(p);
+  }
+  var _pBkKeys2=Object.keys(_pBuckets);
+  for(var _pbi=0;_pbi<_pBkKeys2.length;_pbi++){
+    var _pk2=_pBkKeys2[_pbi]; var _pb=_pBuckets[_pk2]; if(!_pb.length) continue;
+    var _sep=_pk2.lastIndexOf('|'); ctx.globalAlpha=parseInt(_pk2.slice(_sep+1))/10; ctx.fillStyle=_pk2.slice(0,_sep);
+    ctx.beginPath();
+    for(var _ppi=0;_ppi<_pb.length;_ppi++){ var _pt=_pb[_ppi]; ctx.moveTo(_pt.x+_pt.r,_pt.y); ctx.arc(_pt.x,_pt.y,_pt.r,0,Math.PI*2); }
+    ctx.fill();
+  }
   ctx.globalAlpha=1;
   // Draw snakes — viewport-cull remote snakes (head off-screen + no long tail visible)
   // Perf mode: skip expensive skin blur ops for remote peers when 2+ are alive
@@ -7894,7 +7921,7 @@ function drawMM(){
   mctx.restore();
 }
 
-function spawnPt(x,y,color){ for(var i=0;i<6;i++) parts.push({x:x,y:y,vx:(Math.random()-.5)*5,vy:(Math.random()-.5)*5,r:2+Math.random()*2,color:color,life:22+Math.random()*12,max:34}); }
+function spawnPt(x,y,color){ if(parts.length>350) return; for(var i=0;i<6;i++) parts.push({x:x,y:y,vx:(Math.random()-.5)*5,vy:(Math.random()-.5)*5,r:2+Math.random()*2,color:color,life:22+Math.random()*12,max:34}); }
 
 function updateLB(){
   if(!gameRunning) return;
