@@ -1488,7 +1488,7 @@ canvas{display:block;width:100%;height:100%;}
 // ════════════════ CONFIG ════════════════
 // ── Build stamp — bump this string on every deploy ───────────────────────────
 // Shown live on the lobby screen. Check via DevTools → Console: GAME_BUILD
-var GAME_BUILD = 'V128';
+var GAME_BUILD = 'V129';
 
 var PRIVY_APP_ID          = 'client-WY6aEf1eS4reRDrBq7ghh8arEiMaKSj1Vk37ZG8CAawEF';
 var HOUSE_WALLET_ADDRESS  = '2QnrdhxXYt8ythhGYHDz6MtTZE1z2bYvbss8z3ZGj2uJ';
@@ -1571,7 +1571,7 @@ var WIDTH_SCMAX = 6.0;       // max scale, like slither.io's 6× cap
 var ZOOM_PX     = 20;        // controls auto-zoom level (higher = zoomed in more)
 var BODY_SCALE  = 0.63;      // visual + hitbox scale — change one place to resize both
 var BOOST_MULT        = 3.0;
-var BOOST_MASS_DRAIN  = 45/60;  // length units lost per frame while boosting (≈45 units/sec)
+var BOOST_MASS_DRAIN  = 90/60;  // length units lost per frame while boosting (≈90 units/sec)
 var TURN_RATE        = 0.16;
 var CIRCLE_RADIUS_WU = 46;   // auto-circle radius in world units (≈screen px at zoom 1×) — damnbruh RADIUS_PX concept
 var SEG_MULT   = 4;        // segments per length unit — lower = shorter tail
@@ -5251,7 +5251,7 @@ function grow(s,fval){
   s.widthBonus = (s.widthBonus||0) + 0.60;
   if(s.isMe && boosting) return;
   if(snakeRadius(s) >= 50) return; // max visible size cap (headR 50)
-  s.length = (s.length||100) + (fval||1)*4; // matches server: sn.length += f.value * 4
+  s.length = (s.length||100) + (fval||1)*6; // matches server: sn.length += f.value * 6
 }
 function spawnPlayer(){
   var cx=WORLD/2, cy=WORLD/2, sx, sy;
