@@ -1488,7 +1488,7 @@ canvas{display:block;width:100%;height:100%;}
 // ════════════════ CONFIG ════════════════
 // ── Build stamp — bump this string on every deploy ───────────────────────────
 // Shown live on the lobby screen. Check via DevTools → Console: GAME_BUILD
-var GAME_BUILD = 'V129';
+var GAME_BUILD = 'V130';
 
 var PRIVY_APP_ID          = 'client-WY6aEf1eS4reRDrBq7ghh8arEiMaKSj1Vk37ZG8CAawEF';
 var HOUSE_WALLET_ADDRESS  = '2QnrdhxXYt8ythhGYHDz6MtTZE1z2bYvbss8z3ZGj2uJ';
@@ -3481,9 +3481,12 @@ function _wsSend(type, data) {
     }
     return;
   }
-  // All other control events (chat) through Ably only.
-  if (_ablyChannel) {
-    try { _ablyChannel.publish(type, data || {}); } catch(e) { console.warn('[ably] publish error:', e); }
+  // All other control events (chat) → fly.io WS. Ably is vestigial and never
+  // connects (no token is ever issued), so the WS room is the real delivery path.
+  // The server relays chat to room peers and stamps the server-side session id,
+  // so identities can't be spoofed and only actual room members can send.
+  if (_ws && _ws.readyState === WebSocket.OPEN) {
+    try { _ws.send(JSON.stringify({ type: type, clientId: _wsClientId, data: data || {} })); } catch(e) {}
   }
 }
 
@@ -3594,9 +3597,9 @@ function _ablyConnect(tier) {
 function _wsHandleMsg(msg, fromAbly) {
   var type = msg.type, cid = msg.clientId, d = msg.data || {};
 
-  // chat must come from Ably (prevents WS chat spam from non-paying players).
-  // die no longer requires Ably — it goes via WS+Ably with dedup in the die handler.
-  if (type === 'chat' && !fromAbly) return;
+  // chat now arrives over the fly.io WS (Ably is dead). The server stamps the
+  // server-side session id and only relays to room members, so the old "must come
+  // from Ably" gate is obsolete — keeping it would drop every chat message.
 
   // Round-trip ping response — EMA smoothing eliminates GC and scheduling spikes
   if (type === 'ping') {
