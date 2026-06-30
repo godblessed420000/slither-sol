@@ -1492,7 +1492,7 @@ canvas{display:block;width:100%;height:100%;}
 // ════════════════ CONFIG ════════════════
 // ── Build stamp — bump this string on every deploy ───────────────────────────
 // Shown live on the lobby screen. Check via DevTools → Console: GAME_BUILD
-var GAME_BUILD = 'V117';
+var GAME_BUILD = 'V118';
 
 var PRIVY_APP_ID          = 'client-WY6aEf1eS4reRDrBq7ghh8arEiMaKSj1Vk37ZG8CAawEF';
 var HOUSE_WALLET_ADDRESS  = '2QnrdhxXYt8ythhGYHDz6MtTZE1z2bYvbss8z3ZGj2uJ';
@@ -4615,7 +4615,9 @@ var _staleFrame=0; // frame counter for stale-peer eviction (runs every 60 frame
 var _lastLoopT=0;  // last loop timestamp for delta-time calculation
 var _loopActive=false; // true while a loop() rAF chain is running — guards against double-launch
 var _rafHandle=null; // rAF handle returned by requestAnimationFrame — used to cancel on rejoin
-var _spawnMouseLock=0; // performance.now() timestamp: ignore mousemove/touch until this time (spawn grace)
+var _spawnMouseLock=0; // performance.now() timestamp: hold spawn direction until this time (or user moves 150+ px)
+var _spawnAngle=0;    // angle to hold during spawn lock — set from player.angle at game start
+var _spawnRefX=0,_spawnRefY=0; // cursor position at REJOIN click — lock releases early if user sweeps 150+ canvas-px away
 var _lastPosSend=0; // last position-publish timestamp (rAF-driven, ~60fps)
 var _preRejoinAvgSegs=0; // snapshot of peer avg segs taken just before _wsJoin() clears peers[]
 var _boostExhaustedUntil=0; // performance.now() timestamp when the 3s exhaustion penalty expires
@@ -5158,11 +5160,13 @@ function launchGame() {
   }
   spawnPlayer();
   if(player) _smoothLen=player.length; // zoom starts at actual snake size — no mismatch
-  // Align virtual mouse to spawn angle so REJOIN button click position doesn't steer snake into wall
-  if(player && gc) { mouseX=gc.width/2+Math.cos(player.angle)*gc.width*0.4; mouseY=gc.height/2+Math.sin(player.angle)*gc.height*0.4; }
-  // Lock mouse input for 1.2s so the cursor's position at the REJOIN button (bottom of screen)
-  // doesn't immediately steer the snake into the boundary wall
-  _spawnMouseLock = performance.now() + 1200;
+  // Capture cursor reference BEFORE overriding mouseX/mouseY — lock releases early if user sweeps 150+ px away
+  _spawnAngle = player ? player.angle : 0;
+  _spawnRefX = mouseX; _spawnRefY = mouseY;
+  // Align virtual mouse to spawn angle so first update() frame steers toward center
+  if(player && gc) { mouseX=gc.width/2+Math.cos(_spawnAngle)*gc.width*0.4; mouseY=gc.height/2+Math.sin(_spawnAngle)*gc.height*0.4; }
+  // 500ms fallback grace period — update() re-applies spawn direction each frame so onMouse can stay unrestricted
+  _spawnMouseLock = performance.now() + 500;
   // No AI bots — remote players come entirely via Ably
   peers = peers.filter(function(p){ return p.isRemote&&p.alive; });
   // Seed food from server list (authoritative) — fall back to local spawn if server hasn't sent yet
@@ -5281,7 +5285,6 @@ function addFood(x,y,isBoostPebble,isDeathFood){
 }
 
 function onMouse(e){
-  if(performance.now()<_spawnMouseLock) return; // grace period after spawn — ignore mouse near REJOIN button
   var r=gc.getBoundingClientRect();
   // Multiply by ratio to handle any CSS display size vs canvas pixel size mismatch
   var sx=gc.width/r.width, sy=gc.height/r.height;
@@ -5303,7 +5306,6 @@ function onTouch(e){
   }
   // Single finger — aim
   _pinchDist=null;
-  if(performance.now()<_spawnMouseLock) return; // grace period after spawn
   var t=e.touches[0]; var r=gc.getBoundingClientRect();
   var sx=gc.width/r.width, sy=gc.height/r.height;
   mouseX=(t.clientX-r.left)*sx;
@@ -5729,6 +5731,19 @@ function update(_dt){
   if(_joyActive&&(_joyDX!==0||_joyDY!==0)){
     mouseX=gc.width/2 +_joyDX*gc.width *0.45;
     mouseY=gc.height/2+_joyDY*gc.height*0.45;
+  }
+  // Spawn grace: hold spawn direction every frame until the lock expires OR the user
+  // deliberately sweeps the mouse 150+ canvas-px away from the REJOIN button position.
+  // This prevents the cursor resting at the REJOIN button from steering the snake into the wall,
+  // while still feeling responsive the moment the user actually moves their mouse toward gameplay.
+  if(player&&gameRunning&&performance.now()<_spawnMouseLock){
+    var _smdx=mouseX-_spawnRefX, _smdy=mouseY-_spawnRefY;
+    if(_smdx*_smdx+_smdy*_smdy<150*150){
+      mouseX=gc.width/2+Math.cos(_spawnAngle)*gc.width*0.4;
+      mouseY=gc.height/2+Math.sin(_spawnAngle)*gc.height*0.4;
+    } else {
+      _spawnMouseLock=0; // user swept mouse deliberately — release early
+    }
   }
   if(_autoCircle){
     player.angle += TURN_RATE * _dt; // damnbruh: spin at full turn rate, circle size = BASE_SPEED / TURN_RATE
