@@ -1481,6 +1481,10 @@ canvas{display:block;width:100%;height:100%;}
 
 <div id="toast"></div>
 
+<!-- Shared deterministic simulation + collision module. SAME FILE the server runs
+     (game-server/sim.js). Loaded before the game script so `SIM` is the single
+     source of truth for all physics constants, radii, movement, and collision. -->
+<script src="sim.js"></script>
 <script>
 
 // ════════════════ CONFIG ════════════════
@@ -1488,7 +1492,7 @@ canvas{display:block;width:100%;height:100%;}
 // slither-sol.com is served by Vercel, which deploys this file verbatim on push.
 // This is the number players actually see. (The old GitHub Pages workflow that
 // auto-stamped V<VERSION> deployed to a dead host and is now disabled.)
-var GAME_BUILD = 'V405';
+var GAME_BUILD = 'V406';
 
 var PRIVY_APP_ID          = 'client-WY6aEf1eS4reRDrBq7ghh8arEiMaKSj1Vk37ZG8CAawEF';
 var HOUSE_WALLET_ADDRESS  = '2QnrdhxXYt8ythhGYHDz6MtTZE1z2bYvbss8z3ZGj2uJ';
@@ -1558,38 +1562,33 @@ var ZOOM_STEP  = 1.04;     // multiplicative per wheel tick (4%) — damnbruh ST
 var _zoomOffset = 0;       // (legacy, unused) manual scroll offset
 var _zoomScale  = 1.0;     // scroll zoom-OUT only: 1.0 = normal, 0.50 = max 50% zoomed out
 var _smoothLen  = 100;     // exponentially-smoothed snake length used for zoom (avoids per-frame jitter)
-// Slither.io-accurate movement constants
-var BASE_SPEED = 5.8;
-var POINT_DIST = 1.6;        // world-units between body segments (MoneySlither POINT_DIST)
-// ── Width model (slither.io-accurate) ─────────────────────────────────────────
-// Body radius = WIDTH_BASE × scale, scale = 1 + (len-100)/WIDTH_DEN, capped at WIDTH_SCMAX.
-// This is linear-in-length like slither.io's sc=1+(sct-2)/106, so the snake VISIBLY
-// widens as you eat (the old sqrt-of-segments formula barely moved per orb).
-var WIDTH_BASE  = 15.0;      // world-radius of the body at spawn size (len 100)
-var WIDTH_DEN   = 700;       // visible width growth per orb without getting too wide
-var WIDTH_SCMAX = 6.0;       // max scale, like slither.io's 6× cap
+// ── Simulation + collision constants come from the SHARED module (sim.js) ─────
+// These are ALIASES onto SIM.* so the client and the authoritative server run the
+// identical numbers. Never assign new literals here — change sim.js instead. The
+// Combat Tuning panel edits the tunables via SIM.* (see _ctSetTune) so collision,
+// which reads SIM.*, updates live.
+if (typeof SIM === 'undefined') { alert('sim.js failed to load — gameplay disabled'); throw new Error('SIM missing'); }
+var BASE_SPEED  = SIM.BASE_SPEED;
+var POINT_DIST  = SIM.POINT_DIST;
+var WIDTH_BASE  = SIM.WIDTH_BASE;
+var WIDTH_DEN   = SIM.WIDTH_DEN;
+var WIDTH_SCMAX = SIM.WIDTH_SCMAX;
+var BODY_SCALE  = SIM.BODY_SCALE;
+var BOOST_MULT  = SIM.BOOST_MULT;
+var TURN_RATE   = SIM.TURN_RATE;
+var SEG_MULT    = SIM.SEG_MULT;
+var COLLISION_GRACE_MS    = SIM.COLLISION_GRACE_MS;
+var SEGMENT_SPACING_TICKS = SIM.SEGMENT_SPACING_TICKS;
+// Tunables — mirror SIM.* into locals for the debug overlay/diagram; _ctSetTune
+// keeps SIM.* (the authority collision reads) and these mirrors in lockstep.
+var HITBOX_MULT = SIM.HITBOX_MULT;
+var HEAD_MULT   = SIM.HEAD_MULT;
+var FACE_DEG    = SIM.FACE_DEG;
+var FACE_COS    = SIM.FACE_COS;
+// Client-only presentation constants (not simulation — server has no equivalent)
 var ZOOM_PX     = 20;        // controls auto-zoom level (higher = zoomed in more)
-var BODY_SCALE  = 0.63;      // visual + hitbox scale — change one place to resize both
-var BOOST_MULT        = 3.0;
-var BOOST_MASS_DRAIN  = 90/60;  // length units lost per frame while boosting (≈90 units/sec)
-var TURN_RATE        = 0.16;
-var CIRCLE_RADIUS_WU = 46;   // auto-circle radius in world units (≈screen px at zoom 1×) — damnbruh RADIUS_PX concept
-var SEG_MULT   = 4;        // segments per length unit — lower = shorter tail
-// ── UNIFIED COLLISION CONSTANTS ──────────────────────────────────────────────
-// Single source of truth for every hitbox in the game. MUST be byte-identical to
-// the block in game-server/server.js. Collision radius is derived from the exact
-// rendered snake radius (snakeThickness × BODY_SCALE), so what you SEE is what you
-// COLLIDE with — no hidden offset, no oversized "die before you touch" zone.
-//   collision(body) radius = renderedRadius × HITBOX_MULT
-//   collision(head) radius = collision(body) radius × HEAD_MULT
-// The Combat Tuning panel (F8) edits these three live; keep server.js in lockstep.
-var HITBOX_MULT = 1.0;     // 1.0 = hitbox exactly equals the drawn snake
-var HEAD_MULT   = 1.0;     // 1.0 = head hitbox equals body hitbox
-var FACE_DEG    = 75;      // H2H facing gate: both snakes must aim within this many degrees
-var FACE_COS    = Math.cos(FACE_DEG * Math.PI / 180); // ≈ 0.2588 at 75°
-var COLLISION_GRACE_MS = 1500; // spawn grace before a snake can kill or be killed (matches server)
-var SEGMENT_SPACING_TICKS = 4; // H2B body-path stride (matches server)
-var MAX_FOOD   = 150;      // hard cap on food pellets
+var CIRCLE_RADIUS_WU = 46;   // auto-circle radius in world units (visual only)
+var MAX_FOOD   = 150;      // hard cap on food pellets (client render list)
 var CASHOUT_FEE= 0.10;
 var HOUSE_CUT  = 0.10;  // 10% creator fee → 2QnrdhxX… (Coinbase wallet)
 var ESCROW_CUT = 0.00;  // escrow is a holding wallet only — no automatic fee cut
@@ -4895,14 +4894,14 @@ function _ctDrawDiagram(){
   g.fillStyle='#e8a000'; g.fillText('GATE '+FACE_DEG+'°', cx-14, h2ly);
 }
 
-// Live-tune a unified collision constant from the Combat Tuning panel. This mutates
-// the SAME globals the client collision path reads (practice bots, prediction, debug
-// overlay), so the effect is immediate in practice mode. Live lobbies also require a
-// server.js deploy with the matching value.
+// Live-tune a unified collision constant from the Combat Tuning panel. Writes the
+// AUTHORITATIVE value into SIM.* (which every collision predicate reads) and mirrors
+// it into the local alias for the diagram/overlay. Effect is immediate in practice
+// mode; live lobbies also need a server.js deploy with the matching value.
 function _ctSetTune(key, val){
-  if(key==='HITBOX_MULT') HITBOX_MULT=val;
-  else if(key==='HEAD_MULT') HEAD_MULT=val;
-  else if(key==='FACE_DEG'){ FACE_DEG=val; FACE_COS=Math.cos(FACE_DEG*Math.PI/180); }
+  if(key==='HITBOX_MULT'){ SIM.HITBOX_MULT=val; HITBOX_MULT=val; }
+  else if(key==='HEAD_MULT'){ SIM.HEAD_MULT=val; HEAD_MULT=val; }
+  else if(key==='FACE_DEG'){ SIM.FACE_DEG=val; SIM.FACE_COS=Math.cos(val*Math.PI/180); FACE_DEG=val; FACE_COS=SIM.FACE_COS; }
   _ctSyncPanel();
   _ctDrawDiagram();
 }
@@ -4916,8 +4915,8 @@ function _ctSyncPanel(){
 }
 
 function _ctReset(){
-  HITBOX_MULT=1.0; HEAD_MULT=1.0; FACE_DEG=75; FACE_COS=Math.cos(FACE_DEG*Math.PI/180);
-  _ctSyncPanel(); _ctDrawDiagram(); toast('CT reset to unified defaults','info');
+  _ctSetTune('HITBOX_MULT',1.0); _ctSetTune('HEAD_MULT',1.0); _ctSetTune('FACE_DEG',75);
+  toast('CT reset to unified defaults','info');
 }
 
 function _ctSpawnBots(n){
@@ -4942,6 +4941,7 @@ function _ctUpdateBots(_dt2){
   if(!_ctBots.length||!player||!player.alive||!gameRunning) return;
   for(var b=0;b<_ctBots.length;b++){
     var bot=_ctBots[b]; if(!bot.alive) continue;
+    bot._prevX=bot.x; bot._prevY=bot.y; // for shared swept collision
     if(bot._botMode==='circle'){
       bot.angle+=TURN_RATE*_dt2*bot._circleDir;
       moveS(bot,bot.angle,BASE_SPEED*_dt2);
@@ -4973,68 +4973,32 @@ function _ctFighterStep(bot,_dt2){
   moveS(bot,bot.angle,BASE_SPEED*_dt2);
 }
 
-// Practice-lobby bot collision. This is CLIENT-ONLY (the server has no knowledge of
-// practice bots) but it runs the EXACT SAME pipeline the authoritative server runs
-// for live lobbies — unified radii (headHitR/bodyHitR), swept detection, the same
-// 75° facing gate, and the same striped H2B body sampling — so practice combat is
-// identical to free/paid lobbies. See game-server/server.js tickRoom() collision.
+// Practice-lobby bot collision. CLIENT-ONLY (the server has no knowledge of practice
+// bots) but it calls the SAME SIM predicates the authoritative server uses for live
+// lobbies — SIM.h2hContact / facingGateOpen / h2hLoser / headHitsBody — so there is
+// exactly one collision implementation and practice combat == free/paid combat.
 function _ctKillCheck(){
   if(!_ctBots.length||!player||!player.alive||!gameRunning) return;
   var now=Date.now();
-  if(now-(player.spawnTs||0)<COLLISION_GRACE_MS) return;
-  var myHeadR=headHitR(player.length), myBodyR=bodyHitR(player.length);
-  var _myCos=Math.cos(player.angle),_mySin=Math.sin(player.angle);
-  var myHead={x:player.x,y:player.y};
-  var myPrev=player.segs[0]||myHead;
+  if(!SIM.combatReady(player, now)) return;
   for(var b=0;b<_ctBots.length;b++){
     var bot=_ctBots[b]; if(!bot.alive) continue;
-    if(now-(bot.spawnTs||0)<COLLISION_GRACE_MS) continue;
-    var botHeadR=headHitR(bot.length), botBodyR=bodyHitR(bot.length);
-    var botCos=Math.cos(bot.angle), botSin=Math.sin(bot.angle);
-    var botHead={x:bot.x,y:bot.y};
-    var botPrev=bot.segs[0]||botHead;
-    var gap=dst(player.x,player.y,bot.x,bot.y);
+    if(!SIM.combatReady(bot, now)) continue;
 
-    // ── PASS 1: Head-to-head (mirrors server PASS 1) ──────────────────────────
-    // Detection = sum of head hitboxes; static OR swept. Gate: BOTH aim within 75°.
-    // Resolve: smaller dies; equal → deterministic (player yields the tie).
-    var h2hR=myHeadR+botHeadR;
-    var h2hHit=(gap<=h2hR)
-      || segHitsCircle(myPrev,myHead,botHead,h2hR)
-      || segHitsCircle(botPrev,botHead,myHead,h2hR);
-    if(h2hHit){
-      var dh=gap||1;
-      var myDot=((bot.x-player.x)*_myCos+(bot.y-player.y)*_mySin)/dh;
-      var botDot=((player.x-bot.x)*botCos+(player.y-bot.y)*botSin)/dh;
-      if(myDot>=FACE_COS && botDot>=FACE_COS){
-        if(player.length<bot.length){ killPlayer('Eliminated by '+bot.name,null); return; }
-        else if(bot.length<player.length){ bot.alive=false; bot.segs=[]; myKills++; boostE=Math.min(100,boostE+50); kFeed((bot.name||'Bot')+' — outgunned in H2H!','kill'); continue; }
-        else { killPlayer('Eliminated by '+bot.name,null); return; } // tie → player yields
-      }
-      // gate failed → not an H2H kill; fall through to body checks
-    }
-
-    // ── PASS 2a: my head vs bot body (mirrors server PASS 2 striding) ─────────
-    var combR=myHeadR+botBodyR, combR2=combR*combR;
-    var collLim=Math.min(segmentsForSize(bot.length||40),1200);
-    for(var k=2;k<collLim;k++){
-      var seg=bot.segs[k*SEGMENT_SPACING_TICKS]; if(!seg) break;
-      var ddx=player.x-seg.x,ddy=player.y-seg.y;
-      if(ddx*ddx+ddy*ddy<combR2 || segHitsCircle(myPrev,myHead,seg,combR)){
+    // PASS 1 — head-to-head: both must face within the gate; smaller dies.
+    if(SIM.h2hContact(player,bot) && SIM.facingGateOpen(player,bot)){
+      if(SIM.h2hLoser(player.length,'me',bot.length,'bot')==='me'){
         killPlayer('Eliminated by '+bot.name,null); return;
       }
+      bot.alive=false; bot.segs=[]; myKills++; boostE=Math.min(100,boostE+50);
+      kFeed((bot.name||'Bot')+' — outgunned in H2H!','kill'); continue;
     }
-
-    // ── PASS 2b: bot head vs my body → bot dies (mirrors server, reversed) ────
-    var rCombR=botHeadR+myBodyR, rCombR2=rCombR*rCombR;
-    var myLim=Math.min(segmentsForSize(player.length||40),1200);
-    for(var rk=2;rk<myLim;rk++){
-      var mseg=player.segs[rk*SEGMENT_SPACING_TICKS]; if(!mseg) break;
-      var rdx=bot.x-mseg.x,rdy=bot.y-mseg.y;
-      if(rdx*rdx+rdy*rdy<rCombR2 || segHitsCircle(botPrev,botHead,mseg,rCombR)){
-        bot.alive=false; bot.segs=[]; myKills++; boostE=Math.min(100,boostE+50);
-        kFeed((bot.name||'Bot')+' ran into you!','kill'); break;
-      }
+    // PASS 2 — my head into bot body → I die.
+    if(SIM.headHitsBody(player,bot)){ killPlayer('Eliminated by '+bot.name,null); return; }
+    // PASS 2 (reversed) — bot head into my body → bot dies.
+    if(SIM.headHitsBody(bot,player)){
+      bot.alive=false; bot.segs=[]; myKills++; boostE=Math.min(100,boostE+50);
+      kFeed((bot.name||'Bot')+' ran into you!','kill');
     }
   }
 }
@@ -5930,26 +5894,25 @@ function update(_dt){
   // and eating orbs can't instantly re-trigger boost until the lockout clears.
   if(boostE <= 0){ boosting = false; _boostExhaustedUntil = _bNow + 1500; }
   var _boostLocked = _bNow < _boostExhaustedUntil;
-  if(boosting && (player.length <= 4 || _boostLocked)) boosting = false; // block at min size or during lockout
+  // Match the server's boost gate exactly: no boost at/below SIM.BOOST_MIN_SIZE.
+  if(boosting && (player.length <= SIM.BOOST_MIN_SIZE || _boostLocked)) boosting = false;
   var spd = BASE_SPEED * _dt;
   if(boosting && boostE>0 && !_boostLocked){
     spd *= BOOST_MULT;
     boostE = Math.max(0, boostE - 0.25 * _dt);
-    // Mass loss while boosting — drain length and immediately trim tail
-    if(player.length > 18){
-      _boostMassAccum += BOOST_MASS_DRAIN * _dt;
-      if(_boostMassAccum >= 1){
-        _boostMassAccum -= 1;
-        player.length = Math.max(18, player.length - 1);
-        player.widthBonus = Math.max(0, (player.widthBonus||0) - 0.60);
-      }
+    // PROPORTIONAL mass drain — identical rate to the authoritative server
+    // (SIM.BOOST_BURN_PCT_SEC per second), frame-rate corrected via _dt (60fps
+    // units). Replaces the old flat 90/sec drain that made client length diverge
+    // from the server every boosted frame (divergence D1).
+    if(player.length > SIM.BOOST_MIN_SIZE){
+      player.length = Math.max(SIM.BOOST_MIN_SIZE,
+        player.length - player.length * SIM.BOOST_BURN_PCT_SEC * (_dt / 60));
     }
-  } else {
-    _boostMassAccum = 0; // reset when not boosting
   }
   // No passive recharge — boost refills only from eating orbs or getting kills
+  player._prevX = player.x; player._prevY = player.y; // for shared swept collision
   moveS(player, player.angle, spd);
-  // Enforce segment cap
+  // Enforce segment cap (draw-length; collision extent is SIM.segmentsForSize)
   var _tgt = segmentsForSize(player.length||40) + 60;
   while(player.segs.length > _tgt) player.segs.pop();
 
@@ -5988,7 +5951,7 @@ function update(_dt){
   }
   _ctUpdateBots(_dt);
 
-  eatFood(); killCheck(); _ctKillCheck(); checkMoneyDrops();
+  eatFood(); _ctKillCheck(); checkMoneyDrops();
   // Food is managed server-side; state snapshots sync the list each tick.
   // Death food (isDeath:true) is still spawned client-side and preserved in the merge.
   // Enforce absolute max-segs cap
@@ -6060,11 +6023,13 @@ function moveS(s,angle,spd){
 // point every POINT_DIST so the rendered body is dense/smooth AND geometrically identical
 // to the segments the server uses for collision. This is what makes "what you see" ==
 // "what can kill you." Returns a segs array; head is drawn separately by drawS.
-function _segsFromPath(q){
+function _segsFromPath(q, hx, hy){
   var out=[]; var n=q.length>>1;
   if(n<1) return out;
   var _HW=WORLD*0.5;
-  var px=q[0], py=q[1];
+  // Start from the EXACT authoritative head (hx,hy) when provided, not the rounded
+  // q[0]/q[1] downsample — removes the sub-pixel head/body seam (divergence D6).
+  var px=(hx!=null)?hx:q[0], py=(hy!=null)?hy:q[1];
   out.push({x:px,y:py});
   var carry=0;
   for(var i=1;i<n;i++){
@@ -6093,8 +6058,8 @@ function eatFood(){
   var eaten=[];
   for(var i=food.length-1;i>=0;i--){
     var f=food[i];
-    if(player.alive&&dst(player.x,player.y,f.x,f.y)<player.headR+f.r){ score+=f.value; grow(player,f.value); boostE=Math.min(100,boostE+8); eaten.push(i); spawnPt(f.x,f.y,f.color); continue; }
-    for(var j=0;j<peers.length;j++){ if(!peers[j].alive||peers[j].isRemote) continue; if(dst(peers[j].x,peers[j].y,f.x,f.y)<peers[j].headR+f.r){ peers[j].score++; grow(peers[j]); eaten.push(i); break; } }
+    if(player.alive&&SIM.foodContact(player,f)){ score+=f.value; grow(player,f.value); boostE=Math.min(100,boostE+8); eaten.push(i); spawnPt(f.x,f.y,f.color); continue; }
+    for(var j=0;j<peers.length;j++){ if(!peers[j].alive||peers[j].isRemote) continue; if(SIM.foodContact(peers[j],f)){ peers[j].score++; grow(peers[j]); eaten.push(i); break; } }
   }
   // No bots → no duplicate indices; sort descending and splice in one pass
   eaten.sort(function(a,b){return b-a;});
@@ -6153,62 +6118,20 @@ function segmentsForSize(sz){
   var n=(sz<=100)?(8+(sz-40)*(26-8)/(100-40)):(26+(sz-100)*0.25);
   return Math.max(8,Math.min(Math.floor(n),50000));
 }
-// Unified body thickness (world-radius) — single source of truth for hitbox, body
-// collision, visual width, and zoom. Linear-in-length like slither.io's scale factor.
-function snakeThickness(len){
-  len=Math.max(40,Number(len)||100);
-  var sc=1+(len-100)/WIDTH_DEN;
-  if(sc<0.5) sc=0.5; if(sc>WIDTH_SCMAX) sc=WIDTH_SCMAX;
-  return WIDTH_BASE*sc;
-}
-// Back-compat shim: a couple of call sites still pass a segment count.
-function thicknessForSegments(n){ return WIDTH_BASE; }
-function snakeRadius(s){
-  return snakeThickness(s.length||40)*BODY_SCALE;
-}
-function snakeBodyR(s){
-  return snakeThickness(s.length||40)*BODY_SCALE;
-}
-// ── UNIFIED COLLISION RADII — identical to game-server/server.js ──────────────
-// Both take a raw LENGTH (not a snake object) and derive from the rendered radius,
-// so client prediction, practice bots, and the debug overlay all use the exact
-// same hitbox the authoritative server does.
-function bodyHitR(len){ return snakeThickness(len||40)*BODY_SCALE*HITBOX_MULT; }
-function headHitR(len){ return snakeThickness(len||40)*BODY_SCALE*HITBOX_MULT*HEAD_MULT; }
+// ── Geometry + collision helpers — ALL delegate to the shared sim.js ──────────
+// One source of truth. These wrappers exist only to accept a snake OBJECT (legacy
+// call style) as well as a raw length, and to expose the object-arg swept test the
+// render/overlay code already calls. No math lives here — it is all in SIM.
+function _len(x){ return (x && x.length != null) ? x.length : x; }
+function snakeThickness(len){ return SIM.snakeThickness(_len(len)); }
+function snakeRadius(s){ return SIM.snakeRadius(_len(s)); }   // rendered half-width (visual)
+function bodyHitR(len){ return SIM.bodyHitR(_len(len)); }
+function headHitR(len){ return SIM.headHitR(_len(len)); }
+// Object-arg adapter for the render/overlay code; scalar math is in SIM.segHitsCircle.
+function segHitsCircle(p1,p2,c,r){ return SIM.segHitsCircle(p1.x,p1.y,p2.x,p2.y,c.x,c.y,r); }
 
-// Swept segment→circle hit test: did segment p1→p2 pass through circle (c, radius r)?
-// Exact port from reference game — catches boosting head-on tunnels.
-function segHitsCircle(p1,p2,c,r){
-  var ex=p2.x-p1.x,ey=p2.y-p1.y;
-  var fx=p1.x-c.x,fy=p1.y-c.y;
-  var a=ex*ex+ey*ey;
-  if(a<0.001)return fx*fx+fy*fy<r*r;
-  var b=2*(fx*ex+fy*ey);
-  var cc=fx*fx+fy*fy-r*r;
-  var disc=b*b-4*a*cc;
-  if(disc<0)return false;
-  var sq=Math.sqrt(disc);
-  var t1=(-b-sq)/(2*a),t2=(-b+sq)/(2*a);
-  return(t1>=0&&t1<=1)||(t2>=0&&t2<=1)||(t1<=0&&t2>=1);
-}
-
-function killCheck(){
-  // ── FULLY SERVER-AUTHORITATIVE DEATHS ──────────────────────────────────────
-  // The client NO LONGER decides any real-player death. The server runs the sole
-  // authoritative H2H/H2B/boundary collision pass and emits `die` events, which the
-  // client applies (self death: state-event handler → killPlayer; remote death:
-  // snapshot alive:false). Previously this function ALSO killed the local player
-  // by testing player.x/y against each peer's RAW server position (targetX/targetY)
-  // while the peer was DRAWN at its interpolated position (p.x/p.y) — so you could
-  // die to a hitbox that wasn't where the snake appeared. That prediction/render
-  // divergence WAS the "invisible snake" death. It is now gone: only the server kills.
-  //
-  // Client-only practice bots keep their own collision in _ctKillCheck() (the server
-  // has no knowledge of them, so they cannot be server-authoritative).
-  return;
-  // legacy client-side collision fully removed — deaths are 100% server-authoritative;
-  // practice-lobby bots use _ctKillCheck(). This stub stays only so the game loop call is a no-op.
-}
+// (killCheck removed — real-player deaths are 100% server-authoritative; the client
+//  applies server `die` events. Practice bots use _ctKillCheck via the SIM predicates.)
 
 function _doDropTransfer(claimerPubkey, solAmt){
   if(!_localKeypair||!W.pubkey||!solAmt||!claimerPubkey) return;
