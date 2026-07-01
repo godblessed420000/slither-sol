@@ -1485,7 +1485,7 @@ canvas{display:block;width:100%;height:100%;}
 // slither-sol.com is served by Vercel, which deploys this file verbatim on push.
 // This is the number players actually see. (The old GitHub Pages workflow that
 // auto-stamped V<VERSION> deployed to a dead host and is now disabled.)
-var GAME_BUILD = 'V399';
+var GAME_BUILD = 'V400';
 
 var PRIVY_APP_ID          = 'client-WY6aEf1eS4reRDrBq7ghh8arEiMaKSj1Vk37ZG8CAawEF';
 var HOUSE_WALLET_ADDRESS  = '2QnrdhxXYt8ythhGYHDz6MtTZE1z2bYvbss8z3ZGj2uJ';
@@ -4710,6 +4710,12 @@ var _stateBuffer=[];   // server state snapshots [{t, snakes:{id:data}, world}] 
 var _DBG = /[?&]debug=1/.test(location.search);
 var _dbgSelfSrv = null; // last authoritative head {x,y,a} the server reported for US
 var _dbgFrame = 0;      // throttle console logging
+// Rolling divergence measurements (this game's own numbers — no external reference).
+// selfΔ = |rendered head − authoritative head| for YOU (Gap B: "die beside yourself").
+// bodyLead = |rendered head − authoritative head| for remote peers (Gap A: "die on old trail").
+var _dbgStats = { selfMax:0, selfSum:0, selfN:0, selfBoostMax:0, leadMax:0, leadSum:0, leadN:0, offMax:0 };
+function _dbgReset(){ _dbgStats = { selfMax:0, selfSum:0, selfN:0, selfBoostMax:0, leadMax:0, leadSum:0, leadN:0, offMax:0 }; }
+if (typeof window !== 'undefined') window._dbgReset = _dbgReset; // call in console to reset a measurement run
 var _serverSpawn=null; // spawn position provided by server in 'start' message
 var _serverFood=null;  // initial food list from server 'start' message
 var _INTERP_DELAY=100; // ms behind real-time to render remote snakes (absorbs network jitter)
@@ -6722,41 +6728,66 @@ function _dbgOverlay(){
     return {x:dx*Z+cw, y:dy*Z+ch};
   }
   ctx.save(); ctx.setTransform(1,0,0,1,0,0);
-  // ── peers: authoritative collision body + server head ──
-  var _np=0;
+  // ── peers: authoritative collision body + server head; measure body lead ──
+  var _np=0, _leadNow=0, _offNow=0;
   for(var i=0;i<peers.length;i++){
     var p=peers[i]; if(!p.isRemote||!p.alive) continue; _np++;
     if(p._dbgPath){
       ctx.fillStyle='rgba(0,229,255,0.85)';
       for(var k=0;k+1<p._dbgPath.length;k+=2){ var s=W2S(p._dbgPath[k],p._dbgPath[k+1]); ctx.beginPath(); ctx.arc(s.x,s.y,2.2,0,6.283); ctx.fill(); }
     }
-    if(p._dbgSrvX!=null){ var hs=W2S(p._dbgSrvX,p._dbgSrvY); ctx.strokeStyle='#ff2ee6'; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(hs.x,hs.y,7,0,6.283); ctx.stroke(); }
+    if(p._dbgSrvX!=null){
+      var hs=W2S(p._dbgSrvX,p._dbgSrvY); ctx.strokeStyle='#ff2ee6'; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(hs.x,hs.y,7,0,6.283); ctx.stroke();
+      // GAP A metric — how far the DRAWN head leads the AUTHORITATIVE (collidable) head.
+      var lx=p.x-p._dbgSrvX, ly=p.y-p._dbgSrvY;
+      if(lx> HW)lx-=WORLD; else if(lx<-HW)lx+=WORLD;
+      if(ly> HW)ly-=WORLD; else if(ly<-HW)ly+=WORLD;
+      var lead=Math.sqrt(lx*lx+ly*ly);
+      if(lead>_leadNow) _leadNow=lead;
+      _dbgStats.leadSum+=lead; _dbgStats.leadN++; if(lead>_dbgStats.leadMax)_dbgStats.leadMax=lead;
+      // GAP A body offset — nearest authoritative path point to the peer's rendered head
+      // seg[0]; approximates how far the drawn body sits from the collidable body.
+      if(p._dbgPath && p.segs && p.segs.length){
+        var rs=p.segs[0], best=1e9;
+        for(var q=0;q+1<p._dbgPath.length;q+=2){ var ddx=p._dbgPath[q]-rs.x, ddy=p._dbgPath[q+1]-rs.y; var dd=ddx*ddx+ddy*ddy; if(dd<best)best=dd; }
+        var off=Math.sqrt(best); if(off>_offNow)_offNow=off; if(off>_dbgStats.offMax)_dbgStats.offMax=off;
+      }
+    }
   }
-  // ── local player: server head vs rendered head + measured error ──
+  // ── local player: server head vs rendered head + measured error (GAP B) ──
   var selfErr=0;
   if(_dbgSelfSrv){
     var ex=_dbgSelfSrv.x-player.x, ey=_dbgSelfSrv.y-player.y;
     if(ex> HW)ex-=WORLD; else if(ex<-HW)ex+=WORLD;
     if(ey> HW)ey-=WORLD; else if(ey<-HW)ey+=WORLD;
     selfErr=Math.sqrt(ex*ex+ey*ey);
+    _dbgStats.selfSum+=selfErr; _dbgStats.selfN++;
+    if(selfErr>_dbgStats.selfMax)_dbgStats.selfMax=selfErr;
+    if(boosting && selfErr>_dbgStats.selfBoostMax)_dbgStats.selfBoostMax=selfErr;
     var sp=W2S(_dbgSelfSrv.x,_dbgSelfSrv.y), rp=W2S(player.x,player.y);
     ctx.strokeStyle='#ff3b3b'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(rp.x,rp.y); ctx.lineTo(sp.x,sp.y); ctx.stroke();
     ctx.fillStyle='#ff3b3b'; ctx.beginPath(); ctx.arc(sp.x,sp.y,6,0,6.283); ctx.fill();
     ctx.strokeStyle='#39ff14'; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(rp.x,rp.y,8,0,6.283); ctx.stroke();
   }
-  // ── text panel ──
+  // ── text panel: live + rolling stats (this game's own measured divergence) ──
+  var selfAvg=_dbgStats.selfN?(_dbgStats.selfSum/_dbgStats.selfN):0;
+  var leadAvg=_dbgStats.leadN?(_dbgStats.leadSum/_dbgStats.leadN):0;
   var lines=[
-    'DEBUG ?debug=1   ping='+Math.round(_pingEma||0)+'ms',
-    'YOU: server↔render Δ = '+selfErr.toFixed(1)+' wu'+(boosting?'   [BOOST]':''),
-    'reconcile deadzone = '+(boosting?120:50)+' wu   (Δ below this is NEVER corrected)',
-    'peers='+_np+'   cyan=collision body  magenta=peer head  red=your server head  green=your rendered head'
+    'DEBUG ?debug=1   ping='+Math.round(_pingEma||0)+'ms   peers='+_np+(boosting?'   [BOOST]':''),
+    'GAP B you(head): now '+selfErr.toFixed(1)+'  avg '+selfAvg.toFixed(1)+'  max '+_dbgStats.selfMax.toFixed(1)+'  boostMax '+_dbgStats.selfBoostMax.toFixed(1)+' wu',
+    'GAP A peer(head lead): now '+_leadNow.toFixed(1)+'  avg '+leadAvg.toFixed(1)+'  max '+_dbgStats.leadMax.toFixed(1)+' wu',
+    'GAP A peer(body offset): now '+_offNow.toFixed(1)+'  max '+_dbgStats.offMax.toFixed(1)+' wu',
+    'legend: cyan=collidable body  magenta=peer head  red=your srv head  green=your drawn head',
+    'console: window._dbgReset() to start a fresh measurement run'
   ];
   ctx.font='bold 12px Share Tech Mono'; ctx.textAlign='left'; ctx.textBaseline='top';
-  ctx.fillStyle='rgba(0,0,0,0.72)'; ctx.fillRect(8,40,470,lines.length*16+10);
-  ctx.fillStyle=(selfErr>25?'#ff5555':'#8effa6');
-  for(var li=0;li<lines.length;li++){ if(li===1) ctx.fillStyle=(selfErr>25?'#ff5555':'#8effa6'); else ctx.fillStyle='#ddd'; ctx.fillText(lines[li],14,46+li*16); }
+  ctx.fillStyle='rgba(0,0,0,0.75)'; ctx.fillRect(8,40,520,lines.length*16+10);
+  for(var li=0;li<lines.length;li++){
+    ctx.fillStyle = (li===1)?(selfErr>25?'#ff5555':'#8effa6') : (li===2||li===3)?(_leadNow>25||_offNow>25?'#ff5555':'#8effa6') : '#ddd';
+    ctx.fillText(lines[li],14,46+li*16);
+  }
   ctx.restore();
-  if((++_dbgFrame%30)===0) console.log('[DBG] ping='+Math.round(_pingEma||0)+'ms selfΔ='+selfErr.toFixed(1)+'wu boost='+boosting+' peers='+_np);
+  if((++_dbgFrame%120)===0) console.log('[DBG] ping='+Math.round(_pingEma||0)+'ms | YOU selfΔ now/avg/max/boostMax='+selfErr.toFixed(1)+'/'+selfAvg.toFixed(1)+'/'+_dbgStats.selfMax.toFixed(1)+'/'+_dbgStats.selfBoostMax.toFixed(1)+' | PEER lead avg/max='+leadAvg.toFixed(1)+'/'+_dbgStats.leadMax.toFixed(1)+' bodyOff max='+_dbgStats.offMax.toFixed(1)+' | peers='+_np);
 }
 
 // ── Snake renderer — drawn ENTIRELY in screen pixels ──
