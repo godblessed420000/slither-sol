@@ -1485,7 +1485,7 @@ canvas{display:block;width:100%;height:100%;}
 // slither-sol.com is served by Vercel, which deploys this file verbatim on push.
 // This is the number players actually see. (The old GitHub Pages workflow that
 // auto-stamped V<VERSION> deployed to a dead host and is now disabled.)
-var GAME_BUILD = 'V395';
+var GAME_BUILD = 'V396';
 
 var PRIVY_APP_ID          = 'client-WY6aEf1eS4reRDrBq7ghh8arEiMaKSj1Vk37ZG8CAawEF';
 var HOUSE_WALLET_ADDRESS  = '2QnrdhxXYt8ythhGYHDz6MtTZE1z2bYvbss8z3ZGj2uJ';
@@ -3456,6 +3456,7 @@ document.addEventListener('visibilitychange', function() {
 var _processedDies      = {}; // cid → true; prevents double-credit if both WS + Ably deliver
 var _killerScatteredFor = {}; // cid → timestamp; killer already scattered gold food locally — skip broadcast dupe
 var _killNotifyTs   = {}; // cid → timestamp; throttle victim-side kill_target sends (1s/target)
+var _killCreditTs   = {}; // victimId → timestamp; debounce server-driven kill credit (2s/victim)
 var _recentLeaves   = {}; // cid → timestamp; blocks pos from recreating a just-left/dead peer
 var _hintHitMe      = {}; // cid → timestamp; non-referee reported its head is in MY body
 var _hintSentTs     = {}; // cid → timestamp; throttle our own kill_hint sends
@@ -3770,15 +3771,39 @@ function _wsHandleMsg(msg, fromAbly) {
       }
     }
 
-    // Handle server die/eat events
+    // Handle server die/eat events — the server is the SOLE authority on deaths.
     if (d.events) {
       for (var _evi = 0; _evi < d.events.length; _evi++) {
         var _ev = d.events[_evi];
-        if (_ev.e === 'die' && _ev.id === _wsClientId && player && player.alive) {
+        if (_ev.e !== 'die') continue;
+
+        // (a) SELF death — server says our snake died. Play the death sequence.
+        if (_ev.id === _wsClientId && player && player.alive) {
           var _kNow = Date.now();
           if (!_killNotifyTs['__self__'] || _kNow - _killNotifyTs['__self__'] > 2000) {
             _killNotifyTs['__self__'] = _kNow;
             killPlayer('Eliminated', _ev.killed_by || null);
+          }
+          continue;
+        }
+
+        // (b) KILL CREDIT — server says a snake died to US. Credit the kill exactly
+        // once (the client killCheck used to do this; now it's server-driven). The
+        // victim's own client broadcasts the money_drop for its wager, so we only
+        // handle score/boost/feed here — never award SOL from an event we didn't verify.
+        if (_ev.killed_by === _wsClientId && _ev.id !== _wsClientId && player && player.alive) {
+          var _vid = _ev.id;
+          if (!_killCreditTs) _killCreditTs = {};
+          var _kcNow = Date.now();
+          if (!_killCreditTs[_vid] || _kcNow - _killCreditTs[_vid] > 2000) {
+            _killCreditTs[_vid] = _kcNow;
+            myKills++; boostE = Math.min(100, boostE + 50); // kill refills half boost
+            var _vName = (_remoteMap[_vid] && _remoteMap[_vid].name) || _lobbyPeers[_vid] && _lobbyPeers[_vid].n || 'a player';
+            if (activeTier !== 'free' && TIERS[activeTier] && TIERS[activeTier].usd > 0) {
+              kFeed('🗡 ELIMINATED ' + _vName + ' — grab the $' + TIERS[activeTier].usd + ' drop!', 'kill');
+            } else {
+              kFeed('🗡 YOU eliminated ' + _vName + ' [Free Play]', 'kill');
+            }
           }
         }
       }
@@ -6022,6 +6047,21 @@ function segHitsCircle(p1,p2,c,r){
 }
 
 function killCheck(){
+  // ── FULLY SERVER-AUTHORITATIVE DEATHS ──────────────────────────────────────
+  // The client NO LONGER decides any real-player death. The server runs the sole
+  // authoritative H2H/H2B/boundary collision pass and emits `die` events, which the
+  // client applies (self death: state-event handler → killPlayer; remote death:
+  // snapshot alive:false). Previously this function ALSO killed the local player
+  // by testing player.x/y against each peer's RAW server position (targetX/targetY)
+  // while the peer was DRAWN at its interpolated position (p.x/p.y) — so you could
+  // die to a hitbox that wasn't where the snake appeared. That prediction/render
+  // divergence WAS the "invisible snake" death. It is now gone: only the server kills.
+  //
+  // Client-only practice bots keep their own collision in _ctKillCheck() (the server
+  // has no knowledge of them, so they cannot be server-authoritative).
+  return;
+  /* eslint-disable no-unreachable */
+  // ---- legacy client-side prediction (retained for reference, never executed) ----
   if(!player.alive) return;
   var myId=_wsClientId||'zzz';
   var _now=Date.now();
