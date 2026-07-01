@@ -1485,7 +1485,7 @@ canvas{display:block;width:100%;height:100%;}
 // slither-sol.com is served by Vercel, which deploys this file verbatim on push.
 // This is the number players actually see. (The old GitHub Pages workflow that
 // auto-stamped V<VERSION> deployed to a dead host and is now disabled.)
-var GAME_BUILD = 'V392';
+var GAME_BUILD = 'V393';
 
 var PRIVY_APP_ID          = 'client-WY6aEf1eS4reRDrBq7ghh8arEiMaKSj1Vk37ZG8CAawEF';
 var HOUSE_WALLET_ADDRESS  = '2QnrdhxXYt8ythhGYHDz6MtTZE1z2bYvbss8z3ZGj2uJ';
@@ -3654,6 +3654,12 @@ function _wsHandleMsg(msg, fromAbly) {
         // rubber-banding, while still correcting genuine desync (>120wu off).
         var _recThresh = boosting ? 120 * 120 : 50 * 50;
         var _rdx = _sc.x - player.x, _rdy = _sc.y - player.y;
+        // Unwrap server correction across world boundary
+        var _rWH = WORLD * 0.5;
+        if(_rdx >  _rWH) _rdx -= WORLD;
+        if(_rdx < -_rWH) _rdx += WORLD;
+        if(_rdy >  _rWH) _rdy -= WORLD;
+        if(_rdy < -_rWH) _rdy += WORLD;
         if (_rdx*_rdx + _rdy*_rdy > _recThresh) {
           player.x += _rdx * 0.1; player.y += _rdy * 0.1;
         }
@@ -3720,14 +3726,21 @@ function _wsHandleMsg(msg, fromAbly) {
           _prp.boosting = !!_psn.b;
           // Drive the physics sim: client turns toward this angle each frame
           _prp.targetAngle = _psn.a;
-          // Soft position correction — nudge if drifted, hard snap only on respawn
-          var _cdx=_psn.x-_prp.x, _cdy=_psn.y-_prp.y, _cd2=_cdx*_cdx+_cdy*_cdy;
-          if (_cd2 > 160000) { // >400 wu: respawn/teleport
+          // Soft position correction — unwrap server pos relative to client prediction
+          // first (toroidal world), then nudge. Hard snap only on teleport/respawn.
+          var _cdx=_psn.x-_prp.x, _cdy=_psn.y-_prp.y;
+          var _WH2=WORLD*0.5;
+          if(_cdx >  _WH2) _cdx -= WORLD;
+          if(_cdx < -_WH2) _cdx += WORLD;
+          if(_cdy >  _WH2) _cdy -= WORLD;
+          if(_cdy < -_WH2) _cdy += WORLD;
+          var _cd2=_cdx*_cdx+_cdy*_cdy;
+          if (_cd2 > 160000) { // >400 wu: respawn/teleport — hard snap
             _prp.x=_psn.x; _prp.y=_psn.y; _prp.angle=_psn.a; _prp.segs=[]; _prp._segAccum=0;
             var _ris=segmentsForSize(_psn.l||100);
             for(var _rii=0;_rii<_ris;_rii++) _prp.segs.push({x:_psn.x-Math.cos(_psn.a)*_rii*POINT_DIST,y:_psn.y-Math.sin(_psn.a)*_rii*POINT_DIST});
-          } else if (_cd2 > 25) { // >5 wu: gentle drift correction
-            _prp.x += _cdx * 0.15; _prp.y += _cdy * 0.15;
+          } else if (_cd2 > 9) { // >3 wu: pull client toward server position
+            _prp.x += _cdx * 0.30; _prp.y += _cdy * 0.30;
           }
         }
       }
@@ -6628,23 +6641,41 @@ function _spawnTrail(s, isBoosting){
 function drawS(s){
   if(s.segs.length<2) return;
   var Z=CAM_ZOOM, cw=gc.width/2, ch=gc.height/2;
-  // Head and body both at zoom-correct screen position — fixes 1:1 vs Z body mismatch
-  var hx=(s.x-camX)*Z+cw, hy=(s.y-camY)*Z+ch;
-  var W2SX=function(wx){ return (wx-s.x)*Z+hx; };
-  var W2SY=function(wy){ return (wy-s.y)*Z+hy; };
+  // Unwrap head position relative to camera — fixes remote snakes and own snake near the
+  // world boundary appearing on the wrong side (thousands of pixels off screen).
+  var _WH=WORLD*0.5, _hWx=s.x, _hWy=s.y;
+  if(_hWx-camX >  _WH) _hWx -= WORLD;
+  if(_hWx-camX < -_WH) _hWx += WORLD;
+  if(_hWy-camY >  _WH) _hWy -= WORLD;
+  if(_hWy-camY < -_WH) _hWy += WORLD;
+  var hx=(_hWx-camX)*Z+cw, hy=(_hWy-camY)*Z+ch;
+  // W2SX/W2SY now use the unwrapped head as origin so segment offsets are correct
+  var W2SX=function(wx){ return (wx-_hWx)*Z+hx; };
+  var W2SY=function(wy){ return (wy-_hWy)*Z+hy; };
 
   // Visual radius scaled by BODY_SCALE for thinner look; hitbox (snakeRadius) is unchanged.
   var R   = snakeThickness(s.length||100) * Z * BODY_SCALE;  // screen-px radius at current zoom
   var BW  = R*2.0;                                            // body stroke width in screen px
   // Display segmentsForSize(length) body segments — matches MoneySlither tail length
   var _maxDraw = segmentsForSize(s.length||40);
+  var _WH = WORLD * 0.5; // half world — used to detect cross-boundary segment jumps
   var pts=[{x:hx,y:hy}];
-  // Build point list with sub-pixel culling: skip segments that land <1.5px from the
-  // last kept point on screen. Tight auto-circle coils pack 600 segs into a tiny area;
-  // without culling every seg goes through a quadratic bezier and destroys frame rate.
+  // Build point list with sub-pixel culling and world-wrap correction.
+  // Segments store wrapped coordinates (0..WORLD). When the snake crosses a boundary
+  // a segment can jump by ~WORLD relative to the head, making the tail appear to
+  // teleport across the screen. Unwrap each segment relative to the previous one
+  // by adding ±WORLD when the gap exceeds half the world size.
+  var _prevWx=s.x, _prevWy=s.y; // track previous unwrapped world coord
   for(var i=1;i<s.segs.length&&i<_maxDraw;i++){
     var _sg=s.segs[i]; if(!_sg) break;
-    var _sx=W2SX(_sg.x), _sy=W2SY(_sg.y);
+    // Unwrap: if segment is more than half-world away from previous, it crossed a boundary
+    var _wx=_sg.x, _wy=_sg.y;
+    if(_wx-_prevWx >  _WH) _wx -= WORLD;
+    if(_wx-_prevWx < -_WH) _wx += WORLD;
+    if(_wy-_prevWy >  _WH) _wy -= WORLD;
+    if(_wy-_prevWy < -_WH) _wy += WORLD;
+    _prevWx=_wx; _prevWy=_wy;
+    var _sx=W2SX(_wx), _sy=W2SY(_wy);
     var _lp=pts[pts.length-1], _pdx=_sx-_lp.x, _pdy=_sy-_lp.y;
     if(_pdx*_pdx+_pdy*_pdy < 2.25) continue; // <1.5px on screen — skip
     pts.push({x:_sx,y:_sy});
