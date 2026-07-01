@@ -1,11 +1,13 @@
-name: Deploy to GitHub Pages
+name: Deploy to GitHub Pages (DISABLED — site is on Vercel)
 
+# DISABLED 2026-07-01. slither-sol.com is served by Vercel, which auto-deploys
+# from the repo on every push. This workflow deployed to GitHub Pages (a dead
+# host the domain never points at) and stamped GAME_BUILD into the Pages artifact
+# only — the live Vercel site never saw it, so the build number appeared stuck.
+# Trigger is now manual-only so it never auto-runs. GAME_BUILD in index.html is
+# the source of truth; bump it there. Do NOT restore the push trigger.
 on:
-  push:
-    branches:
-      - main
-    paths-ignore:
-      - 'VERSION'
+  workflow_dispatch:
 
 permissions:
   contents: write
