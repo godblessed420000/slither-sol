@@ -893,32 +893,35 @@ canvas{display:block;width:100%;height:100%;}
     <button id="ct-btn-close" onclick="_ctTogglePanel()">✕</button>
   </div>
   <canvas id="ct-diagram" width="286" height="96"></canvas>
+  <!-- These three sliders drive the LIVE unified collision constants (client-side:
+       practice bots, prediction, debug overlay). Push to live lobbies by deploying
+       game-server/server.js with the same values (shown in the readout). -->
   <div class="ct-sblock">
     <div class="ct-srow">
-      <span class="ct-slabel">Hurtbox Forward</span>
-      <span class="ct-sval" id="vl-fwd">0.14r</span>
+      <span class="ct-slabel">Hitbox × visual (HITBOX_MULT)</span>
+      <span class="ct-sval" id="vl-hbmult">1.00×</span>
     </div>
-    <input type="range" id="sl-fwd" min="0" max="1" step="0.01" value="0.14"
-      oninput="_ctFwd=+this.value;document.getElementById('vl-fwd').textContent=(+this.value).toFixed(2)+'r';_ctDrawDiagram();">
-    <div class="ct-shints"><span>mid-face</span><span>nose tip</span></div>
+    <input type="range" id="sl-hbmult" min="0.5" max="1.5" step="0.01" value="1.00"
+      oninput="_ctSetTune('HITBOX_MULT',+this.value);">
+    <div class="ct-shints"><span>smaller than snake</span><span>larger than snake</span></div>
   </div>
   <div class="ct-sblock">
     <div class="ct-srow">
-      <span class="ct-slabel">Hurtbox Radius</span>
-      <span class="ct-sval" id="vl-r">0.85r</span>
+      <span class="ct-slabel">Head × body (HEAD_MULT)</span>
+      <span class="ct-sval" id="vl-headmult">1.00×</span>
     </div>
-    <input type="range" id="sl-r" min="0.3" max="2.0" step="0.01" value="0.85"
-      oninput="_ctR=+this.value;document.getElementById('vl-r').textContent=(+this.value).toFixed(2)+'r';_ctDrawDiagram();">
-    <div class="ct-shints"><span>tiny</span><span>large</span></div>
+    <input type="range" id="sl-headmult" min="0.8" max="1.5" step="0.01" value="1.00"
+      oninput="_ctSetTune('HEAD_MULT',+this.value);">
+    <div class="ct-shints"><span>head = body</span><span>bigger head</span></div>
   </div>
   <div class="ct-sblock">
     <div class="ct-srow">
-      <span class="ct-slabel">H2H Range</span>
-      <span class="ct-sval" id="vl-h2h">0.50x</span>
+      <span class="ct-slabel">Facing gate (FACE_DEG)</span>
+      <span class="ct-sval" id="vl-facedeg">75°</span>
     </div>
-    <input type="range" id="sl-h2h" min="0.1" max="2.0" step="0.01" value="0.50"
-      oninput="_ctH2H=+this.value;document.getElementById('vl-h2h').textContent=(+this.value).toFixed(2)+'x';_ctDrawDiagram();">
-    <div class="ct-shints"><span>tighter</span><span>looser</span></div>
+    <input type="range" id="sl-facedeg" min="30" max="120" step="1" value="75"
+      oninput="_ctSetTune('FACE_DEG',+this.value);">
+    <div class="ct-shints"><span>narrow (head-on only)</span><span>wide</span></div>
   </div>
   <div class="ct-btns">
     <button class="ct-btn active" id="ct-m-circle"
@@ -1485,7 +1488,7 @@ canvas{display:block;width:100%;height:100%;}
 // slither-sol.com is served by Vercel, which deploys this file verbatim on push.
 // This is the number players actually see. (The old GitHub Pages workflow that
 // auto-stamped V<VERSION> deployed to a dead host and is now disabled.)
-var GAME_BUILD = 'V404';
+var GAME_BUILD = 'V405';
 
 var PRIVY_APP_ID          = 'client-WY6aEf1eS4reRDrBq7ghh8arEiMaKSj1Vk37ZG8CAawEF';
 var HOUSE_WALLET_ADDRESS  = '2QnrdhxXYt8ythhGYHDz6MtTZE1z2bYvbss8z3ZGj2uJ';
@@ -1572,6 +1575,20 @@ var BOOST_MASS_DRAIN  = 90/60;  // length units lost per frame while boosting (�
 var TURN_RATE        = 0.16;
 var CIRCLE_RADIUS_WU = 46;   // auto-circle radius in world units (≈screen px at zoom 1×) — damnbruh RADIUS_PX concept
 var SEG_MULT   = 4;        // segments per length unit — lower = shorter tail
+// ── UNIFIED COLLISION CONSTANTS ──────────────────────────────────────────────
+// Single source of truth for every hitbox in the game. MUST be byte-identical to
+// the block in game-server/server.js. Collision radius is derived from the exact
+// rendered snake radius (snakeThickness × BODY_SCALE), so what you SEE is what you
+// COLLIDE with — no hidden offset, no oversized "die before you touch" zone.
+//   collision(body) radius = renderedRadius × HITBOX_MULT
+//   collision(head) radius = collision(body) radius × HEAD_MULT
+// The Combat Tuning panel (F8) edits these three live; keep server.js in lockstep.
+var HITBOX_MULT = 1.0;     // 1.0 = hitbox exactly equals the drawn snake
+var HEAD_MULT   = 1.0;     // 1.0 = head hitbox equals body hitbox
+var FACE_DEG    = 75;      // H2H facing gate: both snakes must aim within this many degrees
+var FACE_COS    = Math.cos(FACE_DEG * Math.PI / 180); // ≈ 0.2588 at 75°
+var COLLISION_GRACE_MS = 1500; // spawn grace before a snake can kill or be killed (matches server)
+var SEGMENT_SPACING_TICKS = 4; // H2B body-path stride (matches server)
 var MAX_FOOD   = 150;      // hard cap on food pellets
 var CASHOUT_FEE= 0.10;
 var HOUSE_CUT  = 0.10;  // 10% creator fee → 2QnrdhxX… (Coinbase wallet)
@@ -4735,9 +4752,8 @@ var _spectating=false,_specTargetId=null;
 var _scrollLock=false,_scrollLockTO=null; // blocks boost during scroll-zoom
 var _boostMassAccum=0; // fractional length drain accumulator for boost mass loss
 // ── Combat Tuning Suite ──────────────────────────────────────────────────────
-var _ctFwd=0.14;         // hurtbox forward offset (fraction of bot radius)
-var _ctR=0.85;           // bot hurtbox radius multiplier
-var _ctH2H=0.50;         // head-to-head combined range multiplier (bot only)
+// The panel's three sliders drive the UNIFIED collision constants directly
+// (HITBOX_MULT / HEAD_MULT / FACE_DEG). No placeholder values live here anymore.
 var _ctBots=[];          // CT bot objects
 var _ctBotMode='circle'; // 'circle' | 'fighter'
 var _ctPanelOpen=false;
@@ -4747,7 +4763,7 @@ function _ctIsAdmin(){ return typeof _currentName==='string'&&_currentName.toLow
 function _ctTogglePanel(){
   _ctPanelOpen=!_ctPanelOpen;
   var el=document.getElementById('ct-panel');
-  if(el){ el.classList.toggle('open',_ctPanelOpen); if(_ctPanelOpen) setTimeout(_ctDrawDiagram,50); }
+  if(el){ el.classList.toggle('open',_ctPanelOpen); if(_ctPanelOpen){ _ctSyncPanel(); setTimeout(_ctDrawDiagram,50); } }
 }
 
 function _ctDrawDiagram(){
@@ -4755,15 +4771,18 @@ function _ctDrawDiagram(){
   var g=c.getContext('2d'),w=c.width,h=c.height;
   g.clearRect(0,0,w,h); g.fillStyle='#080808'; g.fillRect(0,0,w,h);
 
-  // Snake faces RIGHT (angle=0). Head positioned at cx,cy.
+  // Snake faces RIGHT (angle=0). Head positioned at cx,cy. headR here is the DRAWN
+  // (visual) head radius; the rings below show the real collision zone relative to it.
   var cx=w*0.50, cy=h/2, headR=20;
-  var BW=headR*1.85; // body stroke width (matches drawS BW=R*1.9)
+  var BW=headR*2.0; // body stroke width (matches drawS BW=R*2.0)
 
-  // Derived hitbox radii — clamp to stay inside canvas
-  var hbR   = Math.max(6, Math.min(headR*_ctR, cy-4, cx-4));
-  var hbCx  = cx + _ctFwd*headR;           // hurtbox center shifted forward
+  // Real unified hitbox radii, expressed relative to the visual head radius.
+  //   headHitbox = visual × HITBOX_MULT × HEAD_MULT
+  //   H2H range  = headHitbox + an equal peer's headHitbox = 2 × headHitbox
   var maxR  = Math.min(cx-4, w-cx-4, cy-4, h-cy-4);
-  var h2hR  = Math.min((headR+hbR)*_ctH2H, maxR);
+  var hbR   = Math.max(6, Math.min(headR*HITBOX_MULT*HEAD_MULT, maxR));
+  var hbCx  = cx;                          // no forward offset in the unified model
+  var h2hR  = Math.min(hbR*2, maxR);
 
   // ── 1. Snake body — thick bezier line going left ──
   var bodyPts=[
@@ -4869,22 +4888,36 @@ function _ctDrawDiagram(){
   // HITBOX label — above hurtbox circle
   var hlx=hbCx+2, hly=cy-hbR-4;
   if(hly<10) hly=cy+hbR+12;
-  g.fillStyle='#ff6a00'; g.fillText('HITBOX r='+Math.round(hbR), hlx, hly);
+  g.fillStyle='#ff6a00'; g.fillText('HEAD ×'+(HITBOX_MULT*HEAD_MULT).toFixed(2), hlx, hly);
   // H2H label — inside top of H2H ring
   var h2ly=cy-h2hR+11;
   if(h2ly<10) h2ly=10;
-  g.fillStyle='#e8a000'; g.fillText('H2H r='+Math.round(h2hR), cx-14, h2ly);
+  g.fillStyle='#e8a000'; g.fillText('GATE '+FACE_DEG+'°', cx-14, h2ly);
+}
+
+// Live-tune a unified collision constant from the Combat Tuning panel. This mutates
+// the SAME globals the client collision path reads (practice bots, prediction, debug
+// overlay), so the effect is immediate in practice mode. Live lobbies also require a
+// server.js deploy with the matching value.
+function _ctSetTune(key, val){
+  if(key==='HITBOX_MULT') HITBOX_MULT=val;
+  else if(key==='HEAD_MULT') HEAD_MULT=val;
+  else if(key==='FACE_DEG'){ FACE_DEG=val; FACE_COS=Math.cos(FACE_DEG*Math.PI/180); }
+  _ctSyncPanel();
+  _ctDrawDiagram();
+}
+// Reflect the current live constants into the panel readouts + slider positions.
+function _ctSyncPanel(){
+  var set=function(id,txt){ var e=document.getElementById(id); if(e)e.textContent=txt; };
+  var sl =function(id,v){ var e=document.getElementById(id); if(e)e.value=v; };
+  set('vl-hbmult',  HITBOX_MULT.toFixed(2)+'×'); sl('sl-hbmult',HITBOX_MULT);
+  set('vl-headmult',HEAD_MULT.toFixed(2)+'×');   sl('sl-headmult',HEAD_MULT);
+  set('vl-facedeg', FACE_DEG+'°');               sl('sl-facedeg',FACE_DEG);
 }
 
 function _ctReset(){
-  _ctFwd=0.14; _ctR=0.85; _ctH2H=0.50;
-  var f; f=document.getElementById('sl-fwd'); if(f)f.value=0.14;
-  f=document.getElementById('sl-r');   if(f)f.value=0.85;
-  f=document.getElementById('sl-h2h'); if(f)f.value=0.50;
-  f=document.getElementById('vl-fwd'); if(f)f.textContent='0.14';
-  f=document.getElementById('vl-r');   if(f)f.textContent='0.85';
-  f=document.getElementById('vl-h2h'); if(f)f.textContent='0.50';
-  _ctDrawDiagram(); toast('CT reset','info');
+  HITBOX_MULT=1.0; HEAD_MULT=1.0; FACE_DEG=75; FACE_COS=Math.cos(FACE_DEG*Math.PI/180);
+  _ctSyncPanel(); _ctDrawDiagram(); toast('CT reset to unified defaults','info');
 }
 
 function _ctSpawnBots(n){
@@ -4940,36 +4973,68 @@ function _ctFighterStep(bot,_dt2){
   moveS(bot,bot.angle,BASE_SPEED*_dt2);
 }
 
+// Practice-lobby bot collision. This is CLIENT-ONLY (the server has no knowledge of
+// practice bots) but it runs the EXACT SAME pipeline the authoritative server runs
+// for live lobbies — unified radii (headHitR/bodyHitR), swept detection, the same
+// 75° facing gate, and the same striped H2B body sampling — so practice combat is
+// identical to free/paid lobbies. See game-server/server.js tickRoom() collision.
 function _ctKillCheck(){
   if(!_ctBots.length||!player||!player.alive||!gameRunning) return;
-  var now=Date.now(), myR=snakeRadius(player);
+  var now=Date.now();
+  if(now-(player.spawnTs||0)<COLLISION_GRACE_MS) return;
+  var myHeadR=headHitR(player.length), myBodyR=bodyHitR(player.length);
   var _myCos=Math.cos(player.angle),_mySin=Math.sin(player.angle);
+  var myHead={x:player.x,y:player.y};
+  var myPrev=player.segs[0]||myHead;
   for(var b=0;b<_ctBots.length;b++){
     var bot=_ctBots[b]; if(!bot.alive) continue;
-    if(now-(bot.spawnTs||0)<1200) continue;
-    var bR=snakeRadius(bot);
+    if(now-(bot.spawnTs||0)<COLLISION_GRACE_MS) continue;
+    var botHeadR=headHitR(bot.length), botBodyR=bodyHitR(bot.length);
     var botCos=Math.cos(bot.angle), botSin=Math.sin(bot.angle);
-    var rawGap=dst(player.x,player.y,bot.x,bot.y);
+    var botHead={x:bot.x,y:bot.y};
+    var botPrev=bot.segs[0]||botHead;
+    var gap=dst(player.x,player.y,bot.x,bot.y);
 
-    // H2H: both must face each other within 75° (cos75°=0.2588) → bigger wins
-    var h2hR=(myR+bR)*1.07;
-    if(rawGap < h2hR){
-      var _myDot=((bot.x-player.x)*_myCos+(bot.y-player.y)*_mySin)/(rawGap||1);
-      var _theirDot=((player.x-bot.x)*botCos+(player.y-bot.y)*botSin)/(rawGap||1);
-      if(_myDot>0.2588 && _theirDot>0.2588){
-        if(myR<=bR){ killPlayer('Eliminated by '+bot.name,null); return; }
-      } else if(_myDot>0.2588){
-        // Only I face them: I ran into their head → I lose
+    // ── PASS 1: Head-to-head (mirrors server PASS 1) ──────────────────────────
+    // Detection = sum of head hitboxes; static OR swept. Gate: BOTH aim within 75°.
+    // Resolve: smaller dies; equal → deterministic (player yields the tie).
+    var h2hR=myHeadR+botHeadR;
+    var h2hHit=(gap<=h2hR)
+      || segHitsCircle(myPrev,myHead,botHead,h2hR)
+      || segHitsCircle(botPrev,botHead,myHead,h2hR);
+    if(h2hHit){
+      var dh=gap||1;
+      var myDot=((bot.x-player.x)*_myCos+(bot.y-player.y)*_mySin)/dh;
+      var botDot=((player.x-bot.x)*botCos+(player.y-bot.y)*botSin)/dh;
+      if(myDot>=FACE_COS && botDot>=FACE_COS){
+        if(player.length<bot.length){ killPlayer('Eliminated by '+bot.name,null); return; }
+        else if(bot.length<player.length){ bot.alive=false; bot.segs=[]; myKills++; boostE=Math.min(100,boostE+50); kFeed((bot.name||'Bot')+' — outgunned in H2H!','kill'); continue; }
+        else { killPlayer('Eliminated by '+bot.name,null); return; } // tie → player yields
+      }
+      // gate failed → not an H2H kill; fall through to body checks
+    }
+
+    // ── PASS 2a: my head vs bot body (mirrors server PASS 2 striding) ─────────
+    var combR=myHeadR+botBodyR, combR2=combR*combR;
+    var collLim=Math.min(segmentsForSize(bot.length||40),1200);
+    for(var k=2;k<collLim;k++){
+      var seg=bot.segs[k*SEGMENT_SPACING_TICKS]; if(!seg) break;
+      var ddx=player.x-seg.x,ddy=player.y-seg.y;
+      if(ddx*ddx+ddy*ddy<combR2 || segHitsCircle(myPrev,myHead,seg,combR)){
         killPlayer('Eliminated by '+bot.name,null); return;
       }
     }
 
-    // My head vs bot body — 360° full body, all segments (MS style)
-    var _segR2=(myR+snakeBodyR(bot)); _segR2*=_segR2;
-    for(var k=3;k<bot.segs.length;k++){
-      var seg=bot.segs[k]; if(!seg) break;
-      var ddx=player.x-seg.x,ddy=player.y-seg.y;
-      if(ddx*ddx+ddy*ddy<_segR2){ killPlayer('Eliminated by '+bot.name,null); return; }
+    // ── PASS 2b: bot head vs my body → bot dies (mirrors server, reversed) ────
+    var rCombR=botHeadR+myBodyR, rCombR2=rCombR*rCombR;
+    var myLim=Math.min(segmentsForSize(player.length||40),1200);
+    for(var rk=2;rk<myLim;rk++){
+      var mseg=player.segs[rk*SEGMENT_SPACING_TICKS]; if(!mseg) break;
+      var rdx=bot.x-mseg.x,rdy=bot.y-mseg.y;
+      if(rdx*rdx+rdy*rdy<rCombR2 || segHitsCircle(botPrev,botHead,mseg,rCombR)){
+        bot.alive=false; bot.segs=[]; myKills++; boostE=Math.min(100,boostE+50);
+        kFeed((bot.name||'Bot')+' ran into you!','kill'); break;
+      }
     }
   }
 }
@@ -6104,6 +6169,12 @@ function snakeRadius(s){
 function snakeBodyR(s){
   return snakeThickness(s.length||40)*BODY_SCALE;
 }
+// ── UNIFIED COLLISION RADII — identical to game-server/server.js ──────────────
+// Both take a raw LENGTH (not a snake object) and derive from the rendered radius,
+// so client prediction, practice bots, and the debug overlay all use the exact
+// same hitbox the authoritative server does.
+function bodyHitR(len){ return snakeThickness(len||40)*BODY_SCALE*HITBOX_MULT; }
+function headHitR(len){ return snakeThickness(len||40)*BODY_SCALE*HITBOX_MULT*HEAD_MULT; }
 
 // Swept segment→circle hit test: did segment p1→p2 pass through circle (c, radius r)?
 // Exact port from reference game — catches boosting head-on tunnels.
@@ -6135,150 +6206,8 @@ function killCheck(){
   // Client-only practice bots keep their own collision in _ctKillCheck() (the server
   // has no knowledge of them, so they cannot be server-authoritative).
   return;
-  /* eslint-disable no-unreachable */
-  // ---- legacy client-side prediction (retained for reference, never executed) ----
-  if(!player.alive) return;
-  var myId=_wsClientId||'zzz';
-  var _now=Date.now();
-  if(_now-(player.spawnTs||0)<1500) return;
-  var myR=snakeRadius(player);
-  var myBodyR=snakeBodyR(player);
-  var _myCos=Math.cos(player.angle), _mySin=Math.sin(player.angle);
-  var _h2hHandled={}; // peers whose heads were in contact this frame (static OR swept)
-
-  for(var i=0;i<peers.length;i++){
-    var p=peers[i]; if(!p.alive) continue;
-    if(_now-(p.joinTs||0)<1500) continue;
-    var pid=p.remoteId||'';
-    var px=(p.targetX!=null)?p.targetX:p.x, py=(p.targetY!=null)?p.targetY:p.y;
-    var pR=snakeRadius(p);
-    var pBodyR=snakeBodyR(p);
-    var h2hCombR=(myR+pR)*1.07;
-    var bodyCombR2=(myBodyR+pBodyR)*(myBodyR+pBodyR);
-    var headGap=dst(player.x,player.y,px,py);
-
-    // Head proximity: static overlap OR swept (catches boosting tunnels)
-    var aPrev=player.segs[0]||{x:player.x,y:player.y};
-    var _headContact=(headGap<h2hCombR)||segHitsCircle(aPrev,{x:player.x,y:player.y},{x:px,y:py},h2hCombR);
-    if(_headContact){
-      _h2hHandled[pid]=true; // mark so reverse-check skips this peer this frame
-      var _pCos=Math.cos(p.angle), _pSin=Math.sin(p.angle);
-      // MS 75° facing gate: normalize dot product, threshold = cos(75°) = 0.2588
-      var _myDot=((px-player.x)*_myCos+(py-player.y)*_mySin)/(headGap||1);
-      var _theirDot=((player.x-px)*_pCos+(player.y-py)*_pSin)/(headGap||1);
-      var _iFaceThem=_myDot>0.2588;
-      var _theyFaceMe=_theirDot>0.2588;
-
-      // Referee owns EVERY head contact — not just facing ones. Exactly one deterministic
-      // outcome per pair (both clients agree who the referee is), so two snakes can never
-      // die together in a head-to-head. This is the key fix for "both snakes dying".
-      {
-        var _h2=_hoHash(myId,pid);
-        var _iAmRef=(_h2===0)===(myId<pid);
-        if(!_iAmRef){ continue; } // non-ref ALWAYS waits for the ref's kill broadcast
-
-        // Winner: bigger wins; equal size → rammer (the one facing) loses; dead tie → ping.
-        var _iWin;
-        if(myR>pR)      _iWin=true;
-        else if(myR<pR) _iWin=false;
-        else if(_iFaceThem!==_theyFaceMe) _iWin=!_iFaceThem;
-        else _iWin=((_pingEma||999)<=((p.ping||999)));
-
-        if(!_iWin){
-          var _msg=(_iFaceThem&&_theyFaceMe)?'Eliminated by '+p.name+' (H2H — larger snake wins)':'Eliminated by '+p.name;
-          killPlayer(_msg,pid); return;
-        } else {
-          if(_sentKillTs[pid]&&_now-_sentKillTs[pid]<2000){ continue; }
-          _sentKillTs[pid]=_now;
-          var _hoRkp=_remoteMap[pid];
-          if(_hoRkp&&_hoRkp.alive){
-            var _hoSegs=_hoRkp.segs.slice(),_hoLen=_hoRkp.length;
-            _hoRkp.alive=false; _hoRkp.segs=[]; if(_hoRkp.th)_hoRkp.th=[];
-            _processedDies[pid]=true; _recentLeaves[pid]=_now;
-            if(gameRunning)_scatterDeathFood(_hoSegs,_hoLen);
-            _killerScatteredFor[pid]=Date.now();
-            peers=peers.filter(function(q){return q!==_hoRkp;});
-            delete _remoteMap[pid];
-            if(gameRunning)_updateArenaSize();
-            myKills++; boostE=Math.min(100,boostE+50);
-            var _kMsg=(_iFaceThem&&_theyFaceMe)?'🗡 '+(p.name||'Player')+' — outgunned in H2H!':'🗡 '+(p.name||'Player')+' ran into you!';
-            kFeed(_kMsg,'kill');
-          }
-          if(_ws&&_ws.readyState===WebSocket.OPEN){
-            try{_ws.send(JSON.stringify({type:'pos',clientId:_wsClientId,data:{
-              x:+(player.x.toFixed(1)),y:+(player.y.toFixed(1)),a:+(player.angle.toFixed(3)),
-              l:player.length||10,v:true,kill_target:pid,killer:_wsClientId
-            }}));}catch(_re){}
-          }
-          continue;
-        }
-      }
-      // Every path in the head-contact block above returns or continues, so execution
-      // never reaches the body check below for a peer whose head is touching mine.
-    }
-
-    // My head vs their body. Skip segments that lie within THEIR head radius — those are
-    // the head/neck region (governed by the referee above), not the body. Counting them
-    // here is exactly what let an H2H double-kill slip through the body check.
-    var _pMaxSeg=segmentsForSize(p.length||40);
-    for(var j=3;j<p.segs.length&&j<_pMaxSeg;j++){
-      var bs=p.segs[j]; if(!bs) break;
-      var _nhx=bs.x-px, _nhy=bs.y-py;
-      if(_nhx*_nhx+_nhy*_nhy < pR*pR) continue; // head zone — referee's job, not a body kill
-      var _dx=player.x-bs.x, _dy=player.y-bs.y;
-      if(_dx*_dx+_dy*_dy < bodyCombR2){
-        killPlayer('Eliminated by '+p.name,pid); return;
-      }
-    }
-  }
-
-  // Reverse check: their head vs MY body — 360°, all segments (MS style)
-  for(var ri=0;ri<peers.length;ri++){
-    var rp2=peers[ri]; if(!rp2.alive) continue;
-    if(_now-(rp2.joinTs||0)<1500) continue;
-    var rpid=rp2.remoteId||'';
-    if(_h2hHandled[rpid]) continue; // head contact this frame — H2H forward-pass owns this
-    if(_sentKillTs[rpid]&&_now-_sentKillTs[rpid]<2000) continue;
-    var rpx=(rp2.targetX!=null)?rp2.targetX:rp2.x, rpy=(rp2.targetY!=null)?rp2.targetY:rp2.y;
-    var rpR=snakeRadius(rp2);
-    var rCombR=snakeBodyR(rp2)+myBodyR, rCombR2=rCombR*rCombR;
-    if(dst(player.x,player.y,rpx,rpy)<(rpR+myR)*1.07) continue; // H2H handled above
-    var _myMaxSeg=segmentsForSize(player.length||40);
-    for(var rk=3;rk<player.segs.length&&rk<_myMaxSeg;rk++){
-      var rsa=player.segs[rk]; if(!rsa) break;
-      var _mhx=rsa.x-player.x, _mhy=rsa.y-player.y;
-      if(_mhx*_mhx+_mhy*_mhy < myR*myR) continue; // my head zone — not a body kill
-      var _rdx=rpx-rsa.x, _rdy=rpy-rsa.y;
-      if(_rdx*_rdx+_rdy*_rdy < rCombR2){
-        _sentKillTs[rpid]=_now;
-        var _rkp=_remoteMap[rpid];
-        if(_rkp&&_rkp.alive){
-          var _rshSegs=_rkp.segs.slice(),_rshLen=_rkp.length;
-          _rkp.alive=false; _rkp.segs=[]; if(_rkp.th)_rkp.th=[];
-          _processedDies[rpid]=true; _recentLeaves[rpid]=_now;
-          if(gameRunning)_scatterDeathFood(_rshSegs,_rshLen);
-          _killerScatteredFor[rpid]=Date.now();
-          peers=peers.filter(function(q){return q!==_rkp;});
-          delete _remoteMap[rpid];
-          if(gameRunning)_updateArenaSize();
-          myKills++; boostE=Math.min(100,boostE+50);
-          kFeed((rp2.name||'Player')+' ran into you!','kill');
-          if(activeTier!=='free'&&TIERS[activeTier]&&TIERS[activeTier].usd>0)
-            kFeed('💰 $'+TIERS[activeTier].usd+' drop appeared! Grab it!','kill');
-        }
-        if(_ws&&_ws.readyState===WebSocket.OPEN){
-          try{_ws.send(JSON.stringify({type:'pos',clientId:_wsClientId,data:{
-            x:+(player.x.toFixed(1)),y:+(player.y.toFixed(1)),a:+(player.angle.toFixed(3)),
-            l:player.length||10,v:true,kill_target:rpid,killer:_wsClientId
-          }}));}catch(_re){}
-        }
-        break;
-      }
-    }
-  }
-
-  var pdx=player.x-WORLD/2, pdy=player.y-WORLD/2;
-  if(Math.sqrt(pdx*pdx+pdy*pdy)>WORLD_R-10) killPlayer('Hit the boundary',null);
+  // legacy client-side collision fully removed — deaths are 100% server-authoritative;
+  // practice-lobby bots use _ctKillCheck(). This stub stays only so the game loop call is a no-op.
 }
 
 function _doDropTransfer(claimerPubkey, solAmt){
@@ -6614,7 +6543,7 @@ function draw(){
     var _Z=CAM_ZOOM;
     var _dW2X=function(wx){return(wx-player.x)*_Z+_dcw;};
     var _dW2Y=function(wy){return(wy-player.y)*_Z+_dch;};
-    var _myRw=snakeRadius(player);
+    var _myRw=headHitR(player.length);     // unified head hitbox radius (world units)
     var _myRs=_myRw*_Z;                    // screen-px radius at current zoom
     var _hx=_dcw, _hy=_dch;               // head always at screen center
 
@@ -6623,7 +6552,7 @@ function draw(){
     if(_mSegs.length>2 && _mSegs[1]){
       ctx.globalAlpha=0.35; ctx.strokeStyle='#14F195';
       ctx.shadowColor='#14F195'; ctx.shadowBlur=6;
-      ctx.lineWidth=snakeBodyR(player)*_Z*2; ctx.lineJoin='round'; ctx.lineCap='round';
+      ctx.lineWidth=bodyHitR(player.length)*_Z*2; ctx.lineJoin='round'; ctx.lineCap='round';
       var _myDbgMax=segmentsForSize(player.length||40);
       ctx.beginPath(); ctx.moveTo(_dW2X(_mSegs[1].x),_dW2Y(_mSegs[1].y));
       for(var _mi=2;_mi<_mSegs.length&&_mi<_myDbgMax;_mi++){
@@ -6650,7 +6579,7 @@ function draw(){
     for(var _dpi=0;_dpi<peers.length;_dpi++){
       var _dp=peers[_dpi]; if(!_dp.alive) continue;
       var _dpx=(_dp.targetX!=null)?_dp.targetX:_dp.x, _dpy=(_dp.targetY!=null)?_dp.targetY:_dp.y;
-      var _dpRw=snakeRadius(_dp), _dpRs=_dpRw*_Z;  // screen-px radius
+      var _dpRw=headHitR(_dp.length), _dpRs=_dpRw*_Z;  // unified head hitbox radius
       var _prot=_dNow-(_dp.joinTs||0)<1500;
       var _pc=_prot?'#FFD700':'#FF4040';
       var _phx=_dW2X(_dpx), _phy=_dW2Y(_dpy);
@@ -6660,7 +6589,7 @@ function draw(){
       if(_dps.length>2 && _dps[1]){
         ctx.globalAlpha=0.35; ctx.strokeStyle=_pc;
         ctx.shadowColor=_pc; ctx.shadowBlur=6;
-        ctx.lineWidth=snakeBodyR(_dp)*_Z*2; ctx.lineJoin='round'; ctx.lineCap='round';
+        ctx.lineWidth=bodyHitR(_dp.length)*_Z*2; ctx.lineJoin='round'; ctx.lineCap='round';
         var _dpDbgMax=segmentsForSize(_dp.length||40);
         ctx.beginPath(); ctx.moveTo(_dW2X(_dps[1].x),_dW2Y(_dps[1].y));
         for(var _dj=2;_dj<_dps.length&&_dj<_dpDbgMax;_dj++){
@@ -6670,10 +6599,10 @@ function draw(){
         ctx.stroke();
         ctx.shadowBlur=0;
       }
-      // H2H threshold ring — MS formula: (headR1+headR2)*1.07 in screen px
+      // H2H threshold ring — unified: headHitR(me) + headHitR(peer), in screen px
       ctx.globalAlpha=0.4; ctx.strokeStyle='#FF8800'; ctx.lineWidth=1.5;
       ctx.setLineDash([5,3]);
-      ctx.beginPath(); ctx.arc(_phx,_phy,(_myRw+_dpRw)*1.07*_Z,0,Math.PI*2); ctx.stroke();
+      ctx.beginPath(); ctx.arc(_phx,_phy,(_myRw+_dpRw)*_Z,0,Math.PI*2); ctx.stroke();
       ctx.setLineDash([]);
       // Peer head circle — glow
       ctx.shadowColor=_pc; ctx.shadowBlur=10;
