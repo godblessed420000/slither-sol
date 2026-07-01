@@ -1485,7 +1485,7 @@ canvas{display:block;width:100%;height:100%;}
 // slither-sol.com is served by Vercel, which deploys this file verbatim on push.
 // This is the number players actually see. (The old GitHub Pages workflow that
 // auto-stamped V<VERSION> deployed to a dead host and is now disabled.)
-var GAME_BUILD = 'V397';
+var GAME_BUILD = 'V398';
 
 var PRIVY_APP_ID          = 'client-WY6aEf1eS4reRDrBq7ghh8arEiMaKSj1Vk37ZG8CAawEF';
 var HOUSE_WALLET_ADDRESS  = '2QnrdhxXYt8ythhGYHDz6MtTZE1z2bYvbss8z3ZGj2uJ';
@@ -3647,6 +3647,7 @@ function _wsHandleMsg(msg, fromAbly) {
       for (var _sci = 0; _sci < d.snakes.length; _sci++) {
         var _sc = d.snakes[_sci];
         if (_sc.id !== _wsClientId) continue;
+        if (_DBG) _dbgSelfSrv = { x:_sc.x, y:_sc.y, a:_sc.a }; // instrumentation only
         // Server says our snake is dead — don't pull the live client toward a dead ghost.
         // The rejoin flow will replace the snake with a fresh spawn.
         if (!_sc.alive) break;
@@ -3732,6 +3733,7 @@ function _wsHandleMsg(msg, fromAbly) {
           _prp.boosting = !!_psn.b;
           // Drive the physics sim: client turns toward this angle each frame
           _prp.targetAngle = _psn.a;
+          if (_DBG) { _prp._dbgSrvX = _psn.x; _prp._dbgSrvY = _psn.y; if (_psn.q) _prp._dbgPath = _psn.q; } // instrumentation only
           if (_psn.q && _psn.q.length >= 4) {
             // AUTHORITATIVE BODY PATH present (~every 3rd tick): the client renders the
             // EXACT segments the server collides against — no more locally-guessed trail.
@@ -4698,6 +4700,13 @@ var _lastPosSend=0; // last position-publish timestamp (rAF-driven, ~60fps)
 var _preRejoinAvgSegs=0; // snapshot of peer avg segs taken just before _wsJoin() clears peers[]
 var _boostExhaustedUntil=0; // performance.now() timestamp when the 3s exhaustion penalty expires
 var _stateBuffer=[];   // server state snapshots [{t, snakes:{id:data}, world}] for interpolation
+// ── Networking instrumentation (OFF by default; enable only with ?debug=1 in the URL) ──
+// No real player ever navigates with this param, so it stays invisible in production —
+// it exists solely to MEASURE, with runtime evidence, the gap between the authoritative
+// server geometry and what the client renders. See _dbgOverlay().
+var _DBG = /[?&]debug=1/.test(location.search);
+var _dbgSelfSrv = null; // last authoritative head {x,y,a} the server reported for US
+var _dbgFrame = 0;      // throttle console logging
 var _serverSpawn=null; // spawn position provided by server in 'start' message
 var _serverFood=null;  // initial food list from server 'start' message
 var _INTERP_DELAY=100; // ms behind real-time to render remote snakes (absorbs network jitter)
@@ -6690,6 +6699,61 @@ function draw(){
 
   if(_elCashoutQhint){ var _qh=qDown&&cashingOut?'Cashing out... '+Math.round(Math.min((performance.now()-qStart)/CASHOUT_MS*100,100))+'%':'Hold Q to cashout'; if(_qh!==_elCashoutQhint._last){ _elCashoutQhint.textContent=_qh; _elCashoutQhint._last=_qh; } }
 
+  if(_DBG && gameRunning) _dbgOverlay();
+}
+
+// Instrumentation overlay (ONLY when ?debug=1). Visually compares the authoritative
+// SERVER geometry (what collision uses) against what the client RENDERS, and prints the
+// measured error. This is the runtime evidence layer — it changes no gameplay state.
+//   red dot   = server head of YOU        green ring = your rendered head
+//   red line  = your server↔render error (this is how far "where you die" is from "where you look")
+//   cyan dots = a peer's authoritative collision body (server segs)
+//   magenta   = a peer's server head
+function _dbgOverlay(){
+  if(!player) return;
+  var Z=CAM_ZOOM, cw=gc.width/2, ch=gc.height/2, HW=WORLD*0.5;
+  function W2S(wx,wy){
+    var dx=wx-camX, dy=wy-camY;
+    if(dx> HW)dx-=WORLD; else if(dx<-HW)dx+=WORLD;
+    if(dy> HW)dy-=WORLD; else if(dy<-HW)dy+=WORLD;
+    return {x:dx*Z+cw, y:dy*Z+ch};
+  }
+  ctx.save(); ctx.setTransform(1,0,0,1,0,0);
+  // ── peers: authoritative collision body + server head ──
+  var _np=0;
+  for(var i=0;i<peers.length;i++){
+    var p=peers[i]; if(!p.isRemote||!p.alive) continue; _np++;
+    if(p._dbgPath){
+      ctx.fillStyle='rgba(0,229,255,0.85)';
+      for(var k=0;k+1<p._dbgPath.length;k+=2){ var s=W2S(p._dbgPath[k],p._dbgPath[k+1]); ctx.beginPath(); ctx.arc(s.x,s.y,2.2,0,6.283); ctx.fill(); }
+    }
+    if(p._dbgSrvX!=null){ var hs=W2S(p._dbgSrvX,p._dbgSrvY); ctx.strokeStyle='#ff2ee6'; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(hs.x,hs.y,7,0,6.283); ctx.stroke(); }
+  }
+  // ── local player: server head vs rendered head + measured error ──
+  var selfErr=0;
+  if(_dbgSelfSrv){
+    var ex=_dbgSelfSrv.x-player.x, ey=_dbgSelfSrv.y-player.y;
+    if(ex> HW)ex-=WORLD; else if(ex<-HW)ex+=WORLD;
+    if(ey> HW)ey-=WORLD; else if(ey<-HW)ey+=WORLD;
+    selfErr=Math.sqrt(ex*ex+ey*ey);
+    var sp=W2S(_dbgSelfSrv.x,_dbgSelfSrv.y), rp=W2S(player.x,player.y);
+    ctx.strokeStyle='#ff3b3b'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(rp.x,rp.y); ctx.lineTo(sp.x,sp.y); ctx.stroke();
+    ctx.fillStyle='#ff3b3b'; ctx.beginPath(); ctx.arc(sp.x,sp.y,6,0,6.283); ctx.fill();
+    ctx.strokeStyle='#39ff14'; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(rp.x,rp.y,8,0,6.283); ctx.stroke();
+  }
+  // ── text panel ──
+  var lines=[
+    'DEBUG ?debug=1   ping='+Math.round(_pingEma||0)+'ms',
+    'YOU: server↔render Δ = '+selfErr.toFixed(1)+' wu'+(boosting?'   [BOOST]':''),
+    'reconcile deadzone = '+(boosting?120:50)+' wu   (Δ below this is NEVER corrected)',
+    'peers='+_np+'   cyan=collision body  magenta=peer head  red=your server head  green=your rendered head'
+  ];
+  ctx.font='bold 12px Share Tech Mono'; ctx.textAlign='left'; ctx.textBaseline='top';
+  ctx.fillStyle='rgba(0,0,0,0.72)'; ctx.fillRect(8,40,470,lines.length*16+10);
+  ctx.fillStyle=(selfErr>25?'#ff5555':'#8effa6');
+  for(var li=0;li<lines.length;li++){ if(li===1) ctx.fillStyle=(selfErr>25?'#ff5555':'#8effa6'); else ctx.fillStyle='#ddd'; ctx.fillText(lines[li],14,46+li*16); }
+  ctx.restore();
+  if((++_dbgFrame%30)===0) console.log('[DBG] ping='+Math.round(_pingEma||0)+'ms selfΔ='+selfErr.toFixed(1)+'wu boost='+boosting+' peers='+_np);
 }
 
 // ── Snake renderer — drawn ENTIRELY in screen pixels ──
