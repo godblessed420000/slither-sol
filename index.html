@@ -157,14 +157,12 @@ canvas{display:block;width:100%;height:100%;}
 
 /* When photo is loaded: full-bleed cover + neon color-grade gradient stacked on top */
 #menuBgImg.hasimg{
-   background-color:#06040c;
-   background-image:
-     linear-gradient(180deg,rgba(4,2,20,.08) 0%,transparent 30%,transparent 72%,rgba(4,2,20,.18) 100%),
-     var(--menu-bg-url);
+   background-color:transparent;
+   background-image:var(--menu-bg-url);
    background-size:cover;
    background-repeat:no-repeat;
    background-position:center center;
-   filter:brightness(1.18) contrast(1.06) saturate(1.16);
+   filter:brightness(1.50) contrast(1.02) saturate(1.10);
 }
 @keyframes menuKenBurns{
   0%{transform:scale(1.00) translateY(0) translateX(0);}
@@ -1490,7 +1488,7 @@ canvas{display:block;width:100%;height:100%;}
 // slither-sol.com is served by Vercel, which deploys this file verbatim on push.
 // This is the number players actually see. (The old GitHub Pages workflow that
 // auto-stamped V<VERSION> deployed to a dead host and is now disabled.)
-var GAME_BUILD = 'V387';
+var GAME_BUILD = 'V388';
 
 var PRIVY_APP_ID          = 'client-WY6aEf1eS4reRDrBq7ghh8arEiMaKSj1Vk37ZG8CAawEF';
 var HOUSE_WALLET_ADDRESS  = '2QnrdhxXYt8ythhGYHDz6MtTZE1z2bYvbss8z3ZGj2uJ';
