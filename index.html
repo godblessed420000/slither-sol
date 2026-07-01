@@ -1485,7 +1485,7 @@ canvas{display:block;width:100%;height:100%;}
 // slither-sol.com is served by Vercel, which deploys this file verbatim on push.
 // This is the number players actually see. (The old GitHub Pages workflow that
 // auto-stamped V<VERSION> deployed to a dead host and is now disabled.)
-var GAME_BUILD = 'V394';
+var GAME_BUILD = 'V395';
 
 var PRIVY_APP_ID          = 'client-WY6aEf1eS4reRDrBq7ghh8arEiMaKSj1Vk37ZG8CAawEF';
 var HOUSE_WALLET_ADDRESS  = '2QnrdhxXYt8ythhGYHDz6MtTZE1z2bYvbss8z3ZGj2uJ';
@@ -3744,6 +3744,30 @@ function _wsHandleMsg(msg, fromAbly) {
           }
         }
       }
+
+      // ── Snapshot reconciliation (single source of truth) ──────────────────
+      // The server includes EVERY snake it tracks in EVERY state snapshot. So any
+      // remote peer we hold that is absent from this snapshot no longer exists on
+      // the server — it is a phantom (e.g. a stale peer fabricated by the legacy
+      // pos-relay path, or one whose leave/despawn packet was lost). Remove it so
+      // the client can never (a) render a ghost snake or (b) collide against a
+      // snake the server no longer has. A short grace (400ms) absorbs the tiny
+      // window between a genuine local spawn and its first authoritative snapshot.
+      var _seen = {};
+      for (var _ri = 0; _ri < d.snakes.length; _ri++) _seen[d.snakes[_ri].id] = 1;
+      var _recNow = Date.now();
+      for (var _rk = peers.length - 1; _rk >= 0; _rk--) {
+        var _rpk = peers[_rk];
+        if (!_rpk.isRemote) continue;
+        var _rid = _rpk.remoteId;
+        if (_seen[_rid]) continue;                       // present in snapshot — keep
+        if (_recNow - (_rpk.joinTs || 0) < 400) continue; // just spawned — grace
+        // Absent from authoritative state → despawn fully (no stale refs left)
+        _rpk.alive = false; _rpk.segs = [];
+        if (_rid) { delete _remoteMap[_rid]; _recentLeaves[_rid] = _recNow; }
+        peers.splice(_rk, 1);
+        if (gameRunning) _updateArenaSize();
+      }
     }
 
     // Handle server die/eat events
@@ -3880,41 +3904,15 @@ function _wsHandleMsg(msg, fromAbly) {
     // Rendering is open to all pos senders — blocking here caused players to be
     // permanently invisible whenever the Ably verification handshake had any issue.
     var rp = _remoteMap[cid];
-    // If this is a death pos and the peer is already gone (die message arrived first),
-    // do NOT recreate a ghost peer — just drop the message.
-    if (d.v === false && !rp) return;
-    // Block late pos messages from recreating a peer that just left or died
-    if (!rp && _recentLeaves[cid] && Date.now() - _recentLeaves[cid] < 5000) return;
-    if (!rp) {
-      var lobby = _lobbyPeers[cid] || {};
-      var usedColors = peers.map(function(p){ return p.color; });
-      var col = d.color || lobby.color || PC.find(function(c){ return usedColors.indexOf(c)<0; }) || PC[1];
-      var initLen = d.l || 100; // MS START_SIZE=100 default
-      delete _processedDies[cid]; // respawn — reset so their new death is tracked fresh
-      delete _recentLeaves[cid];  // allow this new session's pos messages through
-      var _rpJoinTs = Date.now();
-      rp = {
-        x: d.x, y: d.y, angle: d.a||0,
-        targetX: d.x, targetY: d.y, targetAngle: d.a||0,
-        segs: [], speed: BASE_SPEED,
-        length: initLen, score: d.s||0,
-        color: col, name: d.n || lobby.n || ('P_'+cid.slice(0,4)),
-        skin: d.sk || 'default',
-        isMe: false, isRemote: true, alive: true,
-        remoteId: cid, joinTs: _rpJoinTs,
-        velX: 0, velY: 0, lastT: performance.now()
-      };
-      rp.headR = snakeRadius(rp);
-      var initSegs = segmentsForSize(initLen||100);
-      // Spread segments backward at POINT_DIST spacing so snake looks correct immediately
-      var _ia = d.a || 0;
-      for (var i=0; i<initSegs; i++) rp.segs.push({x: d.x - Math.cos(_ia)*i*POINT_DIST, y: d.y - Math.sin(_ia)*i*POINT_DIST});
-      _remoteMap[cid] = rp;
-      peers.push(rp);
-      _updateArenaSize(); // world grows when a new player enters
-      var _rpName = rp.name;
-      setTimeout(function(){ playJoinDing(); kFeed(_rpName + ' is in the game!'); }, 0);
-    } else {
+    // SERVER-AUTHORITATIVE: `state` snapshots are the SINGLE source of truth for which
+    // snakes exist. The `pos` relay must NEVER create a peer — doing so was a second,
+    // race-prone creation path with different guards than the snapshot path, and was the
+    // root cause of duplicate/ghost/half-created snakes and "server tracks them but the
+    // client doesn't." A pos for an unknown peer is dropped; the authoritative snapshot
+    // (sent every tick, containing every snake) will create it. We only UPDATE peers that
+    // the snapshot has already created — to carry money-drop / kill-credit side effects.
+    if (!rp) return;
+    {
       var now2 = performance.now();
       // Teleport / rejoin detection: if position jumped >400px since last known pos,
       // the player respawned. Clear old segs immediately so the stale body doesn't
