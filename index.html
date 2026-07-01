@@ -1485,7 +1485,7 @@ canvas{display:block;width:100%;height:100%;}
 // slither-sol.com is served by Vercel, which deploys this file verbatim on push.
 // This is the number players actually see. (The old GitHub Pages workflow that
 // auto-stamped V<VERSION> deployed to a dead host and is now disabled.)
-var GAME_BUILD = 'V400';
+var GAME_BUILD = 'V401';
 
 var PRIVY_APP_ID          = 'client-WY6aEf1eS4reRDrBq7ghh8arEiMaKSj1Vk37ZG8CAawEF';
 var HOUSE_WALLET_ADDRESS  = '2QnrdhxXYt8ythhGYHDz6MtTZE1z2bYvbss8z3ZGj2uJ';
@@ -4707,9 +4707,17 @@ var _stateBuffer=[];   // server state snapshots [{t, snakes:{id:data}, world}] 
 // No real player ever navigates with this param, so it stays invisible in production —
 // it exists solely to MEASURE, with runtime evidence, the gap between the authoritative
 // server geometry and what the client renders. See _dbgOverlay().
-var _DBG = /[?&]debug=1/.test(location.search);
+// Enable via ?debug=1 in the URL, #debug in the hash, a saved localStorage flag, OR by
+// typing _dbgOn() in the console at any time (survives client-side URL changes / menus).
+var _DBG = /[?&]debug=1/.test(location.search) || /debug/.test(location.hash);
+try { if (localStorage.getItem('ss_dbg') === '1') _DBG = true; } catch(e) {}
 var _dbgSelfSrv = null; // last authoritative head {x,y,a} the server reported for US
 var _dbgFrame = 0;      // throttle console logging
+if (typeof window !== 'undefined') {
+  window._dbgOn  = function(){ _DBG = true;  try{localStorage.setItem('ss_dbg','1');}catch(e){} console.log('[DBG] ON — enter a game; stats print here every ~2s and the overlay shows top-left.'); return 'debug on'; };
+  window._dbgOff = function(){ _DBG = false; try{localStorage.removeItem('ss_dbg');}catch(e){} console.log('[DBG] OFF'); return 'debug off'; };
+  if (_DBG) console.log('[DBG] active on load. Enter a game to see stats. Toggle with _dbgOff()/_dbgOn().');
+}
 // Rolling divergence measurements (this game's own numbers — no external reference).
 // selfΔ = |rendered head − authoritative head| for YOU (Gap B: "die beside yourself").
 // bodyLead = |rendered head − authoritative head| for remote peers (Gap A: "die on old trail").
