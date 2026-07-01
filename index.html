@@ -1492,7 +1492,7 @@ canvas{display:block;width:100%;height:100%;}
 // slither-sol.com is served by Vercel, which deploys this file verbatim on push.
 // This is the number players actually see. (The old GitHub Pages workflow that
 // auto-stamped V<VERSION> deployed to a dead host and is now disabled.)
-var GAME_BUILD = 'V406';
+var GAME_BUILD = 'V407';
 
 var PRIVY_APP_ID          = 'client-WY6aEf1eS4reRDrBq7ghh8arEiMaKSj1Vk37ZG8CAawEF';
 var HOUSE_WALLET_ADDRESS  = '2QnrdhxXYt8ythhGYHDz6MtTZE1z2bYvbss8z3ZGj2uJ';
@@ -3647,6 +3647,7 @@ function _wsHandleMsg(msg, fromAbly) {
   if (type === 'state') {
     if (!_wsClientId && !_spectating) return;
     var _sNow = performance.now();
+    if (_PERF) { _perf.net.recv++; _perf.net.lastStateT = _sNow; } // profiler: recv rate + packet age
 
     // Update arena size
     if (d.world && Math.abs(d.world - _targetWorld) > 1) _targetWorld = d.world;
@@ -3682,6 +3683,7 @@ function _wsHandleMsg(msg, fromAbly) {
         if(_rdy >  _rWH) _rdy -= WORLD;
         if(_rdy < -_rWH) _rdy += WORLD;
         if (_rdx*_rdx + _rdy*_rdy > _recThresh) {
+          if (_PERF) { _perf.net.recN++; _perf.net.recSum += Math.sqrt(_rdx*_rdx + _rdy*_rdy); } // profiler: reconciliation freq + distance
           player.x += _rdx * 0.30; player.y += _rdy * 0.30;
         }
         // Ease toward the server length instead of hard-snapping. During boost the
@@ -4740,6 +4742,66 @@ if (typeof window !== 'undefined') {
 var _dbgStats = { selfMax:0, selfSum:0, selfN:0, selfBoostMax:0, leadMax:0, leadSum:0, leadN:0, offMax:0 };
 function _dbgReset(){ _dbgStats = { selfMax:0, selfSum:0, selfN:0, selfBoostMax:0, leadMax:0, leadSum:0, leadN:0, offMax:0 }; }
 if (typeof window !== 'undefined') window._dbgReset = _dbgReset; // call in console to reset a measurement run
+
+// ── PERFORMANCE PROFILER (gated: ?perf=1, #perf, saved flag, or _perfOn()) ────
+// ZERO cost unless enabled. When on, _perfInit() monkey-patches the loop's
+// subsystems (update / draw / drawS / _spawnTrail / drawMM) to record REAL
+// per-frame time, renders a HUD (top-right), and logs a line every ~2s. The
+// skipSnake / skipTrail toggles let you A/B-isolate GPU fill-rate cost that JS
+// timers cannot attribute (e.g. coiled-snake stroke overdraw during auto-circle):
+//   _perf.skipSnake = true   → stops drawing snakes; if FPS jumps, snake overdraw is the cost
+//   _perf.skipTrail = true   → stops spawning boost particles
+var _PERF = /[?&]perf=1/.test(location.search) || /perf/.test(location.hash);
+try { if (localStorage.getItem('ss_perf') === '1') _PERF = true; } catch(e) {}
+var _perf = { acc:{update:0,draw:0,drawS:0,trail:0,mm:0}, n:0, fps:0, lastRaf:0,
+              skipSnake:false, skipTrail:false, wrapped:false, _lastLog:0,
+              net:{ recv:0, send:0, recN:0, recSum:0, lastStateT:0, lastReport:0 } };
+function _perfInit(){
+  if(!_PERF || _perf.wrapped) return; _perf.wrapped=true;
+  var oUpd=update, oDraw=draw, oDS=drawS, oST=_spawnTrail, oMM=drawMM;
+  update=function(dt){ var t=performance.now(); var r=oUpd(dt); _perf.acc.update+=performance.now()-t; return r; };
+  drawS=function(s){ if(_perf.skipSnake) return; var t=performance.now(); var r=oDS(s); _perf.acc.drawS+=performance.now()-t; return r; };
+  _spawnTrail=function(s,b){ if(_perf.skipTrail) return; var t=performance.now(); var r=oST(s,b); _perf.acc.trail+=performance.now()-t; return r; };
+  drawMM=function(){ var t=performance.now(); var r=oMM(); _perf.acc.mm+=performance.now()-t; return r; };
+  draw=function(){ var now=performance.now();
+    if(_perf.lastRaf){ var iv=now-_perf.lastRaf; _perf.fps=_perf.fps?_perf.fps*0.9+(1000/iv)*0.1:1000/iv; }
+    _perf.lastRaf=now;
+    var t=performance.now(); var r=oDraw(); _perf.acc.draw+=performance.now()-t; _perf.n++; _perfReport(now); return r; };
+  if(!_perf.net.lastReport) _perf.net.lastReport=performance.now();
+  console.log('[PERF] on — HUD top-right. A/B: _perf.skipSnake=true / _perf.skipTrail=true. Stop: _perfOff().');
+}
+function _perfReport(now){
+  if(now - _perf.net.lastReport < 500) return;            // update HUD ~2Hz
+  var dt=(now-_perf.net.lastReport)/1000; _perf.net.lastReport=now;
+  var n=_perf.n||1, a=_perf.acc;
+  var other=Math.max(0, a.draw-a.drawS-a.trail-a.mm);     // grid + background + food + particles-render
+  var age=_perf.net.lastStateT?Math.round(now-_perf.net.lastStateT):0;
+  var recPS=Math.round(_perf.net.recv/dt), sendPS=Math.round(_perf.net.send/dt);
+  var recNPS=Math.round(_perf.net.recN/dt), recDist=_perf.net.recN?(_perf.net.recSum/_perf.net.recN):0;
+  var html='FPS '+Math.round(_perf.fps)+'  frame '+((a.update+a.draw)/n).toFixed(1)+'ms'
+    +'<br>update '+(a.update/n).toFixed(2)+'ms  draw '+(a.draw/n).toFixed(2)+'ms'
+    +'<br> ├ snakes '+(a.drawS/n).toFixed(2)+'  trail '+(a.trail/n).toFixed(2)
+    +'<br> └ grid+food '+(other/n).toFixed(2)+'  minimap '+(a.mm/n).toFixed(2)
+    +'<br>ping '+Math.round(_pingEma||0)+'ms  pktAge '+age+'ms'
+    +'<br>net recv '+recPS+'/s  send '+sendPS+'/s'
+    +'<br>reconc '+recNPS+'/s  avgDist '+recDist.toFixed(1)+'wu'
+    +'<br>parts '+(typeof parts!=='undefined'?parts.length:0)+'  peers '+(typeof peers!=='undefined'?peers.length:0)+'  segs '+((player&&player.segs)?player.segs.length:0)+'  zoom '+(CAM_ZOOM||0).toFixed(2)
+    +(_perf.skipSnake?'  [skipSnake]':'')+(_perf.skipTrail?'  [skipTrail]':'');
+  var el=document.getElementById('_perfHud');
+  if(!el){ el=document.createElement('div'); el.id='_perfHud';
+    el.style.cssText='position:fixed;top:8px;right:8px;z-index:99999;background:rgba(0,0,0,.74);color:#12f195;font:11px/1.4 monospace;padding:6px 9px;border:1px solid #0a6;border-radius:5px;white-space:nowrap;pointer-events:none';
+    document.body.appendChild(el); }
+  el.innerHTML=html;
+  if(now-_perf._lastLog>2000){ _perf._lastLog=now;
+    console.log('[PERF] fps='+Math.round(_perf.fps)+' draw='+(a.draw/n).toFixed(2)+'ms (snakes='+(a.drawS/n).toFixed(2)+' grid+food='+(other/n).toFixed(2)+' trail='+(a.trail/n).toFixed(2)+') update='+(a.update/n).toFixed(2)+' ping='+Math.round(_pingEma||0)+' recv='+recPS+'/s reconc='+recNPS+'/s dist='+recDist.toFixed(1)+' zoom='+(CAM_ZOOM||0).toFixed(2)); }
+  _perf.acc={update:0,draw:0,drawS:0,trail:0,mm:0}; _perf.n=0;
+  _perf.net.recv=0; _perf.net.send=0; _perf.net.recN=0; _perf.net.recSum=0;
+}
+if(typeof window!=='undefined'){
+  window._perfOn=function(){ _PERF=true; try{localStorage.setItem('ss_perf','1');}catch(e){} _perfInit(); return 'perf on — enter a game; HUD shows top-right'; };
+  window._perfOff=function(){ _PERF=false; try{localStorage.removeItem('ss_perf');}catch(e){} var el=document.getElementById('_perfHud'); if(el)el.remove(); return 'perf off'; };
+  window._perf=_perf;
+}
 var _serverSpawn=null; // spawn position provided by server in 'start' message
 var _serverFood=null;  // initial food list from server 'start' message
 var _INTERP_DELAY=100; // ms behind real-time to render remote snakes (absorbs network jitter)
@@ -5311,6 +5373,7 @@ function launchGame() {
     spawnFood(MAX_FOOD);
   }
   moneyDrops=[]; _claimedDrops={}; gameRunning=true; _cashoutInProgress=false;
+  if(_PERF) _perfInit(); // performance profiler — no-op unless ?perf=1
   _spectating=false; _specTargetId=null; var _shEl=document.getElementById('specHud'); if(_shEl) _shEl.style.display='none';
   _hideMobileBar(); // hide wallet bar during gameplay — HUD shows score/balance
   var _hee=document.getElementById('headerEmailEl'); if(_hee) _hee.style.display='none';
@@ -5744,6 +5807,7 @@ function loop(){
   // Send input to server every ~16ms (≈60fps) — server owns physics, client sends direction only
   if (gameRunning && player && player.alive && _ws && _ws.readyState === WebSocket.OPEN && _lt - _lastPosSend >= 16) {
     _lastPosSend = _lt;
+    if(_PERF) _perf.net.send++; // profiler: input send rate
     try {
       _ws.send(JSON.stringify({
         type:'input', clientId:_wsClientId, tier:_currentTier,
