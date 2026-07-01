@@ -162,7 +162,7 @@ canvas{display:block;width:100%;height:100%;}
    background-size:cover;
    background-repeat:no-repeat;
    background-position:center center;
-   filter:brightness(1.50) contrast(1.02) saturate(1.10);
+   filter:brightness(2.0) contrast(1.0) saturate(1.05);
 }
 @keyframes menuKenBurns{
   0%{transform:scale(1.00) translateY(0) translateX(0);}
@@ -171,7 +171,7 @@ canvas{display:block;width:100%;height:100%;}
 }
 
 /* ── Neon fog — three drifting radial blobs matching image 2 palette ─────── */
-#menuBgFog{position:absolute;inset:-20%;pointer-events:none;mix-blend-mode:screen;opacity:.20;
+#menuBgFog{position:absolute;inset:-20%;pointer-events:none;mix-blend-mode:screen;opacity:0;
   background:
    radial-gradient(50% 42% at 50% 48%, rgba(153,69,255,.52), transparent 68%),
    radial-gradient(42% 36% at 18% 62%, rgba(255,20,200,.44), transparent 66%),
@@ -184,9 +184,7 @@ canvas{display:block;width:100%;height:100%;}
 }
 
 /* ── Vignette with a slow neon hue pulse ───────────────────────────────────── */
-#menuBgVignette{position:absolute;inset:0;pointer-events:none;
-  background:radial-gradient(125% 110% at 50% 42%, transparent 55%, rgba(4,1,14,.14) 82%, rgba(4,1,14,.42) 100%);
-  animation:menuNeonPulse 7s ease-in-out infinite;}
+#menuBgVignette{position:absolute;inset:0;pointer-events:none;opacity:0;}
 @keyframes menuNeonPulse{
   0%,100%{opacity:.80;filter:hue-rotate(0deg);}
   33%{opacity:1;filter:hue-rotate(18deg);}
@@ -1488,7 +1486,7 @@ canvas{display:block;width:100%;height:100%;}
 // slither-sol.com is served by Vercel, which deploys this file verbatim on push.
 // This is the number players actually see. (The old GitHub Pages workflow that
 // auto-stamped V<VERSION> deployed to a dead host and is now disabled.)
-var GAME_BUILD = 'V388';
+var GAME_BUILD = 'V389';
 
 var PRIVY_APP_ID          = 'client-WY6aEf1eS4reRDrBq7ghh8arEiMaKSj1Vk37ZG8CAawEF';
 var HOUSE_WALLET_ADDRESS  = '2QnrdhxXYt8ythhGYHDz6MtTZE1z2bYvbss8z3ZGj2uJ';
