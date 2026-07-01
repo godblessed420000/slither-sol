@@ -1485,7 +1485,7 @@ canvas{display:block;width:100%;height:100%;}
 // slither-sol.com is served by Vercel, which deploys this file verbatim on push.
 // This is the number players actually see. (The old GitHub Pages workflow that
 // auto-stamped V<VERSION> deployed to a dead host and is now disabled.)
-var GAME_BUILD = 'V402';
+var GAME_BUILD = 'V403';
 
 var PRIVY_APP_ID          = 'client-WY6aEf1eS4reRDrBq7ghh8arEiMaKSj1Vk37ZG8CAawEF';
 var HOUSE_WALLET_ADDRESS  = '2QnrdhxXYt8ythhGYHDz6MtTZE1z2bYvbss8z3ZGj2uJ';
@@ -3652,12 +3652,12 @@ function _wsHandleMsg(msg, fromAbly) {
         // The rejoin flow will replace the snake with a fresh spawn.
         if (!_sc.alive) break;
         // Reconcile the client-predicted head toward the authoritative server head.
-        // The gap between them is exactly how far "where the server kills you" is from
-        // "where you're drawn". The old deadzone (120wu boost / 50wu) let the rendered
-        // head drift far enough to die "beside yourself". Tightened here so the rendered
-        // head tracks the authoritative head closely; a gentle continuous ease (0.18)
-        // absorbs the steady-state boost chord-vs-arc divergence without a hard snap.
-        var _recThresh = boosting ? 45 * 45 : 28 * 28;
+        // MEASURED (V402, ~48ms ping): selfΔ avg 24-38wu, boostMax 138wu — far above the
+        // ~26wu latency floor, i.e. the old 45wu deadzone + 0.18 ease could not catch the
+        // boost prediction. Tightened: tiny deadzone + stronger ease so the drawn head
+        // tracks the authoritative (collidable) head. The floor (~one-RTT of travel) is
+        // irreducible without server lag-comp; this drives Δ down toward that floor.
+        var _recThresh = boosting ? 14 * 14 : 12 * 12;
         var _rdx = _sc.x - player.x, _rdy = _sc.y - player.y;
         // Unwrap server correction across world boundary
         var _rWH = WORLD * 0.5;
@@ -3666,7 +3666,7 @@ function _wsHandleMsg(msg, fromAbly) {
         if(_rdy >  _rWH) _rdy -= WORLD;
         if(_rdy < -_rWH) _rdy += WORLD;
         if (_rdx*_rdx + _rdy*_rdy > _recThresh) {
-          player.x += _rdx * 0.18; player.y += _rdy * 0.18;
+          player.x += _rdx * 0.30; player.y += _rdy * 0.30;
         }
         // Ease toward the server length instead of hard-snapping. During boost the
         // fast mass-drain makes client/server length diverge by >5 almost every frame;
