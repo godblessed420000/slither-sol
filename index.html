@@ -1485,7 +1485,7 @@ canvas{display:block;width:100%;height:100%;}
 // slither-sol.com is served by Vercel, which deploys this file verbatim on push.
 // This is the number players actually see. (The old GitHub Pages workflow that
 // auto-stamped V<VERSION> deployed to a dead host and is now disabled.)
-var GAME_BUILD = 'V401';
+var GAME_BUILD = 'V402';
 
 var PRIVY_APP_ID          = 'client-WY6aEf1eS4reRDrBq7ghh8arEiMaKSj1Vk37ZG8CAawEF';
 var HOUSE_WALLET_ADDRESS  = '2QnrdhxXYt8ythhGYHDz6MtTZE1z2bYvbss8z3ZGj2uJ';
@@ -5422,6 +5422,8 @@ function onKD(e){
   if(e.key.toLowerCase()==='t'&&gameRunning&&player&&player.alive){ e.preventDefault(); _openChat(); }
   if((e.key.toLowerCase()==='y'||e.key.toLowerCase()==='e')&&gameRunning&&player&&player.alive){ e.preventDefault(); _autoCircle=!_autoCircle; toast(_autoCircle?'🔄 Auto-circle ON (Y/E)':'⬛ Auto-circle OFF','info'); }
   if(e.key.toLowerCase()==='h'){ _debugHitboxes=!_debugHitboxes; toast(_debugHitboxes?'[H] HITBOXES ON':'[H] HITBOXES OFF','info'); }
+  // Backtick (`) toggles the networking measurement overlay — no console needed.
+  if(e.key==='`'||e.code==='Backquote'){ e.preventDefault(); _DBG=!_DBG; try{ if(_DBG)localStorage.setItem('ss_dbg','1'); else localStorage.removeItem('ss_dbg'); }catch(_){} if(_DBG)_dbgReset(); toast(_DBG?'[`] NET DEBUG ON — read panel top-left':'[`] NET DEBUG OFF','info'); }
 }
 function onKU(e){
   if(e.code==='Space'){ boosting=false; return; }
