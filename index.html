@@ -1488,7 +1488,7 @@ canvas{display:block;width:100%;height:100%;}
 // ════════════════ CONFIG ════════════════
 // ── Build stamp — bump this string on every deploy ───────────────────────────
 // Shown live on the lobby screen. Check via DevTools → Console: GAME_BUILD
-var GAME_BUILD = 'V130';
+var GAME_BUILD = 'V131';
 
 var PRIVY_APP_ID          = 'client-WY6aEf1eS4reRDrBq7ghh8arEiMaKSj1Vk37ZG8CAawEF';
 var HOUSE_WALLET_ADDRESS  = '2QnrdhxXYt8ythhGYHDz6MtTZE1z2bYvbss8z3ZGj2uJ';
@@ -3660,7 +3660,16 @@ function _wsHandleMsg(msg, fromAbly) {
         if (_rdx*_rdx + _rdy*_rdy > _recThresh) {
           player.x += _rdx * 0.1; player.y += _rdy * 0.1;
         }
-        if (_sc.l && Math.abs(_sc.l - player.length) > 5) player.length = _sc.l;
+        // Ease toward the server length instead of hard-snapping. During boost the
+        // fast mass-drain makes client/server length diverge by >5 almost every frame;
+        // snapping re-trims the segment array and jumps the body width each time, which
+        // reads as stutter. A soft ease tracks the server without the visible jitter,
+        // and a hard set is kept only for large desyncs (>40 units).
+        if (_sc.l) {
+          var _ld = _sc.l - player.length;
+          if (Math.abs(_ld) > 40) player.length = _sc.l;
+          else if (Math.abs(_ld) > 5) player.length += _ld * 0.25;
+        }
         break;
       }
     }
@@ -6592,12 +6601,16 @@ function draw(){
 function _spawnTrail(s, isBoosting){
   // Particles are sub-pixel at low zoom and flood the parts[] pool when many snakes are visible
   if(CAM_ZOOM < 0.5) return;
-  if(parts.length > 350) return; // hard cap — prevents pool growing unbounded during busy spectate
+  if(parts.length > 220) return; // hard cap — prevents pool growing unbounded during busy spectate/boost
   if(!s.segs||s.segs.length<3) return;
   var cfg=_SKIN_CFG[s.skin||'default']||_SKIN_CFG['default'];
   var trail=isBoosting?cfg.boost:cfg.idle;
   if(!trail) return;
-  if(!isBoosting&&Math.random()>0.5) return;
+  // Idle spawns on 50% of frames; boost spawned every frame, which pins the particle
+  // pool at its cap and keeps per-frame update+render cost maxed the whole time you
+  // hold boost. Skip ~40% of boost frames — the trail still looks continuous.
+  if(isBoosting){ if(Math.random()<0.40) return; }
+  else if(Math.random()>0.5) return;
   for(var t=0;t<trail.cnt;t++){
     var si=s.segs.length-1-Math.floor(Math.random()*Math.min(6,s.segs.length-1));
     var seg=s.segs[si];
@@ -7929,7 +7942,7 @@ function drawMM(){
   mctx.restore();
 }
 
-function spawnPt(x,y,color){ if(parts.length>350) return; for(var i=0;i<6;i++) parts.push({x:x,y:y,vx:(Math.random()-.5)*5,vy:(Math.random()-.5)*5,r:2+Math.random()*2,color:color,life:22+Math.random()*12,max:34}); }
+function spawnPt(x,y,color){ if(parts.length>220) return; for(var i=0;i<6;i++) parts.push({x:x,y:y,vx:(Math.random()-.5)*5,vy:(Math.random()-.5)*5,r:2+Math.random()*2,color:color,life:22+Math.random()*12,max:34}); }
 
 function updateLB(){
   if(!gameRunning) return;
