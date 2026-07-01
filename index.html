@@ -1485,7 +1485,7 @@ canvas{display:block;width:100%;height:100%;}
 // slither-sol.com is served by Vercel, which deploys this file verbatim on push.
 // This is the number players actually see. (The old GitHub Pages workflow that
 // auto-stamped V<VERSION> deployed to a dead host and is now disabled.)
-var GAME_BUILD = 'V396';
+var GAME_BUILD = 'V397';
 
 var PRIVY_APP_ID          = 'client-WY6aEf1eS4reRDrBq7ghh8arEiMaKSj1Vk37ZG8CAawEF';
 var HOUSE_WALLET_ADDRESS  = '2QnrdhxXYt8ythhGYHDz6MtTZE1z2bYvbss8z3ZGj2uJ';
@@ -3715,9 +3715,14 @@ function _wsHandleMsg(msg, fromAbly) {
             remoteId:_psn.id, joinTs:Date.now(),
             headR:snakeRadius(_pil), lastT:_sNow,
             _segAccum:0 };
-          var _pis = segmentsForSize(_pil);
-          for (var _pii=0; _pii<_pis; _pii++)
-            _prp.segs.push({x:_psn.x-Math.cos(_pia)*_pii*POINT_DIST, y:_psn.y-Math.sin(_pia)*_pii*POINT_DIST});
+          if (_psn.q && _psn.q.length >= 4) {
+            // Authoritative path available on first sight — build the exact server body.
+            _prp.segs = _segsFromPath(_psn.q, _psn.x, _psn.y);
+          } else {
+            var _pis = segmentsForSize(_pil);
+            for (var _pii=0; _pii<_pis; _pii++)
+              _prp.segs.push({x:_psn.x-Math.cos(_pia)*_pii*POINT_DIST, y:_psn.y-Math.sin(_pia)*_pii*POINT_DIST});
+          }
           _remoteMap[_psn.id] = _prp; peers.push(_prp); _updateArenaSize();
           var _prnm = _prp.name;
           setTimeout(function(){ playJoinDing(); kFeed(_prnm + ' is in the game!'); }, 0);
@@ -3727,21 +3732,31 @@ function _wsHandleMsg(msg, fromAbly) {
           _prp.boosting = !!_psn.b;
           // Drive the physics sim: client turns toward this angle each frame
           _prp.targetAngle = _psn.a;
-          // Soft position correction — unwrap server pos relative to client prediction
-          // first (toroidal world), then nudge. Hard snap only on teleport/respawn.
-          var _cdx=_psn.x-_prp.x, _cdy=_psn.y-_prp.y;
-          var _WH2=WORLD*0.5;
-          if(_cdx >  _WH2) _cdx -= WORLD;
-          if(_cdx < -_WH2) _cdx += WORLD;
-          if(_cdy >  _WH2) _cdy -= WORLD;
-          if(_cdy < -_WH2) _cdy += WORLD;
-          var _cd2=_cdx*_cdx+_cdy*_cdy;
-          if (_cd2 > 160000) { // >400 wu: respawn/teleport — hard snap
-            _prp.x=_psn.x; _prp.y=_psn.y; _prp.angle=_psn.a; _prp.segs=[]; _prp._segAccum=0;
-            var _ris=segmentsForSize(_psn.l||100);
-            for(var _rii=0;_rii<_ris;_rii++) _prp.segs.push({x:_psn.x-Math.cos(_psn.a)*_rii*POINT_DIST,y:_psn.y-Math.sin(_psn.a)*_rii*POINT_DIST});
-          } else if (_cd2 > 9) { // >3 wu: pull client toward server position
-            _prp.x += _cdx * 0.30; _prp.y += _cdy * 0.30;
+          if (_psn.q && _psn.q.length >= 4) {
+            // AUTHORITATIVE BODY PATH present (~every 3rd tick): the client renders the
+            // EXACT segments the server collides against — no more locally-guessed trail.
+            // Hard-align the head to the authoritative position/angle and rebuild the body
+            // from the server path (absolute world coords). Between path ticks the render
+            // loop predicts forward for smoothness; the next path tick resyncs.
+            _prp.x = _psn.x; _prp.y = _psn.y; _prp.angle = _psn.a; _prp._segAccum = 0;
+            _prp.segs = _segsFromPath(_psn.q, _psn.x, _psn.y);
+          } else {
+            // No path this tick — soft position correction. Unwrap server pos relative to
+            // client prediction (toroidal world), then nudge. Hard snap only on teleport.
+            var _cdx=_psn.x-_prp.x, _cdy=_psn.y-_prp.y;
+            var _WH2=WORLD*0.5;
+            if(_cdx >  _WH2) _cdx -= WORLD;
+            if(_cdx < -_WH2) _cdx += WORLD;
+            if(_cdy >  _WH2) _cdy -= WORLD;
+            if(_cdy < -_WH2) _cdy += WORLD;
+            var _cd2=_cdx*_cdx+_cdy*_cdy;
+            if (_cd2 > 160000) { // >400 wu: respawn/teleport — hard snap
+              _prp.x=_psn.x; _prp.y=_psn.y; _prp.angle=_psn.a; _prp.segs=[]; _prp._segAccum=0;
+              var _ris=segmentsForSize(_psn.l||100);
+              for(var _rii=0;_rii<_ris;_rii++) _prp.segs.push({x:_psn.x-Math.cos(_psn.a)*_rii*POINT_DIST,y:_psn.y-Math.sin(_psn.a)*_rii*POINT_DIST});
+            } else if (_cd2 > 9) { // >3 wu: pull client toward server position
+              _prp.x += _cdx * 0.30; _prp.y += _cdy * 0.30;
+            }
           }
         }
       }
@@ -5945,6 +5960,38 @@ function moveS(s,angle,spd){
     if(s.segs.length>_maxS) s.segs.length=_maxS;
   }
   s._segAccum=total-newK*POINT_DIST;
+}
+
+// Rebuild a snake body from the server's AUTHORITATIVE downsampled path (flat array
+// [x0,y0,x1,y1,…], head-first, absolute world coords). Walks the polyline and emits a
+// point every POINT_DIST so the rendered body is dense/smooth AND geometrically identical
+// to the segments the server uses for collision. This is what makes "what you see" ==
+// "what can kill you." Returns a segs array; head is drawn separately by drawS.
+function _segsFromPath(q){
+  var out=[]; var n=q.length>>1;
+  if(n<1) return out;
+  var _HW=WORLD*0.5;
+  var px=q[0], py=q[1];
+  out.push({x:px,y:py});
+  var carry=0;
+  for(var i=1;i<n;i++){
+    var cx=q[i*2], cy=q[i*2+1];
+    // Unwrap this point relative to the previous so a body crossing the toroidal
+    // world boundary stays a continuous chain (drawS re-wraps relative to the head).
+    if(cx-px >  _HW) cx-=WORLD; else if(cx-px < -_HW) cx+=WORLD;
+    if(cy-py >  _HW) cy-=WORLD; else if(cy-py < -_HW) cy+=WORLD;
+    var dx=cx-px, dy=cy-py, d=Math.sqrt(dx*dx+dy*dy);
+    if(d<=0.0001){ px=cx; py=cy; continue; }
+    var ux=dx/d, uy=dy/d;
+    var dpos=POINT_DIST-carry;
+    while(dpos<=d){
+      out.push({x:px+ux*dpos, y:py+uy*dpos});
+      dpos+=POINT_DIST;
+    }
+    carry=d-(dpos-POINT_DIST);
+    px=cx; py=cy;
+  }
+  return out;
 }
 
 /* updatePeer removed — no AI bots in this game */
