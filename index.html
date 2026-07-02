@@ -1492,7 +1492,7 @@ canvas{display:block;width:100%;height:100%;}
 // slither-sol.com is served by Vercel, which deploys this file verbatim on push.
 // This is the number players actually see. (The old GitHub Pages workflow that
 // auto-stamped V<VERSION> deployed to a dead host and is now disabled.)
-var GAME_BUILD = 'V407';
+var GAME_BUILD = 'V408';
 
 var PRIVY_APP_ID          = 'client-WY6aEf1eS4reRDrBq7ghh8arEiMaKSj1Vk37ZG8CAawEF';
 var HOUSE_WALLET_ADDRESS  = '2QnrdhxXYt8ythhGYHDz6MtTZE1z2bYvbss8z3ZGj2uJ';
@@ -3684,7 +3684,18 @@ function _wsHandleMsg(msg, fromAbly) {
         if(_rdy < -_rWH) _rdy += WORLD;
         if (_rdx*_rdx + _rdy*_rdy > _recThresh) {
           if (_PERF) { _perf.net.recN++; _perf.net.recSum += Math.sqrt(_rdx*_rdx + _rdy*_rdy); } // profiler: reconciliation freq + distance
-          player.x += _rdx * 0.30; player.y += _rdy * 0.30;
+          // QUEUE the correction instead of teleporting the head (V408).
+          // The old `player.x += _rdx*0.30` moved the head sideways 50×/s WITHOUT
+          // laying body segments along the way. Going straight the pull is collinear
+          // with motion (invisible); while CIRCLING the pull direction rotates, so the
+          // head visibly wobbled against its own coil ("auto-circle is laggy") and at
+          // boost gaps (measured 60-158wu live) single-frame yanks of 18-45wu tore the
+          // neck from the body ("disconnected tail"). update() now folds this pending
+          // correction into the same frame's movement THROUGH moveS, so segments are
+          // laid along the corrected path. Gain is identical (30% per snapshot) —
+          // convergence to the authoritative head is unchanged, only rendered smoothly.
+          player._corrX = (player._corrX || 0) + _rdx * 0.30;
+          player._corrY = (player._corrY || 0) + _rdy * 0.30;
         }
         // Ease toward the server length instead of hard-snapping. During boost the
         // fast mass-drain makes client/server length diverge by >5 almost every frame;
@@ -5374,6 +5385,11 @@ function launchGame() {
   }
   moneyDrops=[]; _claimedDrops={}; gameRunning=true; _cashoutInProgress=false;
   if(_PERF) _perfInit(); // performance profiler — no-op unless ?perf=1
+  // PROVEN LIVE (V407): if the game starts while the window is hidden/minimized,
+  // visibilitychange never fires again, the rAF loop never runs, and NO input is
+  // ever sent — the server snake sails blind until it dies. The worker fallback
+  // only armed on a visibility TRANSITION; arm it here too if already hidden.
+  if(document.hidden) _startBgWorker();
   _spectating=false; _specTargetId=null; var _shEl=document.getElementById('specHud'); if(_shEl) _shEl.style.display='none';
   _hideMobileBar(); // hide wallet bar during gameplay — HUD shows score/balance
   var _hee=document.getElementById('headerEmailEl'); if(_hee) _hee.style.display='none';
@@ -5881,7 +5897,7 @@ function update(_dt){
           var _sdx=_st.x-_slpx,_sdy=_st.y-_slpy,_sMv=Math.hypot(_sdx,_sdy);
           _st._lpx=_st.x; _st._lpy=_st.y;
           var _sd0=_st._segAccum||0,_stot=_sd0+_sMv,_snK=Math.floor(_stot/POINT_DIST);
-          if(_snK>0&&_sMv>0){var _sns=[];for(var _si=1;_si<=_snK;_si++){var _stt=(_si*POINT_DIST-_sd0)/_sMv;_sns.push({x:_slpx+_sdx*_stt,y:_slpy+_sdy*_stt});}if(_sns.length===1)_st.segs.unshift(_sns[0]);else Array.prototype.unshift.apply(_st.segs,_sns);}
+          if(_snK>0&&_sMv>0){var _sns=[];for(var _si=1;_si<=_snK;_si++){var _stt=(_si*POINT_DIST-_sd0)/_sMv;_sns.push({x:_slpx+_sdx*_stt,y:_slpy+_sdy*_stt});}if(_sns.length===1)_st.segs.unshift(_sns[0]);else Array.prototype.unshift.apply(_st.segs,_sns.reverse());} /* .reverse(): segs[] is newest-first */
           _st._segAccum=_stot-_snK*POINT_DIST;
           var _smaxS=Math.floor(segmentsForSize(_st.length||40)+60); if(isFinite(_smaxS)&&_smaxS>0&&_st.segs.length>_smaxS)_st.segs.length=_smaxS;
         }
@@ -5916,7 +5932,7 @@ function update(_dt){
       _spp.y+=Math.sin(_spp.angle)*_spSpd;
       var _spdx=_spp.x-_splpx,_spdy=_spp.y-_splpy,_spMv=Math.hypot(_spdx,_spdy);
       var _spd0=_spp._segAccum||0,_sptot=_spd0+_spMv,_spnK=Math.floor(_sptot/POINT_DIST);
-      if(_spnK>0&&_spMv>0){var _spns=[];for(var _spii=1;_spii<=_spnK;_spii++){var _sptt=(_spii*POINT_DIST-_spd0)/_spMv;_spns.push({x:_splpx+_spdx*_sptt,y:_splpy+_spdy*_sptt});}if(_spns.length===1)_spp.segs.unshift(_spns[0]);else Array.prototype.unshift.apply(_spp.segs,_spns);}
+      if(_spnK>0&&_spMv>0){var _spns=[];for(var _spii=1;_spii<=_spnK;_spii++){var _sptt=(_spii*POINT_DIST-_spd0)/_spMv;_spns.push({x:_splpx+_spdx*_sptt,y:_splpy+_spdy*_sptt});}if(_spns.length===1)_spp.segs.unshift(_spns[0]);else Array.prototype.unshift.apply(_spp.segs,_spns.reverse());} /* .reverse(): segs[] is newest-first */
       _spp._segAccum=_sptot-_spnK*POINT_DIST;
       var _spMax=Math.floor(segmentsForSize(_spp.length||40)+60);
       if(isFinite(_spMax)&&_spMax>0&&_spp.segs.length>_spMax)_spp.segs.length=_spMax;
@@ -5975,7 +5991,21 @@ function update(_dt){
   }
   // No passive recharge — boost refills only from eating orbs or getting kills
   player._prevX = player.x; player._prevY = player.y; // for shared swept collision
-  moveS(player, player.angle, spd);
+  // Fold the queued reconciliation correction (see state handler) into this frame's
+  // movement so body segments are laid along the corrected path. Cap the correction
+  // consumed per frame at 2× the frame's own travel — a huge boost-gap correction
+  // spreads over 2-4 frames as a smooth curve instead of one 45wu head teleport.
+  var _mvx = Math.cos(player.angle)*spd, _mvy = Math.sin(player.angle)*spd;
+  if(player._corrX || player._corrY){
+    var _cMag = Math.hypot(player._corrX||0, player._corrY||0);
+    var _cCap = Math.max(spd*2, 12);
+    var _cFr  = _cMag > _cCap ? _cCap/_cMag : 1;
+    _mvx += (player._corrX||0)*_cFr; _mvy += (player._corrY||0)*_cFr;
+    player._corrX -= (player._corrX||0)*_cFr; player._corrY -= (player._corrY||0)*_cFr;
+    if(Math.abs(player._corrX)<0.01) player._corrX=0;
+    if(Math.abs(player._corrY)<0.01) player._corrY=0;
+  }
+  moveS(player, player.angle, spd, _mvx, _mvy);
   // Enforce segment cap (draw-length; collision extent is SIM.segmentsForSize)
   var _tgt = segmentsForSize(player.length||40) + 60;
   while(player.segs.length > _tgt) player.segs.pop();
@@ -6006,7 +6036,7 @@ function update(_dt){
       // Arc-length resampling — place segments at exactly POINT_DIST spacing
       var _pdx=p.x-_plpx, _pdy=p.y-_plpy, _pMv=Math.hypot(_pdx,_pdy);
       var _pd0=p._segAccum||0, _ptot=_pd0+_pMv, _pnK=Math.floor(_ptot/POINT_DIST);
-      if(_pnK>0&&_pMv>0){var _pns=[];for(var _pi=1;_pi<=_pnK;_pi++){var _ptt=(_pi*POINT_DIST-_pd0)/_pMv;_pns.push({x:_plpx+_pdx*_ptt,y:_plpy+_pdy*_ptt});}if(_pns.length===1)p.segs.unshift(_pns[0]);else Array.prototype.unshift.apply(p.segs,_pns);}
+      if(_pnK>0&&_pMv>0){var _pns=[];for(var _pi=1;_pi<=_pnK;_pi++){var _ptt=(_pi*POINT_DIST-_pd0)/_pMv;_pns.push({x:_plpx+_pdx*_ptt,y:_plpy+_pdy*_ptt});}if(_pns.length===1)p.segs.unshift(_pns[0]);else Array.prototype.unshift.apply(p.segs,_pns.reverse());} /* .reverse(): segs[] is newest-first */
       p._segAccum=_ptot-_pnK*POINT_DIST;
       var maxS=Math.floor(segmentsForSize(p.length||40)+60);
       if(isFinite(maxS)&&maxS>0&&p.segs.length>maxS) p.segs.length=maxS;
@@ -6058,25 +6088,36 @@ function update(_dt){
   }
 }
 
-function moveS(s,angle,spd){
+// Move a snake and lay body segments at POINT_DIST spacing along the ACTUAL path.
+// `angle` is the STEERING angle (stored on s.angle — eyes/facing/input use it).
+// Optionally pass an explicit displacement vector (mvx,mvy) that differs from
+// angle×spd — used to fold the queued reconciliation correction into the same
+// frame's movement so segments follow the corrected path (no sideways head yank).
+function moveS(s,angle,spd,mvx,mvy){
   s.angle=angle;
-  var _cx=Math.cos(angle), _cy=Math.sin(angle);
+  var _dx,_dy,_dist;
+  if(mvx!=null){ _dx=mvx; _dy=mvy; _dist=Math.sqrt(mvx*mvx+mvy*mvy); }
+  else { _dx=Math.cos(angle)*spd; _dy=Math.sin(angle)*spd; _dist=spd; }
   var px=s.x, py=s.y;
-  s.x=((px+_cx*spd)%WORLD+WORLD)%WORLD;
-  s.y=((py+_cy*spd)%WORLD+WORLD)%WORLD;
+  s.x=((px+_dx)%WORLD+WORLD)%WORLD;
+  s.y=((py+_dy)%WORLD+WORLD)%WORLD;
   // Add body segments at POINT_DIST (1.6 wu) intervals — matches MoneySlither exactly
-  var d0=s._segAccum||0, total=d0+spd;
+  var d0=s._segAccum||0, total=d0+_dist;
   var newK=Math.floor(total/POINT_DIST);
   var _maxS=Math.max(segmentsForSize(s.length||40)+60,80);
-  if(newK>0){
+  if(newK>0&&_dist>0){
     // Batch all new segments into one array then splice-in with a single unshift call.
     // Per-iteration unshift is O(n) per call → O(k*n) total; at boost speed k≈10.
     var _ns=[];
     for(var j=1;j<=newK;j++){
-      var t=(j*POINT_DIST-d0)/spd;
-      _ns.push({x:((px+_cx*spd*t)%WORLD+WORLD)%WORLD, y:((py+_cy*spd*t)%WORLD+WORLD)%WORLD});
+      var t=(j*POINT_DIST-d0)/_dist;
+      _ns.push({x:((px+_dx*t)%WORLD+WORLD)%WORLD, y:((py+_dy*t)%WORLD+WORLD)%WORLD});
     }
-    if(_ns.length===1) s.segs.unshift(_ns[0]); else Array.prototype.unshift.apply(s.segs,_ns);
+    // _ns is built oldest→newest along this frame's path; segs[] is NEWEST-first.
+    // Reverse before the batched prepend — without this every frame's batch lands
+    // in backwards order, zigzagging the rendered body by up to 2 frames of travel
+    // (invisible at base speed, torn/"disconnected" tail at boost speed).
+    if(_ns.length===1) s.segs.unshift(_ns[0]); else Array.prototype.unshift.apply(s.segs,_ns.reverse());
     if(s.segs.length>_maxS) s.segs.length=_maxS;
   }
   s._segAccum=total-newK*POINT_DIST;
