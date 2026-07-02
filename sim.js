@@ -25,10 +25,13 @@
   'use strict';
   var S = {};
 
-  // ── Physics constants ───────────────────────────────────────────────────────
-  S.BASE_SPEED   = 5.8;
-  S.BOOST_MULT   = 3.0;
-  S.TURN_RATE    = 0.16;
+  // ── Physics constants — matched to moneyslither.com (user-extracted bundle) ───
+  // Per-second values are BASE × DT_SCALE × TICK_RATE = BASE × 60 (DT_SCALE×TICK_RATE
+  // is always 60). moneyslither targets: speed 288 px/s, boost 630 px/s (2.1875×),
+  // turn 8.22 rad/s (0.274 rad/tick @ their 30 TPS) → auto-circle radius ≈ 35 px.
+  S.BASE_SPEED   = 4.8;      // 4.8 × 60 = 288 px/s  (moneyslither SNAKE_SPD)
+  S.BOOST_MULT   = 2.1875;   // 288 × 2.1875 = 630 px/s (moneyslither BOOST_SPD)
+  S.TURN_RATE    = 0.137;    // 0.137 × 60 = 8.22 rad/s (moneyslither MAX_TURN, rate-matched)
   S.POINT_DIST   = 1.6;
   S.WIDTH_BASE   = 15.0;
   S.WIDTH_DEN    = 700;
@@ -46,8 +49,12 @@
   // ── Unified collision knobs (V405) ──────────────────────────────────────────
   // collision(body) radius = renderedRadius × HITBOX_MULT
   // collision(head) radius = collision(body) radius × HEAD_MULT
-  S.HITBOX_MULT  = 1.0;   // 1.0 = hitbox exactly equals the drawn snake
-  S.HEAD_MULT    = 1.0;   // 1.0 = head hitbox equals body hitbox
+  // moneyslither combat hitboxes (user-extracted): SS_HB=0.95, SS_HBS=1.07, SS_HHBS=1.18.
+  //   body hitbox = renderedRadius × 0.95 × 1.07       = ×1.0165
+  //   head hitbox = renderedRadius × 0.95 × 1.07 × 1.18 = ×1.1995
+  // Restores moneyslither's die-before-touch (user chose "match moneyslither exactly").
+  S.HITBOX_MULT  = 0.95 * 1.07;   // 1.0165 — body hitbox vs drawn radius
+  S.HEAD_MULT    = 1.18;          // head hitbox = body × 1.18
   S.FACE_DEG     = 75;    // H2H facing gate half-angle
   S.FACE_COS     = Math.cos(S.FACE_DEG * Math.PI / 180);
   S.COLLISION_GRACE_MS = 1500; // spawn grace before a snake can kill or be killed
