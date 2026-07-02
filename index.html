@@ -1492,7 +1492,7 @@ canvas{display:block;width:100%;height:100%;}
 // slither-sol.com is served by Vercel, which deploys this file verbatim on push.
 // This is the number players actually see. (The old GitHub Pages workflow that
 // auto-stamped V<VERSION> deployed to a dead host and is now disabled.)
-var GAME_BUILD = 'V411';
+var GAME_BUILD = 'V412';
 
 var PRIVY_APP_ID          = 'client-WY6aEf1eS4reRDrBq7ghh8arEiMaKSj1Vk37ZG8CAawEF';
 var HOUSE_WALLET_ADDRESS  = '2QnrdhxXYt8ythhGYHDz6MtTZE1z2bYvbss8z3ZGj2uJ';
@@ -4798,6 +4798,16 @@ var _lastPosSend=0; // last position-publish timestamp (rAF-driven, ~60fps)
 // not really circling": the old code corrected toward a target that was always
 // ~1 RTT of travel behind, so every correction visibly perturbed the circle).
 var _inputHistory=[];
+// ── _OWN_CORRECT — production default reconciliation SMOOTHING value ───────────
+// Fraction of the queued own-snake reconciliation correction folded into movement
+// each frame (see the correction fold in update()). This is a SMOOTHING/interp
+// factor ONLY — it does not touch movement physics, collision, speed, or any
+// gameplay rule; it only controls how gently the rendered head eases toward the
+// server-reconciled position. 0.2 (production default, global, all players) spreads
+// each correction over several frames so there are no teleport correction spikes.
+// Shift+O toggles it between 0 (smoothing OFF — raw prediction, for debugging) and
+// 0.2 (ON) LOCALLY at runtime; production always starts at 0.2 for everyone.
+var _OWN_CORRECT = 0.2;
 var _preRejoinAvgSegs=0; // snapshot of peer avg segs taken just before _wsJoin() clears peers[]
 var _boostExhaustedUntil=0; // performance.now() timestamp when the 3s exhaustion penalty expires
 var _stateBuffer=[];   // server state snapshots [{t, snakes:{id:data}, world}] for interpolation
@@ -5599,6 +5609,10 @@ function onKD(e){
   if(e.key.toLowerCase()==='t'&&gameRunning&&player&&player.alive){ e.preventDefault(); _openChat(); }
   if((e.key.toLowerCase()==='y'||e.key.toLowerCase()==='e')&&gameRunning&&player&&player.alive){ e.preventDefault(); _autoCircle=!_autoCircle; toast(_autoCircle?'🔄 Auto-circle ON (Y/E)':'⬛ Auto-circle OFF','info'); }
   if(e.key.toLowerCase()==='h'){ _debugHitboxes=!_debugHitboxes; toast(_debugHitboxes?'[H] HITBOXES ON':'[H] HITBOXES OFF','info'); }
+  // Shift+O — LOCAL debug toggle for reconciliation smoothing: 0.2 (production
+  // default, ON) ⇄ 0 (OFF, raw prediction). Does not persist and does not affect
+  // other players; production always starts at _OWN_CORRECT = 0.2 for everyone.
+  if(e.shiftKey && (e.code==='KeyO' || e.key.toLowerCase()==='o')){ e.preventDefault(); _OWN_CORRECT = (_OWN_CORRECT > 0) ? 0 : 0.2; toast(_OWN_CORRECT>0?'[Shift+O] Smoothing ON ('+_OWN_CORRECT+')':'[Shift+O] Smoothing OFF (0)','info'); }
   // Backtick (`) toggles the networking measurement overlay — no console needed.
   if(e.key==='`'||e.code==='Backquote'){ e.preventDefault(); _DBG=!_DBG; try{ if(_DBG)localStorage.setItem('ss_dbg','1'); else localStorage.removeItem('ss_dbg'); }catch(_){} if(_DBG)_dbgReset(); toast(_DBG?'[`] NET DEBUG ON — read panel top-left':'[`] NET DEBUG OFF','info'); }
 }
@@ -6076,14 +6090,21 @@ function update(_dt){
   // corrections so they can never teleport the head.
   var _mvx = Math.cos(player.angle)*spd, _mvy = Math.sin(player.angle)*spd;
   if(player._corrX || player._corrY){
-    var _cMag = Math.hypot(player._corrX||0, player._corrY||0);
-    var _cCap = Math.max(spd*2, 12);
-    var _cFr  = Math.min(0.20, _cCap/(_cMag||1)); // 20%/frame, but never exceed the cap
-    if(_cMag < 0.5) _cFr = 1;                      // finish tiny remainders in one frame
-    _mvx += (player._corrX||0)*_cFr; _mvy += (player._corrY||0)*_cFr;
-    player._corrX -= (player._corrX||0)*_cFr; player._corrY -= (player._corrY||0)*_cFr;
-    if(Math.abs(player._corrX)<0.01) player._corrX=0;
-    if(Math.abs(player._corrY)<0.01) player._corrY=0;
+    if(_OWN_CORRECT <= 0){
+      // Smoothing OFF (Shift+O). Discard the queued correction instead of applying
+      // it — pure client prediction, no reconciliation blending. Debug/testing only;
+      // production default is 0.2 so this branch never runs for normal players.
+      player._corrX = 0; player._corrY = 0;
+    } else {
+      var _cMag = Math.hypot(player._corrX||0, player._corrY||0);
+      var _cCap = Math.max(spd*2, 12);
+      var _cFr  = Math.min(_OWN_CORRECT, _cCap/(_cMag||1)); // _OWN_CORRECT/frame, capped
+      if(_cMag < 0.5) _cFr = 1;                             // finish tiny remainders in one frame
+      _mvx += (player._corrX||0)*_cFr; _mvy += (player._corrY||0)*_cFr;
+      player._corrX -= (player._corrX||0)*_cFr; player._corrY -= (player._corrY||0)*_cFr;
+      if(Math.abs(player._corrX)<0.01) player._corrX=0;
+      if(Math.abs(player._corrY)<0.01) player._corrY=0;
+    }
   }
   moveS(player, player.angle, spd, _mvx, _mvy);
   // Enforce segment cap (draw-length; collision extent is SIM.segmentsForSize)
