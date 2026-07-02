@@ -1492,7 +1492,7 @@ canvas{display:block;width:100%;height:100%;}
 // slither-sol.com is served by Vercel, which deploys this file verbatim on push.
 // This is the number players actually see. (The old GitHub Pages workflow that
 // auto-stamped V<VERSION> deployed to a dead host and is now disabled.)
-var GAME_BUILD = 'V409';
+var GAME_BUILD = 'V410';
 
 var PRIVY_APP_ID          = 'client-WY6aEf1eS4reRDrBq7ghh8arEiMaKSj1Vk37ZG8CAawEF';
 var HOUSE_WALLET_ADDRESS  = '2QnrdhxXYt8ythhGYHDz6MtTZE1z2bYvbss8z3ZGj2uJ';
@@ -3715,7 +3715,6 @@ function _wsHandleMsg(msg, fromAbly) {
           }
           _predX = _pred.x; _predY = _pred.y; _predL = _pred.length;
         }
-        var _recThresh = boosting ? 14 * 14 : 12 * 12;
         var _rdx = _predX - player.x, _rdy = _predY - player.y;
         // Unwrap server correction across world boundary
         var _rWH = WORLD * 0.5;
@@ -3723,13 +3722,35 @@ function _wsHandleMsg(msg, fromAbly) {
         if(_rdx < -_rWH) _rdx += WORLD;
         if(_rdy >  _rWH) _rdy -= WORLD;
         if(_rdy < -_rWH) _rdy += WORLD;
-        if (_rdx*_rdx + _rdy*_rdy > _recThresh) {
-          if (_PERF) { _perf.net.recN++; _perf.net.recSum += Math.sqrt(_rdx*_rdx + _rdy*_rdy); } // profiler: reconciliation freq + distance
-          // QUEUE the correction instead of teleporting the head (V408) — folded into
-          // the same frame's movement THROUGH moveS in update(), so segments are laid
-          // along the corrected path (no head/body seam).
-          player._corrX = (player._corrX || 0) + _rdx * 0.30;
-          player._corrY = (player._corrY || 0) + _rdy * 0.30;
+        var _gapMag2 = _rdx*_rdx + _rdy*_rdy;
+        if (_autoCircle) {
+          // While auto-circling, the LOCAL rendered path is perfectly smooth by
+          // construction (player.angle += TURN_RATE*dt, moveS integrates that exact
+          // angle at BASE_SPEED*dt every frame — a mathematically exact circle, no
+          // possible source of visible jank). Real-player collision is 100%
+          // server-authoritative (killCheck is a no-op; see V405/V406) — the server
+          // never looks at what the client renders for itself — so applying ANY
+          // correction here, however gentle, only ever WORSENS what would otherwise
+          // be a perfect circle. V408/V409 both still nudged the head every ~20-50
+          // corrections/sec (measured live), which is exactly what the user kept
+          // reporting as "doesn't look like it's circling." Fix: while circling,
+          // trust local prediction completely and apply ZERO soft correction; only
+          // hard-snap on an unambiguous desync (140wu — well above any latency-
+          // driven gap, only reached by a genuine teleport/packet-loss event).
+          if (_gapMag2 > 140*140) {
+            player.x = _predX; player.y = _predY;
+            player._corrX = 0; player._corrY = 0;
+          }
+        } else {
+          var _recThresh = boosting ? 14 * 14 : 12 * 12;
+          if (_gapMag2 > _recThresh) {
+            if (_PERF) { _perf.net.recN++; _perf.net.recSum += Math.sqrt(_gapMag2); } // profiler: reconciliation freq + distance
+            // QUEUE the correction instead of teleporting the head (V408) — folded into
+            // the same frame's movement THROUGH moveS in update(), so segments are laid
+            // along the corrected path (no head/body seam).
+            player._corrX = (player._corrX || 0) + _rdx * 0.30;
+            player._corrY = (player._corrY || 0) + _rdy * 0.30;
+          }
         }
         // Ease toward the PREDICTED length (_predL, replayed through the same boost-
         // burn math the server uses) rather than the raw server value — the replay
