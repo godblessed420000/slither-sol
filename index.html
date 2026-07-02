@@ -1492,7 +1492,7 @@ canvas{display:block;width:100%;height:100%;}
 // slither-sol.com is served by Vercel, which deploys this file verbatim on push.
 // This is the number players actually see. (The old GitHub Pages workflow that
 // auto-stamped V<VERSION> deployed to a dead host and is now disabled.)
-var GAME_BUILD = 'V408';
+var GAME_BUILD = 'V409';
 
 var PRIVY_APP_ID          = 'client-WY6aEf1eS4reRDrBq7ghh8arEiMaKSj1Vk37ZG8CAawEF';
 var HOUSE_WALLET_ADDRESS  = '2QnrdhxXYt8ythhGYHDz6MtTZE1z2bYvbss8z3ZGj2uJ';
@@ -3668,14 +3668,55 @@ function _wsHandleMsg(msg, fromAbly) {
         // Server says our snake is dead — don't pull the live client toward a dead ghost.
         // The rejoin flow will replace the snake with a fresh spawn.
         if (!_sc.alive) break;
-        // Reconcile the client-predicted head toward the authoritative server head.
-        // MEASURED (V402, ~48ms ping): selfΔ avg 24-38wu, boostMax 138wu — far above the
-        // ~26wu latency floor, i.e. the old 45wu deadzone + 0.18 ease could not catch the
-        // boost prediction. Tightened: tiny deadzone + stronger ease so the drawn head
-        // tracks the authoritative (collidable) head. The floor (~one-RTT of travel) is
-        // irreducible without server lag-comp; this drives Δ down toward that floor.
+        // ── Client-side prediction + reconciliation via input replay (V409) ──────
+        // V408 folded corrections smoothly into movement, but still targeted the
+        // RAW server position (_sc.x/y) — which is always ~1 RTT of travel behind
+        // because it reflects an input the server processed `ping` ms ago. That
+        // made EVERY snapshot (48-51/s, measured live) nudge the head sideways by
+        // ~1 latency's worth of travel (~15-17wu measured at 48ms ping, matching
+        // BASE_SPEED×DT_SCALE×ping exactly) — imperceptible moving in a straight
+        // line, but visibly perturbing a tight auto-circle every single snapshot,
+        // which read as "doesn't look like it's actually circling."
+        //
+        // Fix: replay our OWN buffered inputs (the same ones we sent) through
+        // SIM.stepSnake — the exact deterministic function the server runs —
+        // starting from the server's authoritative snapshot, landing on a
+        // PREDICTED current position that should already match what we're
+        // rendering. The correction then targets that prediction, not the stale
+        // raw position, so steady-state correction magnitude drops toward the
+        // genuine desync (jitter/packet loss) rather than the latency floor.
+        var _predX = _sc.x, _predY = _sc.y, _predL = (_sc.l != null ? _sc.l : player.length);
+        if (typeof SIM !== 'undefined' && _inputHistory.length) {
+          // Replay window: from just before this snapshot was generated (one-way
+          // latency ≈ pingEma/2, plus a tick of slack) up to now.
+          var _oneWay = Math.max(10, (_pingEma || 40) / 2) + 20;
+          var _replayFrom = _sNow - _oneWay;
+          var _pred = { x:_sc.x, y:_sc.y, angle:(_sc.a != null ? _sc.a : player.angle),
+                        length:_predL, segs:[], _segAccum:0, spawnTs:player.spawnTs };
+          // Drop history older than the window (with margin so the "latest input at
+          // or before this tick" lookup below has something to find near the start).
+          var _kept = [];
+          for (var _ihi = 0; _ihi < _inputHistory.length; _ihi++) {
+            if (_inputHistory[_ihi].t >= _replayFrom - 500) _kept.push(_inputHistory[_ihi]);
+          }
+          _inputHistory = _kept;
+          // Step at the SERVER's tick cadence (SIM.TICK_MS = 20ms), not once per
+          // buffered client input (~16.7ms) — stepSnake advances a FIXED amount per
+          // call (TURN_RATE×DT_SCALE, BASE_SPEED×DT_SCALE), so calling it at the
+          // client's faster send rate would over-rotate/over-move by ~20% versus what
+          // the server actually computed. At each simulated tick we use whichever
+          // buffered input was the most recently SENT one as of that tick's time —
+          // exactly what the server does (it always steps using the latest `sn.input`
+          // it has received, regardless of how many arrived between ticks).
+          var _hi = 0, _curInput = null;
+          for (var _tt = _replayFrom; _tt < _sNow; _tt += SIM.TICK_MS) {
+            while (_hi < _inputHistory.length && _inputHistory[_hi].t <= _tt) { _curInput = _inputHistory[_hi]; _hi++; }
+            if (_curInput) SIM.stepSnake(_pred, { a:_curInput.a, b:!!_curInput.b }, WORLD);
+          }
+          _predX = _pred.x; _predY = _pred.y; _predL = _pred.length;
+        }
         var _recThresh = boosting ? 14 * 14 : 12 * 12;
-        var _rdx = _sc.x - player.x, _rdy = _sc.y - player.y;
+        var _rdx = _predX - player.x, _rdy = _predY - player.y;
         // Unwrap server correction across world boundary
         var _rWH = WORLD * 0.5;
         if(_rdx >  _rWH) _rdx -= WORLD;
@@ -3684,27 +3725,19 @@ function _wsHandleMsg(msg, fromAbly) {
         if(_rdy < -_rWH) _rdy += WORLD;
         if (_rdx*_rdx + _rdy*_rdy > _recThresh) {
           if (_PERF) { _perf.net.recN++; _perf.net.recSum += Math.sqrt(_rdx*_rdx + _rdy*_rdy); } // profiler: reconciliation freq + distance
-          // QUEUE the correction instead of teleporting the head (V408).
-          // The old `player.x += _rdx*0.30` moved the head sideways 50×/s WITHOUT
-          // laying body segments along the way. Going straight the pull is collinear
-          // with motion (invisible); while CIRCLING the pull direction rotates, so the
-          // head visibly wobbled against its own coil ("auto-circle is laggy") and at
-          // boost gaps (measured 60-158wu live) single-frame yanks of 18-45wu tore the
-          // neck from the body ("disconnected tail"). update() now folds this pending
-          // correction into the same frame's movement THROUGH moveS, so segments are
-          // laid along the corrected path. Gain is identical (30% per snapshot) —
-          // convergence to the authoritative head is unchanged, only rendered smoothly.
+          // QUEUE the correction instead of teleporting the head (V408) — folded into
+          // the same frame's movement THROUGH moveS in update(), so segments are laid
+          // along the corrected path (no head/body seam).
           player._corrX = (player._corrX || 0) + _rdx * 0.30;
           player._corrY = (player._corrY || 0) + _rdy * 0.30;
         }
-        // Ease toward the server length instead of hard-snapping. During boost the
-        // fast mass-drain makes client/server length diverge by >5 almost every frame;
-        // snapping re-trims the segment array and jumps the body width each time, which
-        // reads as stutter. A soft ease tracks the server without the visible jitter,
-        // and a hard set is kept only for large desyncs (>40 units).
-        if (_sc.l) {
-          var _ld = _sc.l - player.length;
-          if (Math.abs(_ld) > 40) player.length = _sc.l;
+        // Ease toward the PREDICTED length (_predL, replayed through the same boost-
+        // burn math the server uses) rather than the raw server value — the replay
+        // already accounts for mass burned during in-flight inputs, so this tracks
+        // much closer during boost than easing toward a value that's ~1 RTT stale.
+        if (_predL) {
+          var _ld = _predL - player.length;
+          if (Math.abs(_ld) > 40) player.length = _predL;
           else if (Math.abs(_ld) > 5) player.length += _ld * 0.25;
         }
         break;
@@ -4729,6 +4762,16 @@ var _spawnMouseLock=0; // performance.now() timestamp: hold spawn direction unti
 var _spawnAngle=0;    // angle to hold during spawn lock — set from player.angle at game start
 var _spawnRefX=0,_spawnRefY=0; // cursor position at REJOIN click — lock releases early if user sweeps 150+ canvas-px away
 var _lastPosSend=0; // last position-publish timestamp (rAF-driven, ~60fps)
+// Rolling buffer of every input WE sent (angle, boost, send-time). Used by the
+// state handler to REPLAY our own recent inputs through SIM.stepSnake starting
+// from the server's authoritative snapshot, producing a PREDICTED current
+// position — the correction then targets that prediction instead of the raw
+// (network-delayed) server position, so it converges toward ~0 in steady state
+// instead of continuously nudging the head by ~1 latency's worth of travel
+// every snapshot (V409 — this was the real cause of "auto-circle looks janky/
+// not really circling": the old code corrected toward a target that was always
+// ~1 RTT of travel behind, so every correction visibly perturbed the circle).
+var _inputHistory=[];
 var _preRejoinAvgSegs=0; // snapshot of peer avg segs taken just before _wsJoin() clears peers[]
 var _boostExhaustedUntil=0; // performance.now() timestamp when the 3s exhaustion penalty expires
 var _stateBuffer=[];   // server state snapshots [{t, snakes:{id:data}, world}] for interpolation
@@ -5337,7 +5380,7 @@ function launchGame() {
   if(tb){ tb.style.display='none'; }
   var alb=document.getElementById('activeLobbyBadge');
   if(alb){ alb.style.display='none'; }
-  score=0; myKills=0; killSOL=0; boostE=100; boosting=false; cashingOut=false; qDown=false; _zoomOffset=0; _zoomScale=1.0; CAM_ZOOM=1.0; _smoothLen=100; _autoCircle=false; _hudScoreV=''; _hudSubV=''; _hudEarnV=''; _boostMassAccum=0; _stateBuffer=[]; _boostExhaustedUntil=0;
+  score=0; myKills=0; killSOL=0; boostE=100; boosting=false; cashingOut=false; qDown=false; _zoomOffset=0; _zoomScale=1.0; CAM_ZOOM=1.0; _smoothLen=100; _autoCircle=false; _hudScoreV=''; _hudSubV=''; _hudEarnV=''; _boostMassAccum=0; _stateBuffer=[]; _boostExhaustedUntil=0; _inputHistory=[];
   _updateArenaSize(); WORLD = _targetWorld; WORLD_R = WORLD / 2; // snap immediately at game start; later joins/leaves lerp gradually
   // Restore W.balance from on-chain if it was zeroed by a previous death or is stale.
   // refreshBalance() won't sync during gameplay (gameRunning guard), so we must do it here.
@@ -5824,10 +5867,17 @@ function loop(){
   if (gameRunning && player && player.alive && _ws && _ws.readyState === WebSocket.OPEN && _lt - _lastPosSend >= 16) {
     _lastPosSend = _lt;
     if(_PERF) _perf.net.send++; // profiler: input send rate
+    var _sentA = +player.angle.toFixed(3), _sentB = boosting?1:0;
+    // Buffer every sent input (with its send time) so the state handler can REPLAY
+    // it through SIM.stepSnake once the matching server snapshot arrives — this is
+    // what lets reconciliation compare against a PREDICTED position instead of the
+    // raw (network-delayed) server position. See _inputHistory in the state handler.
+    _inputHistory.push({ a:_sentA, b:_sentB, t:_lt });
+    if(_inputHistory.length > 240) _inputHistory.shift(); // ~4s at 60fps — generous cap
     try {
       _ws.send(JSON.stringify({
         type:'input', clientId:_wsClientId, tier:_currentTier,
-        data:{ a:+player.angle.toFixed(3), b:boosting?1:0 }
+        data:{ a:_sentA, b:_sentB }
       }));
     } catch(e) {}
   }
