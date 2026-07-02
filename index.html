@@ -1492,7 +1492,7 @@ canvas{display:block;width:100%;height:100%;}
 // slither-sol.com is served by Vercel, which deploys this file verbatim on push.
 // This is the number players actually see. (The old GitHub Pages workflow that
 // auto-stamped V<VERSION> deployed to a dead host and is now disabled.)
-var GAME_BUILD = 'V410';
+var GAME_BUILD = 'V411';
 
 var PRIVY_APP_ID          = 'client-WY6aEf1eS4reRDrBq7ghh8arEiMaKSj1Vk37ZG8CAawEF';
 var HOUSE_WALLET_ADDRESS  = '2QnrdhxXYt8ythhGYHDz6MtTZE1z2bYvbss8z3ZGj2uJ';
@@ -3724,22 +3724,27 @@ function _wsHandleMsg(msg, fromAbly) {
         if(_rdy < -_rWH) _rdy += WORLD;
         var _gapMag2 = _rdx*_rdx + _rdy*_rdy;
         if (_autoCircle) {
-          // While auto-circling, the LOCAL rendered path is perfectly smooth by
-          // construction (player.angle += TURN_RATE*dt, moveS integrates that exact
-          // angle at BASE_SPEED*dt every frame — a mathematically exact circle, no
-          // possible source of visible jank). Real-player collision is 100%
-          // server-authoritative (killCheck is a no-op; see V405/V406) — the server
-          // never looks at what the client renders for itself — so applying ANY
-          // correction here, however gentle, only ever WORSENS what would otherwise
-          // be a perfect circle. V408/V409 both still nudged the head every ~20-50
-          // corrections/sec (measured live), which is exactly what the user kept
-          // reporting as "doesn't look like it's circling." Fix: while circling,
-          // trust local prediction completely and apply ZERO soft correction; only
-          // hard-snap on an unambiguous desync (140wu — well above any latency-
-          // driven gap, only reached by a genuine teleport/packet-loss event).
+          // MEASURED (V410, live, clean steady-state auto-circle): disabling ALL
+          // correction while circling did NOT give a perfect circle — instead the
+          // client (variable-dt render) slowly drifted from the server (fixed 50Hz
+          // sim) until the gap crossed the 140wu hard-snap threshold, producing a
+          // ~138wu TELEPORT roughly once every 5 s (frame-by-frame capture: 1 snap
+          // per 600 frames, corr=0 confirming it was the hard-snap, not reconcile).
+          // That periodic snap IS the residual "tiny snap every second or so."
+          //
+          // Fix: apply a VERY gentle bounded correction toward the fixed-tick
+          // prediction (_predX/_predY, from the V409 input replay). Gain 0.06 with a
+          // 3wu deadzone keeps the client from ever drifting far enough to trip the
+          // hard-snap; the fold in update() drains it as a smooth fraction per frame,
+          // so per-frame displacement stays sub-wu (measured invisible) — continuous
+          // imperceptible tracking instead of one visible 138wu jump every 5s.
           if (_gapMag2 > 140*140) {
-            player.x = _predX; player.y = _predY;
+            player.x = _predX; player.y = _predY;       // genuine desync — hard snap (rare)
             player._corrX = 0; player._corrY = 0;
+          } else if (_gapMag2 > 3*3) {
+            if (_PERF) { _perf.net.recN++; _perf.net.recSum += Math.sqrt(_gapMag2); }
+            player._corrX = (player._corrX || 0) + _rdx * 0.06;
+            player._corrY = (player._corrY || 0) + _rdy * 0.06;
           }
         } else {
           var _recThresh = boosting ? 14 * 14 : 12 * 12;
@@ -6063,14 +6068,18 @@ function update(_dt){
   // No passive recharge — boost refills only from eating orbs or getting kills
   player._prevX = player.x; player._prevY = player.y; // for shared swept collision
   // Fold the queued reconciliation correction (see state handler) into this frame's
-  // movement so body segments are laid along the corrected path. Cap the correction
-  // consumed per frame at 2× the frame's own travel — a huge boost-gap correction
-  // spreads over 2-4 frames as a smooth curve instead of one 45wu head teleport.
+  // movement so body segments are laid along the corrected path. Drain a smooth
+  // FRACTION of the remaining backlog per frame (exponential decay) rather than
+  // consuming it all at once — this spreads even the gentle auto-circle correction
+  // over many frames so per-frame displacement stays sub-wu (measured invisible),
+  // while a hard per-frame cap (2× own travel) still bounds large manual-steer
+  // corrections so they can never teleport the head.
   var _mvx = Math.cos(player.angle)*spd, _mvy = Math.sin(player.angle)*spd;
   if(player._corrX || player._corrY){
     var _cMag = Math.hypot(player._corrX||0, player._corrY||0);
     var _cCap = Math.max(spd*2, 12);
-    var _cFr  = _cMag > _cCap ? _cCap/_cMag : 1;
+    var _cFr  = Math.min(0.20, _cCap/(_cMag||1)); // 20%/frame, but never exceed the cap
+    if(_cMag < 0.5) _cFr = 1;                      // finish tiny remainders in one frame
     _mvx += (player._corrX||0)*_cFr; _mvy += (player._corrY||0)*_cFr;
     player._corrX -= (player._corrX||0)*_cFr; player._corrY -= (player._corrY||0)*_cFr;
     if(Math.abs(player._corrX)<0.01) player._corrX=0;
