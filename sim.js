@@ -32,19 +32,40 @@
   S.BASE_SPEED   = 4.8;      // 4.8 × 60 = 288 px/s  (moneyslither SNAKE_SPD)
   S.BOOST_MULT   = 2.1875;   // 288 × 2.1875 = 630 px/s (moneyslither BOOST_SPD)
   S.TURN_RATE    = 0.137;    // 0.137 × 60 = 8.22 rad/s (moneyslither MAX_TURN, rate-matched)
-  S.POINT_DIST   = 1.6;
+  S.POINT_DIST   = 1.6;      // movement-path resample density (internal; body links derive from it)
+  // Legacy width constants — used ONLY by the client auto-zoom feel math now;
+  // the actual snake radius comes from the moneyslither curve below.
   S.WIDTH_BASE   = 15.0;
   S.WIDTH_DEN    = 700;
   S.WIDTH_SCMAX  = 6.0;
-  S.BODY_SCALE   = 0.63;      // visual + collision scale — the ONE number both derive from
-  S.SEG_MULT     = 4;
-  S.START_SIZE   = 100;
-  S.BOOST_BURN_PCT_SEC = 0.108; // proportional boost mass drain (fraction of size / sec)
-  S.BOOST_MIN_SIZE     = 20;    // below this, boosting is impossible
-  S.TICK_RATE    = 50;
-  S.TICK_MS      = 1000 / S.TICK_RATE;      // 20 ms
-  S.DT_SCALE     = 60 / S.TICK_RATE;        // 1.2 — "60fps frames" of motion per tick
-  S.SEGMENT_SPACING_TICKS = 4;              // H2B body-path stride
+  S.BODY_SCALE   = 0.63;
+  S.SEG_MULT     = 4;        // legacy (lobby size-stat display only)
+  S.TICK_RATE    = 60;       // user requested 60 TPS (moneyslither runs 30; per-second values identical)
+  S.TICK_MS      = 1000 / S.TICK_RATE;      // 16.67 ms
+  S.DT_SCALE     = 60 / S.TICK_RATE;        // 1.0 — "60fps frames" of motion per tick
+
+  // ── moneyslither/damnbruh size & body model (user-extracted constants) ───────
+  // length is measured in SECTIONS. size = sections × SIZE_PER_SEGMENT.
+  //   radius   = BASE_RADIUS + size^RADIUS_GROWTH × RADIUS_SCALE
+  //   spacing  = radius × SEGMENT_SPACING  (body link spacing — VARIABLE, grows with girth)
+  //   sections = the number of body links (start 24, +2 per food, boost floor 12)
+  S.SIZE_PER_SEGMENT = 5;
+  S.SEGMENT_SPACING  = 0.5;
+  S.BASE_RADIUS      = 8;
+  S.RADIUS_GROWTH    = 0.6;
+  S.RADIUS_SCALE     = 0.8;
+  S.INIT_SECTIONS    = 24;    // starting length
+  S.MIN_SECTIONS     = 8;     // absolute floor
+  S.MAX_SECTIONS     = 300;   // hard cap (paid lobbies: min(300, floor(usd×70)))
+  S.FOOD_GROW        = 2;     // sections per food orb
+  S.FOOD_TARGET      = 135;   // orbs on map
+  S.FOOD_PICKUP_R    = 29;    // pickup reach beyond snake radius
+  S.KILL_FOOD_PICKUP_R = 42;  // kill-food (SOL drop) reach beyond snake radius
+  S.SHED_NOEAT_MS    = 4000;  // can't re-eat own boost-shed pebbles for this long
+  // Boost drain: 3.0 sections per 8 ticks @30TPS = 0.375/tick = 11.25 sections/sec.
+  // Expressed per-second so it is tick-rate independent at our 60 TPS.
+  S.BOOST_DRAIN_SECTIONS_PER_SEC = 11.25;
+  S.BOOST_MIN_SIZE   = 12;    // boost stops draining below this many sections
 
   // ── Unified collision knobs (V405) ──────────────────────────────────────────
   // collision(body) radius = renderedRadius × HITBOX_MULT
@@ -59,16 +80,29 @@
   S.FACE_COS     = Math.cos(S.FACE_DEG * Math.PI / 180);
   S.COLLISION_GRACE_MS = 1500; // spawn grace before a snake can kill or be killed
 
-  // ── Geometry (the single radius definition) ─────────────────────────────────
-  // Linear-in-length thickness, capped at WIDTH_SCMAX, exactly as the server has
-  // always computed it. The client renders at snakeRadius() so hitbox == drawing.
-  S.snakeThickness = function (len) {
-    return S.WIDTH_BASE * Math.min(1 + ((len || 100) - S.START_SIZE) / S.WIDTH_DEN, S.WIDTH_SCMAX);
+  // ── Geometry (the single radius definition — moneyslither curve) ─────────────
+  // radius = BASE_RADIUS + (sections × SIZE_PER_SEGMENT)^RADIUS_GROWTH × RADIUS_SCALE
+  // The client renders at snakeRadius(), so hitbox and drawing share one source.
+  S.snakeRadius = function (len) {
+    var sections = Math.max(S.MIN_SECTIONS, (len || S.INIT_SECTIONS));
+    return S.BASE_RADIUS + Math.pow(sections * S.SIZE_PER_SEGMENT, S.RADIUS_GROWTH) * S.RADIUS_SCALE;
   };
-  S.snakeRadius = function (len) { return S.snakeThickness(len) * S.BODY_SCALE; };
+  // Back-compat shim: a few client call sites (zoom feel) use thickness×BODY_SCALE;
+  // defining thickness = radius/BODY_SCALE keeps thickness×BODY_SCALE === radius.
+  S.snakeThickness = function (len) { return S.snakeRadius(len) / S.BODY_SCALE; };
   S.bodyHitR    = function (len) { return S.snakeRadius(len) * S.HITBOX_MULT; };
   S.headHitR    = function (len) { return S.snakeRadius(len) * S.HITBOX_MULT * S.HEAD_MULT; };
-  S.segmentsForSize = function (len) { return Math.max(20, Math.floor((len || 40) * S.SEG_MULT)); };
+  // Body-link layout: `sections` links spaced radius×0.5 apart along the movement
+  // path. Internally the path is still resampled at POINT_DIST density, so links
+  // are path points strided pathStride() apart — one shared definition for the
+  // renderer, the H2B collision pass, and the server's path transmission.
+  S.segSpacing   = function (len) { return S.snakeRadius(len) * S.SEGMENT_SPACING; };
+  S.pathStride   = function (len) { return Math.max(1, Math.round(S.segSpacing(len) / S.POINT_DIST)); };
+  S.bodySections = function (len) { return Math.max(2, Math.floor(len || S.INIT_SECTIONS)); };
+  // Total PATH POINTS spanning the body (draw cap + path-buffer sizing).
+  S.segmentsForSize = function (len) {
+    return Math.max(20, S.bodySections(len) * S.pathStride(len));
+  };
 
   // ── Distance + swept helpers ────────────────────────────────────────────────
   S.dist2 = function (ax, ay, bx, by) { var dx = ax - bx, dy = ay - by; return dx * dx + dy * dy; };
@@ -126,7 +160,9 @@
     var spd = S.BASE_SPEED * S.DT_SCALE;
     if (sn.boosting) {
       spd *= S.BOOST_MULT;
-      var burn = sn.length * S.BOOST_BURN_PCT_SEC * (S.DT_SCALE / 60);
+      // moneyslither drain: CONSTANT rate (11.25 sections/sec), floored at
+      // BOOST_MIN_SIZE — not proportional to size.
+      var burn = S.BOOST_DRAIN_SECTIONS_PER_SEC / S.TICK_RATE;
       sn.length = Math.max(S.BOOST_MIN_SIZE, sn.length - burn);
     }
     sn.headR = S.snakeRadius(sn.length);
@@ -175,10 +211,14 @@
     var r  = S.headHitR(attacker.length) + S.bodyHitR(target.length);
     var r2 = r * r;
     var ap = prevOf(attacker);
-    var lim = Math.min(S.segmentsForSize(target.length || 40), 1200);
+    // Body links: bodySections(target) points, spaced radius×0.5 along the path —
+    // i.e. every pathStride()-th path point. Start at k=2 (skip the neck; those
+    // two links sit inside the head zone and belong to the H2H referee).
+    var stride = S.pathStride(target.length);
+    var lim = Math.min(S.bodySections(target.length), 1200);
     var segs = target.segs || [];
     for (var k = 2; k < lim; k++) {
-      var seg = segs[k * S.SEGMENT_SPACING_TICKS];
+      var seg = segs[k * stride];
       if (!seg) break;
       if (S.dist2(attacker.x, attacker.y, seg.x, seg.y) < r2
           || S.segHitsCircle(ap.x, ap.y, attacker.x, attacker.y, seg.x, seg.y, r)) return true;
@@ -186,9 +226,10 @@
     return false;
   };
 
-  // Food pickup: head circle vs food circle (rendered radius + food radius).
+  // Food pickup — moneyslither reach: snake radius + FOOD_PICKUP_R px (generous,
+  // covers the orb's own size; f.r is render-only).
   S.foodContact = function (sn, f) {
-    var r = S.snakeRadius(sn.length) + f.r;
+    var r = S.snakeRadius(sn.length) + S.FOOD_PICKUP_R;
     return S.dist2(sn.x, sn.y, f.x, f.y) < r * r;
   };
 

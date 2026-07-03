@@ -1550,7 +1550,7 @@ var W = {
 };
 
 var SOL_USD    = 148;
-var _BASE_WORLD      = 3800; // baseline arena diameter (1 player)
+var _BASE_WORLD      = 6000; // moneyslither arena: radius 3000 → diameter 6000 (fixed)
 var _WORLD_PER_PLAYER = 150; // arena grows 150px diameter per extra remote player
 var WORLD      = _BASE_WORLD;
 var WORLD_R    = WORLD/2;  // radius of circular arena
@@ -1578,7 +1578,8 @@ var BOOST_MULT  = SIM.BOOST_MULT;
 var TURN_RATE   = SIM.TURN_RATE;
 var SEG_MULT    = SIM.SEG_MULT;
 var COLLISION_GRACE_MS    = SIM.COLLISION_GRACE_MS;
-var SEGMENT_SPACING_TICKS = SIM.SEGMENT_SPACING_TICKS;
+// (SEGMENT_SPACING_TICKS removed — body links are now spaced radius×0.5 via
+//  SIM.pathStride/SIM.bodySections, the moneyslither variable-spacing model.)
 // Tunables — mirror SIM.* into locals for the debug overlay/diagram; _ctSetTune
 // keeps SIM.* (the authority collision reads) and these mirrors in lockstep.
 var HITBOX_MULT = SIM.HITBOX_MULT;
@@ -3656,7 +3657,7 @@ function _wsHandleMsg(msg, fromAbly) {
     // Server sends food only every 3 ticks so this runs at ~8Hz, not 25Hz.
     if (d.food && gameRunning) {
       var _df2 = food.filter(function(f){ return f.isDeath; });
-      food = _df2.concat(d.food.map(function(f){ return {x:f.x,y:f.y,r:f.r,color:f.c,value:f.v,id:f.id}; }));
+      food = _df2.concat(d.food.map(function(f){ return {x:f.x,y:f.y,r:f.r,color:f.c,value:f.v,id:f.id,o:f.o}; }));
     }
 
     // Reconcile local player length/position from server (soft correction)
@@ -5167,7 +5168,7 @@ function _boostOn(e){
   if(e && e.button!=null && e.button!==0) return;
   if(_scrollLock) return; // no boost during scroll-zoom
   if(e && e.touches && e.touches.length>1) return; // multi-touch = pinch, not boost
-  if(!player||player.length<=8) return;
+  if(!player||player.length<=SIM.BOOST_MIN_SIZE) return; // match the boost gate everywhere else
   boosting=true;
 }
 function _boostOff(e){ if(e && e.button!=null && e.button!==0) return; boosting=false; }
@@ -5455,7 +5456,7 @@ function launchGame() {
   peers = peers.filter(function(p){ return p.isRemote&&p.alive; });
   // Seed food from server list (authoritative) — fall back to local spawn if server hasn't sent yet
   if (_serverFood && _serverFood.length > 0) {
-    food = _serverFood.map(function(f){ return {x:f.x,y:f.y,r:f.r,color:f.c,value:f.v,id:f.id}; });
+    food = _serverFood.map(function(f){ return {x:f.x,y:f.y,r:f.r,color:f.c,value:f.v,id:f.id,o:f.o}; });
     _serverFood = null;
   } else {
     var _cx=WORLD/2, _cy=WORLD/2;
@@ -5512,7 +5513,7 @@ function launchGame() {
 }
 
 function mkSnake(x,y,color,name,isMe,startLength){
-  var initLen = startLength || 100;              // MS START_SIZE=100 default
+  var initLen = startLength || SIM.INIT_SECTIONS; // moneyslither: 24 sections at spawn
   var initSegCount = segmentsForSize(initLen);   // number of body segments MS would show
   var segs=[]; for(var i=0;i<initSegCount;i++) segs.push({x:x-i*POINT_DIST,y:y});
   var _initHeadR=snakeThickness(initLen)*1.15;
@@ -5523,8 +5524,9 @@ function getMaxSegs(){ return 600; }
 function grow(s,fval){
   s.widthBonus = (s.widthBonus||0) + 0.60;
   if(s.isMe && boosting) return;
-  if(snakeRadius(s) >= 50) return; // max visible size cap (headR 50)
-  s.length = (s.length||100) + (fval||1)*6; // matches server: sn.length += f.value * 6
+  // moneyslither: every orb is worth FOOD_GROW (2) sections, capped at MAX_SECTIONS.
+  // (Paid-lobby caps are enforced server-side; the reconcile ease tracks them.)
+  s.length = Math.min(SIM.MAX_SECTIONS, (s.length||SIM.INIT_SECTIONS) + SIM.FOOD_GROW);
 }
 function spawnPlayer(){
   var cx=WORLD/2, cy=WORLD/2, sx, sy;
@@ -5544,9 +5546,9 @@ function spawnPlayer(){
     }
     if(minD>bestDist){ bestDist=minD; bestX=_tx; bestY=_ty; }
   }
-  var _spawnL=100;
+  var _spawnL=SIM.INIT_SECTIONS;   // 24 sections (new moneyslither model — NOT the old size 100)
   var _spawnA=null;
-  if (_serverSpawn) { sx=_serverSpawn.x; sy=_serverSpawn.y; _spawnL=_serverSpawn.l||100; _spawnA=_serverSpawn.a||null; _serverSpawn=null; }
+  if (_serverSpawn) { sx=_serverSpawn.x; sy=_serverSpawn.y; _spawnL=_serverSpawn.l||SIM.INIT_SECTIONS; _spawnA=_serverSpawn.a||null; _serverSpawn=null; }
   else { sx=bestX; sy=bestY; }
   var pn=userProfile?userProfile.name.split(' ')[0].slice(0,14):'YOU';
   _preRejoinAvgSegs=0; // reset
@@ -5603,7 +5605,7 @@ function onTouch(e){
 }
 function onKD(e){
   if(_chatOpen) return; // all keys go to chat input while chat is open
-  if(e.code==='Space'&&gameRunning){ e.preventDefault(); if(player&&player.length>20) boosting=true; return; }
+  if(e.code==='Space'&&gameRunning){ e.preventDefault(); if(player&&player.length>SIM.BOOST_MIN_SIZE) boosting=true; return; }
   if(e.key.toLowerCase()==='q'&&!qDown&&gameRunning&&player&&player.alive){ qDown=true; qStart=performance.now(); startCharge(); }
   if(e.key==='F8'){ e.preventDefault(); _ctTogglePanel(); return; }
   if(e.key.toLowerCase()==='t'&&gameRunning&&player&&player.alive){ e.preventDefault(); _openChat(); }
@@ -5679,7 +5681,7 @@ function _initJoystick(){
   // ── Boost ─────────────────────────────────────
   bBtn.addEventListener('touchstart',function(e){
     e.preventDefault(); bBtn.classList.add('active');
-    if(player&&player.length>20) boosting=true;
+    if(player&&player.length>SIM.BOOST_MIN_SIZE) boosting=true;
   },{passive:false});
   bBtn.addEventListener('touchend',function(e){
     e.preventDefault(); bBtn.classList.remove('active'); boosting=false;
@@ -6070,13 +6072,11 @@ function update(_dt){
   if(boosting && boostE>0 && !_boostLocked){
     spd *= BOOST_MULT;
     boostE = Math.max(0, boostE - 0.25 * _dt);
-    // PROPORTIONAL mass drain — identical rate to the authoritative server
-    // (SIM.BOOST_BURN_PCT_SEC per second), frame-rate corrected via _dt (60fps
-    // units). Replaces the old flat 90/sec drain that made client length diverge
-    // from the server every boosted frame (divergence D1).
+    // moneyslither drain — CONSTANT 11.25 sections/sec (identical to the server's
+    // SIM.stepSnake), frame-rate corrected via _dt (60fps units), floored at 12.
     if(player.length > SIM.BOOST_MIN_SIZE){
       player.length = Math.max(SIM.BOOST_MIN_SIZE,
-        player.length - player.length * SIM.BOOST_BURN_PCT_SEC * (_dt / 60));
+        player.length - SIM.BOOST_DRAIN_SECTIONS_PER_SEC * (_dt / 60));
     }
   }
   // No passive recharge — boost refills only from eating orbs or getting kills
@@ -6316,14 +6316,12 @@ function _hoHash(a,b){
   return h&1;
 }
 
-// How many body segments to render/store for a given size. CONTINUOUS (no rounding) so
-// width/length grow smoothly every orb. Above 100 the snake keeps lengthening at a
-// visible rate (0.25 seg per size unit ≈ +4 world-units of tail per orb).
-function segmentsForSize(sz){
-  sz=Math.max(40,Math.min(Number(sz)||40,100000));
-  var n=(sz<=100)?(8+(sz-40)*(26-8)/(100-40)):(26+(sz-100)*0.25);
-  return Math.max(8,Math.min(Math.floor(n),50000));
-}
+// How many body PATH POINTS span the snake — delegates to the shared sim.js so the
+// renderer, the per-frame segment buffers, and the collision/server all agree on the
+// body length. (The old local curve here assumed the pre-rewrite "size" units, 40-6000;
+// under the moneyslither SECTIONS model it clamped a 24-section spawn to 40 → 8 points,
+// drawing every snake as a tiny stub. One source of truth: SIM.segmentsForSize.)
+function segmentsForSize(sz){ return SIM.segmentsForSize(_len(sz)); }
 // ── Geometry + collision helpers — ALL delegate to the shared sim.js ──────────
 // One source of truth. These wrappers exist only to accept a snake OBJECT (legacy
 // call style) as well as a raw length, and to expose the object-arg swept test the
