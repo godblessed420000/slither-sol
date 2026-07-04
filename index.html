@@ -1492,7 +1492,7 @@ canvas{display:block;width:100%;height:100%;}
 // slither-sol.com is served by Vercel, which deploys this file verbatim on push.
 // This is the number players actually see. (The old GitHub Pages workflow that
 // auto-stamped V<VERSION> deployed to a dead host and is now disabled.)
-var GAME_BUILD = 'V413';
+var GAME_BUILD = 'V414';
 
 var PRIVY_APP_ID          = 'client-WY6aEf1eS4reRDrBq7ghh8arEiMaKSj1Vk37ZG8CAawEF';
 var HOUSE_WALLET_ADDRESS  = '2QnrdhxXYt8ythhGYHDz6MtTZE1z2bYvbss8z3ZGj2uJ';
@@ -3724,7 +3724,18 @@ function _wsHandleMsg(msg, fromAbly) {
         if(_rdy >  _rWH) _rdy -= WORLD;
         if(_rdy < -_rWH) _rdy += WORLD;
         var _gapMag2 = _rdx*_rdx + _rdy*_rdy;
-        if (_autoCircle) {
+        // ── REJOIN de-lag (V414) ────────────────────────────────────────────────
+        // A self-gap larger than any latency could produce, within the spawn-grace
+        // window right after (re)spawn, can only be a STALE CROSS-LIFE snapshot — a
+        // state packet generated for the PREVIOUS life, or before the server processed
+        // the respawn. Reconciling toward it drags the fresh snake across the map over
+        // ~1s (the "snake rejoins but very laggy" report — GAP B measured up to ~3800wu
+        // in the first moment after rejoin). Normal 1-RTT prediction error at this speed
+        // is only ~30wu, so a >400wu gap this early is unambiguously stale: ignore it
+        // (the next valid snapshot lands the snake correctly) and drop any queued drag.
+        if (player.spawnTs && (Date.now() - player.spawnTs) < SIM.COLLISION_GRACE_MS && _gapMag2 > 400*400) {
+          player._corrX = 0; player._corrY = 0;
+        } else if (_autoCircle) {
           // MEASURED (V410, live, clean steady-state auto-circle): disabling ALL
           // correction while circling did NOT give a perfect circle — instead the
           // client (variable-dt render) slowly drifted from the server (fixed 50Hz
