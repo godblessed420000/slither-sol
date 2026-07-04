@@ -1492,7 +1492,7 @@ canvas{display:block;width:100%;height:100%;}
 // slither-sol.com is served by Vercel, which deploys this file verbatim on push.
 // This is the number players actually see. (The old GitHub Pages workflow that
 // auto-stamped V<VERSION> deployed to a dead host and is now disabled.)
-var GAME_BUILD = 'V414';
+var GAME_BUILD = 'V415';
 
 var PRIVY_APP_ID          = 'client-WY6aEf1eS4reRDrBq7ghh8arEiMaKSj1Vk37ZG8CAawEF';
 var HOUSE_WALLET_ADDRESS  = '2QnrdhxXYt8ythhGYHDz6MtTZE1z2bYvbss8z3ZGj2uJ';
@@ -5476,10 +5476,18 @@ function launchGame() {
   }
   moneyDrops=[]; _claimedDrops={}; gameRunning=true; _cashoutInProgress=false;
   if(_PERF) _perfInit(); // performance profiler — no-op unless ?perf=1
-  // PROVEN LIVE (V407): if the game starts while the window is hidden/minimized,
-  // visibilitychange never fires again, the rAF loop never runs, and NO input is
-  // ever sent — the server snake sails blind until it dies. The worker fallback
-  // only armed on a visibility TRANSITION; arm it here too if already hidden.
+  // Single update-driver guarantee (V415): ALWAYS stop any leftover background worker
+  // first, then re-arm it only if we're actually hidden. Bug it fixes: if you alt-
+  // tabbed away on the death/spectate screen, the worker was started (visibilitychange
+  // → hidden while _spectating). Its self-stop check is `!gameRunning && !_spectating`,
+  // which becomes FALSE the moment you rejoin (gameRunning=true) — so the worker kept
+  // running. launchGame also starts the rAF loop, so BOTH drove update() at once
+  // (~60fps rAF + ~30fps worker = ~90 sim steps/s) — the snake outran the 60fps server
+  // and got reconciled every frame: "rejoins but very laggy." Now exactly one driver:
+  // rAF when visible, worker when hidden.
+  // PROVEN LIVE (V407): if the game starts while hidden, visibilitychange never fires,
+  // the rAF loop never runs, and NO input is sent — so the worker must drive when hidden.
+  _stopBgWorker();
   if(document.hidden) _startBgWorker();
   _spectating=false; _specTargetId=null; var _shEl=document.getElementById('specHud'); if(_shEl) _shEl.style.display='none';
   _hideMobileBar(); // hide wallet bar during gameplay — HUD shows score/balance
@@ -5910,6 +5918,12 @@ document.addEventListener('visibilitychange',function(){
 function loop(){
   if(!gameRunning&&!_spectating){ _loopActive=false; _rafHandle=null; return; }
   _loopActive=true;
+  // Single-driver guard (V415): while the tab is HIDDEN the background worker is the
+  // sole update()/input driver (rAF is throttled and would only add jittery extra
+  // steps). Defer entirely to it — just keep the rAF chain alive so it resumes on
+  // wake. When visible, the worker is stopped, so this never fires and the loop runs
+  // normally. Guarantees update() has exactly one caller and never double-simulates.
+  if(_bgWorker && document.hidden){ _rafHandle = requestAnimationFrame(loop); return; }
   var _lt = performance.now();
   // Normalize to 60fps: dt=1.0 at 60fps, 0.5 at 120fps, 2.0 at 30fps.
   // Cap at 2.5 to prevent huge jumps after tab-switch or GC pause.
