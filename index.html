@@ -1492,7 +1492,7 @@ canvas{display:block;width:100%;height:100%;}
 // slither-sol.com is served by Vercel, which deploys this file verbatim on push.
 // This is the number players actually see. (The old GitHub Pages workflow that
 // auto-stamped V<VERSION> deployed to a dead host and is now disabled.)
-var GAME_BUILD = 'V415';
+var GAME_BUILD = 'V416';
 
 var PRIVY_APP_ID          = 'client-WY6aEf1eS4reRDrBq7ghh8arEiMaKSj1Vk37ZG8CAawEF';
 var HOUSE_WALLET_ADDRESS  = '2QnrdhxXYt8ythhGYHDz6MtTZE1z2bYvbss8z3ZGj2uJ';
@@ -1587,7 +1587,7 @@ var HEAD_MULT   = SIM.HEAD_MULT;
 var FACE_DEG    = SIM.FACE_DEG;
 var FACE_COS    = SIM.FACE_COS;
 // Client-only presentation constants (not simulation — server has no equivalent)
-var ZOOM_PX     = 20;        // controls auto-zoom level (higher = zoomed in more)
+var ZOOM_PX     = 15;        // controls auto-zoom level (higher = zoomed in more) — 20→15 = ~25% more zoomed out
 var CIRCLE_RADIUS_WU = 46;   // auto-circle radius in world units (visual only)
 var MAX_FOOD   = 150;      // hard cap on food pellets (client render list)
 var CASHOUT_FEE= 0.10;
@@ -6020,7 +6020,7 @@ function update(_dt){
         }
         camX=_st.x; camY=_st.y;
         var _szCur=snakeThickness(_st.length||40);
-        var _sautoZ=Math.max(0.42,Math.min(1.9,ZOOM_PX/Math.sqrt(_szCur*WIDTH_BASE)));
+        var _sautoZ=Math.max(0.30,Math.min(1.9,ZOOM_PX/Math.sqrt(_szCur*WIDTH_BASE)));
         CAM_ZOOM=CAM_ZOOM+(_sautoZ*_zoomScale-CAM_ZOOM)*0.12;
       } else {
         // Target died/left — try to find any alive peer and auto-follow them
@@ -6187,7 +6187,7 @@ function update(_dt){
   //   • 4× thicker → 2× bigger on screen, while the camera gently pulls back.
   // (The old 22/snakeRadius made screen_radius constant, cancelling all width growth.)
   var _zCur=snakeThickness(player.length||100);
-  var _autoZ=Math.max(0.42,Math.min(1.9, ZOOM_PX/Math.sqrt(_zCur*WIDTH_BASE)));
+  var _autoZ=Math.max(0.30,Math.min(1.9, ZOOM_PX/Math.sqrt(_zCur*WIDTH_BASE)));
   var _tarZ=_autoZ*_zoomScale; // scroll wheel can zoom OUT up to 25% (_zoomScale ∈ [0.75,1.0])
   CAM_ZOOM=CAM_ZOOM+(_tarZ-CAM_ZOOM)*0.12; // lerp — responsive to scroll, still smooth
 
