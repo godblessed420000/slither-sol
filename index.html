@@ -1492,7 +1492,7 @@ canvas{display:block;width:100%;height:100%;}
 // slither-sol.com is served by Vercel, which deploys this file verbatim on push.
 // This is the number players actually see. (The old GitHub Pages workflow that
 // auto-stamped V<VERSION> deployed to a dead host and is now disabled.)
-var GAME_BUILD = 'V417';
+var GAME_BUILD = 'V418';
 
 var PRIVY_APP_ID          = 'client-WY6aEf1eS4reRDrBq7ghh8arEiMaKSj1Vk37ZG8CAawEF';
 var HOUSE_WALLET_ADDRESS  = '2QnrdhxXYt8ythhGYHDz6MtTZE1z2bYvbss8z3ZGj2uJ';
@@ -3829,7 +3829,9 @@ function _wsHandleMsg(msg, fromAbly) {
           }
           _remoteMap[_psn.id] = _prp; peers.push(_prp); _updateArenaSize();
           var _prnm = _prp.name;
-          setTimeout(function(){ playJoinDing(); kFeed(_prnm + ' is in the game!'); }, 0);
+          // Bots respawn constantly — don't ding/announce them (kill feeds still fire).
+          if (String(_psn.id).indexOf('_bot') !== 0)
+            setTimeout(function(){ playJoinDing(); kFeed(_prnm + ' is in the game!'); }, 0);
         } else if (_prp) {
           _prp.lastT = _sNow;
           if (_psn.l) { _prp.length = _psn.l; _prp.headR = snakeRadius(_psn.l); }
