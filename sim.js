@@ -157,7 +157,9 @@
     sn.angle += Math.sign(da) * Math.min(Math.abs(da), S.TURN_RATE * S.DT_SCALE);
 
     sn.boosting = !!(input && input.b) && sn.length > S.BOOST_MIN_SIZE;
-    var spd = S.BASE_SPEED * S.DT_SCALE;
+    // _spdMult: optional per-snake speed factor (default 1). Bots set it <1 to move
+    // slower; nothing else sets it, so players + the determinism harness are unchanged.
+    var spd = S.BASE_SPEED * S.DT_SCALE * (sn._spdMult || 1);
     if (sn.boosting) {
       spd *= S.BOOST_MULT;
       // moneyslither drain: CONSTANT rate (11.25 sections/sec), floored at

@@ -1492,7 +1492,7 @@ canvas{display:block;width:100%;height:100%;}
 // slither-sol.com is served by Vercel, which deploys this file verbatim on push.
 // This is the number players actually see. (The old GitHub Pages workflow that
 // auto-stamped V<VERSION> deployed to a dead host and is now disabled.)
-var GAME_BUILD = 'V418';
+var GAME_BUILD = 'V419';
 
 var PRIVY_APP_ID          = 'client-WY6aEf1eS4reRDrBq7ghh8arEiMaKSj1Vk37ZG8CAawEF';
 var HOUSE_WALLET_ADDRESS  = '2QnrdhxXYt8ythhGYHDz6MtTZE1z2bYvbss8z3ZGj2uJ';
@@ -3818,6 +3818,7 @@ function _wsHandleMsg(msg, fromAbly) {
             skin:'default', isMe:false, isRemote:true, alive:true,
             remoteId:_psn.id, joinTs:Date.now(),
             headR:snakeRadius(_pil), lastT:_sNow,
+            _spdMult:(_psn.sm!=null?_psn.sm:1), // slow-bot speed factor — predict at matching speed
             _segAccum:0 };
           if (_psn.q && _psn.q.length >= 4) {
             // Authoritative path available on first sight — build the exact server body.
@@ -3836,6 +3837,7 @@ function _wsHandleMsg(msg, fromAbly) {
           _prp.lastT = _sNow;
           if (_psn.l) { _prp.length = _psn.l; _prp.headR = snakeRadius(_psn.l); }
           _prp.boosting = !!_psn.b;
+          _prp._spdMult = (_psn.sm!=null?_psn.sm:1); // keep slow-bot speed factor current
           // Drive the physics sim: client turns toward this angle each frame
           _prp.targetAngle = _psn.a;
           if (_DBG) { _prp._dbgSrvX = _psn.x; _prp._dbgSrvY = _psn.y; if (_psn.q) _prp._dbgPath = _psn.q; } // instrumentation only
@@ -6045,7 +6047,7 @@ function update(_dt){
       while(_spda>Math.PI)_spda-=Math.PI*2;
       while(_spda<-Math.PI)_spda+=Math.PI*2;
       _spp.angle+=Math.sign(_spda)*Math.min(Math.abs(_spda),TURN_RATE*_dt);
-      var _spSpd=BASE_SPEED*_dt*(_spp.boosting?BOOST_MULT:1);
+      var _spSpd=BASE_SPEED*_dt*(_spp.boosting?BOOST_MULT:1)*(_spp._spdMult||1);
       var _splpx=_spp.x,_splpy=_spp.y;
       _spp.x+=Math.cos(_spp.angle)*_spSpd;
       _spp.y+=Math.sin(_spp.angle)*_spSpd;
@@ -6156,7 +6158,7 @@ function update(_dt){
       p.angle += Math.sign(_pda) * Math.min(Math.abs(_pda), TURN_RATE * _dt);
 
       // Move at correct speed (boost-aware)
-      var _pSpd = BASE_SPEED * _dt * (p.boosting ? BOOST_MULT : 1);
+      var _pSpd = BASE_SPEED * _dt * (p.boosting ? BOOST_MULT : 1) * (p._spdMult || 1);
       var _plpx = p.x, _plpy = p.y;
       p.x += Math.cos(p.angle) * _pSpd;
       p.y += Math.sin(p.angle) * _pSpd;
