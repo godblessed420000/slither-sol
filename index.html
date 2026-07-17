@@ -1492,7 +1492,7 @@ canvas{display:block;width:100%;height:100%;}
 // slither-sol.com is served by Vercel, which deploys this file verbatim on push.
 // This is the number players actually see. (The old GitHub Pages workflow that
 // auto-stamped V<VERSION> deployed to a dead host and is now disabled.)
-var GAME_BUILD = 'V419';
+var GAME_BUILD = 'V420';
 
 var PRIVY_APP_ID          = 'client-WY6aEf1eS4reRDrBq7ghh8arEiMaKSj1Vk37ZG8CAawEF';
 var HOUSE_WALLET_ADDRESS  = '2QnrdhxXYt8ythhGYHDz6MtTZE1z2bYvbss8z3ZGj2uJ';
@@ -6988,6 +6988,18 @@ function drawS(s){
 
   var skin = s.skin || 'default';
 
+  // Facing + pupil-look vectors. MUST be computed here, ABOVE the remote-peer perf
+  // fast-path below — that path uses fx2/fy2/sxp/syp/_lookDX/_lookDY to place the eyes
+  // and then returns. They used to be declared further down, so `var` hoisting left them
+  // `undefined` in the perf path → eye coords became NaN → remote snakes rendered with
+  // NO EYES whenever 2+ peers were alive (_gfxPerfMode). Bots made that permanent.
+  var ang=s.angle, fx2=Math.cos(ang), fy2=Math.sin(ang);
+  var sxp=Math.cos(ang+Math.PI/2), syp=Math.sin(ang+Math.PI/2);
+  // Pupil look direction: player tracks mouse, others look forward
+  var _lookDX, _lookDY;
+  if(s.isMe){ var _ldx=mouseX-hx,_ldy=mouseY-hy,_ld=Math.sqrt(_ldx*_ldx+_ldy*_ldy)||1; _lookDX=_ldx/_ld; _lookDY=_ldy/_ld; }
+  else { _lookDX=fx2; _lookDY=fy2; }
+
   // ── Perf fast-path: remote peers with 2+ players → no shadow blur ──
   if(s.isRemote && _gfxPerfMode){
     var _skMap={'frost':'#aaeeff','void':'#00ff66','inferno':'#ff5500','toxic':'#39ff14',
@@ -7052,12 +7064,7 @@ function drawS(s){
     }
   }
 
-  var ang=s.angle, fx2=Math.cos(ang), fy2=Math.sin(ang);
-  var sxp=Math.cos(ang+Math.PI/2), syp=Math.sin(ang+Math.PI/2);
-  // Pupil look direction: player tracks mouse, others look forward
-  var _lookDX, _lookDY;
-  if(s.isMe){ var _ldx=mouseX-hx,_ldy=mouseY-hy,_ld=Math.sqrt(_ldx*_ldx+_ldy*_ldy)||1; _lookDX=_ldx/_ld; _lookDY=_ldy/_ld; }
-  else { _lookDX=fx2; _lookDY=fy2; }
+  // (facing + pupil-look vectors are computed above, before the perf fast-path)
   function _pulse(period){ return (tnow%period)/period; }
 
   // ══════════════════ SKIN RENDERING ══════════════════
