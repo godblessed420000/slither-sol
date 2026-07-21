@@ -311,6 +311,9 @@ canvas{display:block;width:100%;height:100%;}
 .skin-equip-btn.equipped{background:var(--green);color:#000;}
 .skin-equip-btn.not-equipped{background:rgba(153,69,255,.25);border:1px solid rgba(153,69,255,.55);color:#cc88ff;}
 .skin-equip-btn.not-equipped:hover{background:rgba(153,69,255,.45);}
+/* ══ GAMES TAB BUTTON ══ */
+#gamesBtn{position:fixed;bottom:72px;left:14px;z-index:300;display:flex;align-items:center;gap:8px;background:linear-gradient(135deg,#9945FF,#14F195);border:none;border-radius:24px;padding:10px 18px;cursor:pointer;font-family:'Orbitron',monospace;font-size:.62rem;font-weight:700;color:#fff;letter-spacing:1px;text-decoration:none;box-shadow:0 0 18px rgba(153,69,255,.45);transition:transform .18s,box-shadow .18s;white-space:nowrap;}
+#gamesBtn:hover{transform:scale(1.07);box-shadow:0 0 32px rgba(20,241,149,.7);}
 /* ══ DISCORD BUTTON ══ */
 #discordBtn{position:fixed;bottom:24px;left:14px;z-index:300;display:flex;align-items:center;gap:8px;background:#5865F2;border:none;border-radius:24px;padding:10px 18px;cursor:pointer;font-family:'Orbitron',monospace;font-size:.62rem;font-weight:700;color:#fff;letter-spacing:1px;text-decoration:none;box-shadow:0 0 18px rgba(88,101,242,.55);transition:transform .18s,box-shadow .18s;white-space:nowrap;}
 #discordBtn:hover{transform:scale(1.07);box-shadow:0 0 32px rgba(88,101,242,.85);}
@@ -1492,7 +1495,7 @@ canvas{display:block;width:100%;height:100%;}
 // slither-sol.com is served by Vercel, which deploys this file verbatim on push.
 // This is the number players actually see. (The old GitHub Pages workflow that
 // auto-stamped V<VERSION> deployed to a dead host and is now disabled.)
-var GAME_BUILD = 'V420';
+var GAME_BUILD = 'V421';
 
 var PRIVY_APP_ID          = 'client-WY6aEf1eS4reRDrBq7ghh8arEiMaKSj1Vk37ZG8CAawEF';
 var HOUSE_WALLET_ADDRESS  = '2QnrdhxXYt8ythhGYHDz6MtTZE1z2bYvbss8z3ZGj2uJ';
@@ -4713,6 +4716,7 @@ function showStart() {
   _wsLeave(); // close any lingering Ably/WS connection (spectating, death screen, etc.)
   _spectating=false; _specTargetId=null; var _shEl2=document.getElementById('specHud'); if(_shEl2) _shEl2.style.display='none';
   var _ffb3=document.getElementById('friendsFloatBtn'); if(_ffb3) _ffb3.style.display='';
+  var _gb=document.getElementById('gamesBtn'); if(_gb) _gb.style.display='';
   var _db=document.getElementById('discordBtn'); if(_db) _db.style.display='';
   var _xb=document.getElementById('xBtn'); if(_xb) _xb.style.display='';
   var _sb=document.getElementById('shopFloatBtn'); if(_sb) _sb.style.display='';
@@ -5500,6 +5504,7 @@ function launchGame() {
   // Hide friends button + close panel during active gameplay
   var _ffb=document.getElementById('friendsFloatBtn'); if(_ffb) _ffb.style.display='none';
   var _ffp=document.getElementById('friendsPanel'); if(_ffp) _ffp.classList.remove('open'); panelOpen=false;
+  var _gb2=document.getElementById('gamesBtn'); if(_gb2) _gb2.style.display='none';
   var _db2=document.getElementById('discordBtn'); if(_db2) _db2.style.display='none';
   var _xb2=document.getElementById('xBtn'); if(_xb2) _xb2.style.display='none';
   var _sb2=document.getElementById('shopFloatBtn'); if(_sb2) _sb2.style.display='none';
@@ -8295,6 +8300,7 @@ function cleanupL(keepAbly){
   _joyActive=false; _joyDX=0; _joyDY=0;
   var cw=document.getElementById('canvasWrap'); if(cw) cw.classList.remove('game-active');
   var _ffb2=document.getElementById('friendsFloatBtn'); if(_ffb2) _ffb2.style.display='';
+  var _gb3=document.getElementById('gamesBtn'); if(_gb3) _gb3.style.display='';
   var _db3=document.getElementById('discordBtn'); if(_db3) _db3.style.display='';
   var _xb3=document.getElementById('xBtn'); if(_xb3) _xb3.style.display='';
   var _sb3=document.getElementById('shopFloatBtn'); if(_sb3) _sb3.style.display='';
@@ -10021,6 +10027,15 @@ window.addEventListener('load', function() {
     </div><!-- end step2 -->
   </div>
 </div>
+
+<!-- ══ GAMES TAB BUTTON ══ -->
+<a id="gamesBtn" href="/rps.html" title="Rock Paper Scissors">
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="#ffffff" xmlns="http://www.w3.org/2000/svg">
+    <path d="M19.5 10.5c0-.23-.01-.45-.03-.68l1.86-1.07-2-3.46-1.88 1.08c-.36-.28-.76-.51-1.18-.69V3.5h-4v2.18c-.42.18-.82.41-1.18.69L9.21 5.29l-2 3.46 1.86 1.07c-.02.23-.03.45-.03.68s.01.45.03.68l-1.86 1.07 2 3.46 1.88-1.08c.36.28.76.51 1.18.69v2.18h4v-2.18c.42-.18.82-.41 1.18-.69l1.88 1.08 2-3.46-1.86-1.07c.02-.23.03-.45.03-.68zm-5.25 2.25a2.25 2.25 0 1 1 0-4.5 2.25 2.25 0 0 1 0 4.5z"/>
+    <path d="M5.5 18.5c0-.17.01-.34.04-.5H3.27l-1 1.73 1.42.82c.27-.21.57-.39.89-.52V18.5z" opacity=".6"/>
+  </svg>
+  GAMES
+</a>
 
 <!-- ══ DISCORD BUTTON ══ -->
 <a id="discordBtn" href="https://discord.gg/2Ez7wNRZ" target="_blank" rel="noopener" title="Join our Discord">

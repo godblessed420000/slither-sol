@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>SLITHER.SOL — Rock Paper Scissors</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap');
+:root{--purple:#9945FF;--green:#14F195;--blue:#00C2FF;--red:#FF4560;--gold:#FFD700;--bg:#020810;--panel:#080d1a;--border:#141e35;--text:#dde6f0;--dim:#3d4f6a;}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:var(--bg);color:var(--text);font-family:'Share Tech Mono',monospace;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;user-select:none;overflow:hidden;}
+
+/* back button */
+#backBtn{position:fixed;top:18px;left:18px;z-index:300;display:flex;align-items:center;gap:8px;background:rgba(153,69,255,.25);border:1px solid rgba(153,69,255,.55);border-radius:24px;padding:10px 18px;cursor:pointer;font-family:'Orbitron',monospace;font-size:.62rem;font-weight:700;color:#fff;letter-spacing:1px;text-decoration:none;box-shadow:0 0 18px rgba(153,69,255,.35);transition:transform .18s,box-shadow .18s;white-space:nowrap;}
+#backBtn:hover{transform:scale(1.07);box-shadow:0 0 32px rgba(153,69,255,.7);}
+
+/* title */
+.rps-title{font-family:'Orbitron',monospace;font-size:1.6rem;font-weight:900;background:linear-gradient(90deg,var(--purple),var(--green));-webkit-background-clip:text;-webkit-text-fill-color:transparent;letter-spacing:4px;margin-bottom:8px;text-align:center;}
+@keyframes titleFlash{0%,100%{opacity:.75;filter:brightness(.9) drop-shadow(0 0 5px rgba(20,241,149,.15));}45%,55%{opacity:1;filter:brightness(1.5) drop-shadow(0 0 22px rgba(20,241,149,1)) drop-shadow(0 0 44px rgba(153,69,215,.8));}}
+.rps-title{animation:titleFlash 1.8s ease-in-out infinite;}
+
+.subtitle{font-family:'Orbitron',monospace;font-size:.55rem;color:var(--dim);letter-spacing:2px;margin-bottom:32px;text-transform:uppercase;}
+
+/* scoreboard */
+.scoreboard{display:flex;gap:28px;margin-bottom:28px;font-family:'Orbitron',monospace;font-size:.7rem;letter-spacing:1px;}
+.score-item{text-align:center;}
+.score-label{color:var(--dim);font-size:.5rem;text-transform:uppercase;letter-spacing:2px;margin-bottom:4px;}
+.score-val{font-size:1.4rem;font-weight:900;}
+.score-val.win{color:var(--green);text-shadow:0 0 12px rgba(20,241,149,.5);}
+.score-val.lose{color:var(--red);text-shadow:0 0 12px rgba(255,69,96,.5);}
+.score-val.draw{color:var(--blue);text-shadow:0 0 12px rgba(0,194,255,.5);}
+
+/* arena */
+.arena{display:flex;align-items:center;gap:40px;margin-bottom:32px;min-height:180px;}
+.fighter{display:flex;flex-direction:column;align-items:center;gap:8px;}
+.fighter-label{font-family:'Orbitron',monospace;font-size:.55rem;color:var(--dim);text-transform:uppercase;letter-spacing:2px;}
+.fighter-choice{font-size:5rem;width:120px;height:120px;display:flex;align-items:center;justify-content:center;background:var(--panel);border:2px solid var(--border);border-radius:16px;transition:all .3s;}
+.fighter-choice.winner{border-color:var(--green);box-shadow:0 0 30px rgba(20,241,149,.4);}
+.fighter-choice.loser{border-color:var(--red);box-shadow:0 0 30px rgba(255,69,96,.3);opacity:.6;}
+.fighter-choice.draw-hi{border-color:var(--blue);box-shadow:0 0 20px rgba(0,194,255,.3);}
+.vs{font-family:'Orbitron',monospace;font-size:1rem;font-weight:900;color:var(--purple);text-shadow:0 0 15px rgba(153,69,255,.5);letter-spacing:2px;}
+
+/* result text */
+.result{font-family:'Orbitron',monospace;font-size:1rem;font-weight:700;letter-spacing:3px;min-height:1.4em;margin-bottom:24px;text-align:center;}
+.result.win-text{color:var(--green);text-shadow:0 0 20px rgba(20,241,149,.6);}
+.result.lose-text{color:var(--red);text-shadow:0 0 20px rgba(255,69,96,.6);}
+.result.draw-text{color:var(--blue);text-shadow:0 0 20px rgba(0,194,255,.5);}
+
+/* pick buttons */
+.picks{display:flex;gap:18px;}
+.pick-btn{width:100px;height:100px;font-size:3.2rem;background:var(--panel);border:2px solid var(--border);border-radius:16px;cursor:pointer;transition:transform .15s,box-shadow .15s,border-color .15s;display:flex;align-items:center;justify-content:center;}
+.pick-btn:hover{transform:scale(1.12);border-color:var(--purple);box-shadow:0 0 25px rgba(153,69,255,.5);}
+.pick-btn:active{transform:scale(.95);}
+.pick-btn.disabled{pointer-events:none;opacity:.4;}
+
+/* streak */
+.streak{font-family:'Orbitron',monospace;font-size:.5rem;color:var(--gold);letter-spacing:2px;margin-top:16px;min-height:1em;text-shadow:0 0 10px rgba(255,215,0,.4);}
+
+/* shake animation */
+@keyframes shake{0%,100%{transform:rotate(0deg);}25%{transform:rotate(-15deg);}75%{transform:rotate(15deg);}50%{transform:rotate(0deg);}}
+.shaking{animation:shake .3s ease-in-out 3;}
+
+/* pop animation */
+@keyframes pop{0%{transform:scale(0.3);opacity:0;}60%{transform:scale(1.15);}100%{transform:scale(1);opacity:1;}}
+.pop{animation:pop .35s ease-out;}
+
+/* responsive */
+@media(max-width:600px){
+  .rps-title{font-size:1.1rem;}
+  .arena{gap:20px;}
+  .fighter-choice{font-size:3.5rem;width:85px;height:85px;}
+  .pick-btn{width:75px;height:75px;font-size:2.4rem;}
+  .picks{gap:12px;}
+  .scoreboard{gap:18px;}
+}
+
+/* background particles */
+canvas#bgCanvas{position:fixed;top:0;left:0;width:100%;height:100%;z-index:-1;pointer-events:none;}
+</style>
+</head>
+<body>
+
+<canvas id="bgCanvas"></canvas>
+
+<a id="backBtn" href="/" title="Back to Slither.sol">
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+  SLITHER.SOL
+</a>
+
+<div class="rps-title">ROCK PAPER SCISSORS</div>
+<div class="subtitle">Choose your weapon</div>
+
+<div class="scoreboard">
+  <div class="score-item"><div class="score-label">Wins</div><div class="score-val win" id="wins">0</div></div>
+  <div class="score-item"><div class="score-label">Losses</div><div class="score-val lose" id="losses">0</div></div>
+  <div class="score-item"><div class="score-label">Draws</div><div class="score-val draw" id="draws">0</div></div>
+</div>
+
+<div class="arena">
+  <div class="fighter">
+    <div class="fighter-label">You</div>
+    <div class="fighter-choice" id="playerPick">❓</div>
+  </div>
+  <div class="vs">VS</div>
+  <div class="fighter">
+    <div class="fighter-label">CPU</div>
+    <div class="fighter-choice" id="cpuPick">❓</div>
+  </div>
+</div>
+
+<div class="result" id="result">&nbsp;</div>
+
+<div class="picks">
+  <button class="pick-btn" data-choice="rock" title="Rock">🪨</button>
+  <button class="pick-btn" data-choice="paper" title="Paper">📄</button>
+  <button class="pick-btn" data-choice="scissors" title="Scissors">✂️</button>
+</div>
+
+<div class="streak" id="streak">&nbsp;</div>
+
+<script>
+var EMOJI = {rock:'🪨', paper:'📄', scissors:'✂️'};
+var CHOICES = ['rock','paper','scissors'];
+var wins=0, losses=0, draws=0, streak=0, streakType='';
+var locked = false;
+
+var playerEl = document.getElementById('playerPick');
+var cpuEl    = document.getElementById('cpuPick');
+var resultEl = document.getElementById('result');
+var streakEl = document.getElementById('streak');
+var winsEl   = document.getElementById('wins');
+var lossesEl = document.getElementById('losses');
+var drawsEl  = document.getElementById('draws');
+
+function getResult(p, c) {
+  if (p === c) return 'draw';
+  if ((p==='rock'&&c==='scissors')||(p==='paper'&&c==='rock')||(p==='scissors'&&c==='paper')) return 'win';
+  return 'lose';
+}
+
+document.querySelectorAll('.pick-btn').forEach(function(btn){
+  btn.addEventListener('click', function(){
+    if (locked) return;
+    locked = true;
+    var choice = btn.dataset.choice;
+    var cpuChoice = CHOICES[Math.floor(Math.random()*3)];
+
+    // reset classes
+    playerEl.className = 'fighter-choice';
+    cpuEl.className = 'fighter-choice';
+    resultEl.className = 'result';
+    document.querySelectorAll('.pick-btn').forEach(function(b){b.classList.add('disabled');});
+
+    // shake phase
+    playerEl.textContent = '✊';
+    cpuEl.textContent = '✊';
+    playerEl.classList.add('shaking');
+    cpuEl.classList.add('shaking');
+    resultEl.innerHTML = '&nbsp;';
+
+    setTimeout(function(){
+      playerEl.classList.remove('shaking');
+      cpuEl.classList.remove('shaking');
+
+      // reveal
+      playerEl.textContent = EMOJI[choice];
+      cpuEl.textContent = EMOJI[cpuChoice];
+      playerEl.classList.add('pop');
+      cpuEl.classList.add('pop');
+
+      var res = getResult(choice, cpuChoice);
+
+      if (res === 'win') {
+        wins++;
+        playerEl.classList.add('winner');
+        cpuEl.classList.add('loser');
+        resultEl.textContent = 'YOU WIN!';
+        resultEl.classList.add('win-text');
+        if (streakType === 'win') streak++; else { streak = 1; streakType = 'win'; }
+      } else if (res === 'lose') {
+        losses++;
+        cpuEl.classList.add('winner');
+        playerEl.classList.add('loser');
+        resultEl.textContent = 'YOU LOSE';
+        resultEl.classList.add('lose-text');
+        if (streakType === 'lose') streak++; else { streak = 1; streakType = 'lose'; }
+      } else {
+        draws++;
+        playerEl.classList.add('draw-hi');
+        cpuEl.classList.add('draw-hi');
+        resultEl.textContent = 'DRAW';
+        resultEl.classList.add('draw-text');
+        streak = 0; streakType = '';
+      }
+
+      winsEl.textContent = wins;
+      lossesEl.textContent = losses;
+      drawsEl.textContent = draws;
+
+      if (streak >= 2) {
+        streakEl.textContent = streak + 'x ' + streakType.toUpperCase() + ' STREAK!';
+      } else {
+        streakEl.innerHTML = '&nbsp;';
+      }
+
+      setTimeout(function(){
+        locked = false;
+        document.querySelectorAll('.pick-btn').forEach(function(b){b.classList.remove('disabled');});
+      }, 600);
+    }, 900);
+  });
+});
+
+// background particles
+(function(){
+  var c = document.getElementById('bgCanvas');
+  var ctx = c.getContext('2d');
+  var particles = [];
+  var COLORS = ['#9945FF','#14F195','#00C2FF','#ff4ecd','#ffb800'];
+  function resize(){ c.width=window.innerWidth; c.height=window.innerHeight; }
+  resize(); window.addEventListener('resize', resize);
+  for(var i=0;i<40;i++){
+    particles.push({
+      x:Math.random()*c.width, y:Math.random()*c.height,
+      r:Math.random()*2+0.5, vx:(Math.random()-.5)*.3, vy:(Math.random()-.5)*.3,
+      color:COLORS[Math.floor(Math.random()*COLORS.length)], alpha:Math.random()*.3+.1
+    });
+  }
+  function draw(){
+    ctx.clearRect(0,0,c.width,c.height);
+    for(var i=0;i<particles.length;i++){
+      var p=particles[i];
+      p.x+=p.vx; p.y+=p.vy;
+      if(p.x<0)p.x=c.width; if(p.x>c.width)p.x=0;
+      if(p.y<0)p.y=c.height; if(p.y>c.height)p.y=0;
+      ctx.globalAlpha=p.alpha;
+      ctx.fillStyle=p.color;
+      ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fill();
+    }
+    requestAnimationFrame(draw);
+  }
+  draw();
+})();
+</script>
+</body>
+</html>
