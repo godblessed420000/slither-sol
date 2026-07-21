@@ -4,25 +4,101 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>SLITHER.SOL — Rock Paper Scissors</title>
+
+<!-- Buffer polyfill (verbatim from index.html) — @solana/web3.js needs window.Buffer -->
+<script>
+!function(){
+  if(typeof window.Buffer!=='undefined'&&typeof window.Buffer.from==='function')return;
+  function B(arg,enc){
+    if(!(this instanceof B))return new B(arg,enc);
+    var a;
+    if(typeof arg==='number')a=new Uint8Array(arg);
+    else a=B.from(arg,enc).valueOf();
+    Object.setPrototypeOf(a,B.prototype);
+    return a;
+  }
+  B.prototype=Object.create(Uint8Array.prototype,{constructor:{value:B,writable:true,configurable:true}});
+  Object.setPrototypeOf(B,Uint8Array);
+  B._w=function(u){Object.setPrototypeOf(u,B.prototype);return u;};
+  B.from=function(v,enc){
+    if(typeof v==='string'){
+      enc=enc||'utf8';
+      if(enc==='hex'){var n=new Uint8Array(v.length>>1);for(var i=0;i<n.length;i++)n[i]=parseInt(v.substr(i*2,2),16);return B._w(n);}
+      if(enc==='base64'){var s=atob(v.replace(/-/g,'+').replace(/_/g,'/'));var n=new Uint8Array(s.length);for(var i=0;i<s.length;i++)n[i]=s.charCodeAt(i);return B._w(n);}
+      return B._w(new TextEncoder().encode(v));
+    }
+    if(v instanceof ArrayBuffer)return B._w(new Uint8Array(v));
+    if(ArrayBuffer.isView(v))return B._w(new Uint8Array(v.buffer,v.byteOffset,v.byteLength));
+    return B._w(new Uint8Array(v));
+  };
+  B.alloc=function(n,f){var a=new Uint8Array(n);if(f!=null)a.fill(typeof f==='string'?f.charCodeAt(0):f);return B._w(a);};
+  B.allocUnsafe=B.allocUnsafeSlow=function(n){return B._w(new Uint8Array(n));};
+  B.isBuffer=function(o){return o instanceof Uint8Array;};
+  B.isEncoding=function(){return true;};
+  B.byteLength=function(s,e){if(typeof s!=='string')return s.byteLength||s.length||0;if(e==='hex')return s.length>>1;if(e==='base64')return Math.ceil(s.length*3/4);return new TextEncoder().encode(s).length;};
+  B.concat=function(list,len){var tot=len||list.reduce(function(s,b){return s+b.length;},0);var o=new Uint8Array(tot),p=0;for(var i=0;i<list.length;i++){o.set(list[i],p);p+=list[i].length;}return B._w(o);};
+  B.compare=function(a,b){for(var i=0;i<Math.min(a.length,b.length);i++){if(a[i]<b[i])return -1;if(a[i]>b[i])return 1;}return a.length<b.length?-1:a.length>b.length?1:0;};
+  B.prototype.toString=function(enc,s,e){var d=s!=null||e!=null?this.subarray(s,e):this;enc=enc||'utf8';if(enc==='hex')return Array.prototype.map.call(d,function(b){return('0'+b.toString(16)).slice(-2);}).join('');if(enc==='base64')return btoa(String.fromCharCode.apply(null,d));return new TextDecoder(enc).decode(d);};
+  B.prototype.toJSON=function(){return{type:'Buffer',data:Array.prototype.slice.call(this)};};
+  B.prototype.equals=function(b){return B.compare(this,b)===0;};
+  B.prototype.copy=function(t,ts,ss,se){ts=ts||0;ss=ss||0;se=se!=null?se:this.length;t.set(this.subarray(ss,se),ts);return se-ss;};
+  B.prototype.slice=B.prototype.subarray=function(s,e){return B._w(Uint8Array.prototype.subarray.call(this,s,e));};
+  B.prototype.write=function(str,off,len,enc){off=off||0;enc=enc||'utf8';var src=B.from(str,enc);var n=Math.min(src.length,len!=null?len:this.length-off);this.set(src.subarray(0,n),off);return n;};
+  B.prototype.fill=Uint8Array.prototype.fill;
+  function dv(b,o,s){return new DataView(b.buffer,b.byteOffset+o,s);}
+  B.prototype.readUInt8=function(o){return this[o];};
+  B.prototype.readInt8=function(o){var v=this[o];return v>=128?v-256:v;};
+  B.prototype.readUInt16LE=function(o){return this[o]|(this[o+1]<<8);};
+  B.prototype.readUInt16BE=function(o){return(this[o]<<8)|this[o+1];};
+  B.prototype.readInt16LE=function(o){var v=this.readUInt16LE(o);return v&0x8000?v-0x10000:v;};
+  B.prototype.readInt16BE=function(o){var v=this.readUInt16BE(o);return v&0x8000?v-0x10000:v;};
+  B.prototype.readUInt32LE=function(o){return((this[o])|(this[o+1]<<8)|(this[o+2]<<16))+this[o+3]*0x1000000;};
+  B.prototype.readUInt32BE=function(o){return this[o]*0x1000000+((this[o+1]<<16)|(this[o+2]<<8)|this[o+3]);};
+  B.prototype.readInt32LE=function(o){return(this[o])|(this[o+1]<<8)|(this[o+2]<<16)|(this[o+3]<<24);};
+  B.prototype.readInt32BE=function(o){return(this[o]<<24)|(this[o+1]<<16)|(this[o+2]<<8)|this[o+3];};
+  B.prototype.writeUInt8=function(v,o){this[o]=v&255;return o+1;};
+  B.prototype.writeUInt16LE=function(v,o){this[o]=v;this[o+1]=v>>>8;return o+2;};
+  B.prototype.writeUInt32LE=function(v,o){this[o]=v&255;this[o+1]=v>>>8&255;this[o+2]=v>>>16&255;this[o+3]=v>>>24;return o+4;};
+  B.Buffer=B; window.Buffer=B;
+  window.buffer=window.buffer||{}; window.buffer.Buffer=B; window.buffer.isBuffer=B.isBuffer;
+  try{global.Buffer=B;}catch(e){} try{globalThis.Buffer=B;}catch(e){}
+  window.process=window.process||{env:{},browser:true,version:'',nextTick:function(fn){setTimeout(fn,0);}};
+}();
+</script>
+<script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@1.87.6/lib/index.iife.min.js"></script>
+<script src="https://cdn.ably.com/lib/ably.min-2.js"></script>
+<script>
+(function(){
+  var B=window.Buffer;
+  if(B){B.Buffer=B;window.buffer=window.buffer||{};window.buffer.Buffer=B;try{globalThis.Buffer=B;}catch(e){}}
+})();
+</script>
+
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap');
 :root{--purple:#9945FF;--green:#14F195;--blue:#00C2FF;--red:#FF4560;--gold:#FFD700;--bg:#020810;--panel:#080d1a;--border:#141e35;--text:#dde6f0;--dim:#3d4f6a;}
 *{margin:0;padding:0;box-sizing:border-box;}
-body{background:var(--bg);color:var(--text);font-family:'Share Tech Mono',monospace;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;user-select:none;overflow:hidden;}
+body{background:var(--bg);color:var(--text);font-family:'Share Tech Mono',monospace;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:70px 16px 40px;user-select:none;overflow-x:hidden;}
 
-/* back button */
 #backBtn{position:fixed;top:18px;left:18px;z-index:300;display:flex;align-items:center;gap:8px;background:rgba(153,69,255,.25);border:1px solid rgba(153,69,255,.55);border-radius:24px;padding:10px 18px;cursor:pointer;font-family:'Orbitron',monospace;font-size:.62rem;font-weight:700;color:#fff;letter-spacing:1px;text-decoration:none;box-shadow:0 0 18px rgba(153,69,255,.35);transition:transform .18s,box-shadow .18s;white-space:nowrap;}
 #backBtn:hover{transform:scale(1.07);box-shadow:0 0 32px rgba(153,69,255,.7);}
 
-/* title */
 .rps-title{font-family:'Orbitron',monospace;font-size:1.6rem;font-weight:900;background:linear-gradient(90deg,var(--purple),var(--green));-webkit-background-clip:text;-webkit-text-fill-color:transparent;letter-spacing:4px;margin-bottom:8px;text-align:center;}
 @keyframes titleFlash{0%,100%{opacity:.75;filter:brightness(.9) drop-shadow(0 0 5px rgba(20,241,149,.15));}45%,55%{opacity:1;filter:brightness(1.5) drop-shadow(0 0 22px rgba(20,241,149,1)) drop-shadow(0 0 44px rgba(153,69,215,.8));}}
 .rps-title{animation:titleFlash 1.8s ease-in-out infinite;}
+.subtitle{font-family:'Orbitron',monospace;font-size:.55rem;color:var(--dim);letter-spacing:2px;margin-bottom:22px;text-transform:uppercase;text-align:center;}
 
-.subtitle{font-family:'Orbitron',monospace;font-size:.55rem;color:var(--dim);letter-spacing:2px;margin-bottom:32px;text-transform:uppercase;}
+/* mode tabs */
+.modes{display:flex;gap:10px;margin-bottom:26px;}
+.mode-tab{font-family:'Orbitron',monospace;font-size:.6rem;font-weight:700;letter-spacing:1px;padding:10px 20px;border-radius:24px;cursor:pointer;background:var(--panel);border:1px solid var(--border);color:var(--dim);transition:all .18s;text-transform:uppercase;}
+.mode-tab.active{color:#fff;border-color:var(--purple);background:rgba(153,69,255,.18);box-shadow:0 0 18px rgba(153,69,255,.4);}
+.mode-tab.live.active{border-color:var(--green);background:rgba(20,241,149,.14);box-shadow:0 0 18px rgba(20,241,149,.4);}
+
+.panel{display:flex;flex-direction:column;align-items:center;width:100%;max-width:520px;}
+.hidden{display:none!important;}
 
 /* scoreboard */
-.scoreboard{display:flex;gap:28px;margin-bottom:28px;font-family:'Orbitron',monospace;font-size:.7rem;letter-spacing:1px;}
+.scoreboard{display:flex;gap:28px;margin-bottom:24px;font-family:'Orbitron',monospace;letter-spacing:1px;}
 .score-item{text-align:center;}
 .score-label{color:var(--dim);font-size:.5rem;text-transform:uppercase;letter-spacing:2px;margin-bottom:4px;}
 .score-val{font-size:1.4rem;font-weight:900;}
@@ -31,40 +107,53 @@ body{background:var(--bg);color:var(--text);font-family:'Share Tech Mono',monosp
 .score-val.draw{color:var(--blue);text-shadow:0 0 12px rgba(0,194,255,.5);}
 
 /* arena */
-.arena{display:flex;align-items:center;gap:40px;margin-bottom:32px;min-height:180px;}
+.arena{display:flex;align-items:center;gap:40px;margin-bottom:24px;min-height:170px;}
 .fighter{display:flex;flex-direction:column;align-items:center;gap:8px;}
-.fighter-label{font-family:'Orbitron',monospace;font-size:.55rem;color:var(--dim);text-transform:uppercase;letter-spacing:2px;}
+.fighter-label{font-family:'Orbitron',monospace;font-size:.55rem;color:var(--dim);text-transform:uppercase;letter-spacing:2px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .fighter-choice{font-size:5rem;width:120px;height:120px;display:flex;align-items:center;justify-content:center;background:var(--panel);border:2px solid var(--border);border-radius:16px;transition:all .3s;}
 .fighter-choice.winner{border-color:var(--green);box-shadow:0 0 30px rgba(20,241,149,.4);}
 .fighter-choice.loser{border-color:var(--red);box-shadow:0 0 30px rgba(255,69,96,.3);opacity:.6;}
 .fighter-choice.draw-hi{border-color:var(--blue);box-shadow:0 0 20px rgba(0,194,255,.3);}
 .vs{font-family:'Orbitron',monospace;font-size:1rem;font-weight:900;color:var(--purple);text-shadow:0 0 15px rgba(153,69,255,.5);letter-spacing:2px;}
 
-/* result text */
-.result{font-family:'Orbitron',monospace;font-size:1rem;font-weight:700;letter-spacing:3px;min-height:1.4em;margin-bottom:24px;text-align:center;}
+.result{font-family:'Orbitron',monospace;font-size:1rem;font-weight:700;letter-spacing:3px;min-height:1.4em;margin-bottom:20px;text-align:center;}
 .result.win-text{color:var(--green);text-shadow:0 0 20px rgba(20,241,149,.6);}
 .result.lose-text{color:var(--red);text-shadow:0 0 20px rgba(255,69,96,.6);}
 .result.draw-text{color:var(--blue);text-shadow:0 0 20px rgba(0,194,255,.5);}
 
-/* pick buttons */
 .picks{display:flex;gap:18px;}
 .pick-btn{width:100px;height:100px;font-size:3.2rem;background:var(--panel);border:2px solid var(--border);border-radius:16px;cursor:pointer;transition:transform .15s,box-shadow .15s,border-color .15s;display:flex;align-items:center;justify-content:center;}
 .pick-btn:hover{transform:scale(1.12);border-color:var(--purple);box-shadow:0 0 25px rgba(153,69,255,.5);}
 .pick-btn:active{transform:scale(.95);}
 .pick-btn.disabled{pointer-events:none;opacity:.4;}
 
-/* streak */
 .streak{font-family:'Orbitron',monospace;font-size:.5rem;color:var(--gold);letter-spacing:2px;margin-top:16px;min-height:1em;text-shadow:0 0 10px rgba(255,215,0,.4);}
 
-/* shake animation */
 @keyframes shake{0%,100%{transform:rotate(0deg);}25%{transform:rotate(-15deg);}75%{transform:rotate(15deg);}50%{transform:rotate(0deg);}}
 .shaking{animation:shake .3s ease-in-out 3;}
-
-/* pop animation */
 @keyframes pop{0%{transform:scale(0.3);opacity:0;}60%{transform:scale(1.15);}100%{transform:scale(1);opacity:1;}}
 .pop{animation:pop .35s ease-out;}
 
-/* responsive */
+/* live-specific */
+.live-status{font-family:'Orbitron',monospace;font-size:.62rem;letter-spacing:1px;color:var(--blue);min-height:1.2em;margin-bottom:12px;text-align:center;}
+.wager-box{background:rgba(20,241,149,.07);border:1px solid rgba(20,241,149,.25);border-radius:8px;padding:10px 16px;margin-bottom:20px;text-align:center;font-size:.62rem;line-height:1.7;color:rgba(20,241,149,.9);max-width:440px;}
+.wager-box strong{color:var(--green);}
+.wager-amt{font-family:'Orbitron',monospace;font-size:1.1rem;font-weight:900;color:var(--gold);text-shadow:0 0 12px rgba(255,215,0,.4);}
+.bo5{display:flex;gap:24px;margin-bottom:20px;font-family:'Orbitron',monospace;}
+.bo5 .score-val{font-size:1.8rem;}
+.dots{display:flex;gap:5px;justify-content:center;margin-top:5px;}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--border);}
+.dot.on-win{background:var(--green);box-shadow:0 0 8px var(--green);}
+.dot.on-lose{background:var(--red);box-shadow:0 0 8px var(--red);}
+.big-btn{font-family:'Orbitron',monospace;font-size:.66rem;font-weight:700;letter-spacing:1px;padding:14px 30px;border-radius:26px;cursor:pointer;border:none;color:#000;background:linear-gradient(135deg,var(--green),#0cb87a);box-shadow:0 0 18px rgba(20,241,149,.4);transition:transform .15s,box-shadow .15s;text-transform:uppercase;}
+.big-btn:hover{transform:scale(1.05);box-shadow:0 0 28px rgba(20,241,149,.7);}
+.big-btn.secondary{background:rgba(153,69,255,.2);border:1px solid rgba(153,69,255,.5);color:#fff;box-shadow:none;}
+.big-btn[disabled]{opacity:.5;pointer-events:none;}
+.warn-note{font-size:.56rem;color:var(--dim);line-height:1.7;max-width:440px;text-align:center;margin-top:16px;}
+.warn-note a{color:var(--purple);}
+.settle-note{font-family:'Orbitron',monospace;font-size:.58rem;letter-spacing:1px;min-height:1.2em;margin-top:10px;text-align:center;color:var(--gold);}
+.fair-badge{display:inline-flex;align-items:center;gap:5px;font-size:.52rem;color:var(--dim);letter-spacing:1px;margin-top:14px;}
+
 @media(max-width:600px){
   .rps-title{font-size:1.1rem;}
   .arena{gap:20px;}
@@ -73,8 +162,6 @@ body{background:var(--bg);color:var(--text);font-family:'Share Tech Mono',monosp
   .picks{gap:12px;}
   .scoreboard{gap:18px;}
 }
-
-/* background particles */
 canvas#bgCanvas{position:fixed;top:0;left:0;width:100%;height:100%;z-index:-1;pointer-events:none;}
 </style>
 </head>
@@ -90,157 +177,569 @@ canvas#bgCanvas{position:fixed;top:0;left:0;width:100%;height:100%;z-index:-1;po
 <div class="rps-title">ROCK PAPER SCISSORS</div>
 <div class="subtitle">Choose your weapon</div>
 
-<div class="scoreboard">
-  <div class="score-item"><div class="score-label">Wins</div><div class="score-val win" id="wins">0</div></div>
-  <div class="score-item"><div class="score-label">Losses</div><div class="score-val lose" id="losses">0</div></div>
-  <div class="score-item"><div class="score-label">Draws</div><div class="score-val draw" id="draws">0</div></div>
+<div class="modes">
+  <div class="mode-tab active" id="tabCpu" onclick="setMode('cpu')">Free · vs CPU</div>
+  <div class="mode-tab live" id="tabLive" onclick="setMode('live')">$1 Live · PvP</div>
 </div>
 
-<div class="arena">
-  <div class="fighter">
-    <div class="fighter-label">You</div>
-    <div class="fighter-choice" id="playerPick">❓</div>
+<!-- ══════════ CPU (FREE) PANEL ══════════ -->
+<div class="panel" id="cpuPanel">
+  <div class="scoreboard">
+    <div class="score-item"><div class="score-label">Wins</div><div class="score-val win" id="wins">0</div></div>
+    <div class="score-item"><div class="score-label">Losses</div><div class="score-val lose" id="losses">0</div></div>
+    <div class="score-item"><div class="score-label">Draws</div><div class="score-val draw" id="draws">0</div></div>
   </div>
-  <div class="vs">VS</div>
-  <div class="fighter">
-    <div class="fighter-label">CPU</div>
-    <div class="fighter-choice" id="cpuPick">❓</div>
+  <div class="arena">
+    <div class="fighter"><div class="fighter-label">You</div><div class="fighter-choice" id="cpuPlayerPick">❓</div></div>
+    <div class="vs">VS</div>
+    <div class="fighter"><div class="fighter-label">CPU</div><div class="fighter-choice" id="cpuCpuPick">❓</div></div>
   </div>
+  <div class="result" id="cpuResult">&nbsp;</div>
+  <div class="picks">
+    <button class="pick-btn" data-choice="rock" onclick="cpuPlay('rock')" title="Rock">🪨</button>
+    <button class="pick-btn" data-choice="paper" onclick="cpuPlay('paper')" title="Paper">📄</button>
+    <button class="pick-btn" data-choice="scissors" onclick="cpuPlay('scissors')" title="Scissors">✂️</button>
+  </div>
+  <div class="streak" id="cpuStreak">&nbsp;</div>
 </div>
 
-<div class="result" id="result">&nbsp;</div>
+<!-- ══════════ LIVE ($1) PANEL ══════════ -->
+<div class="panel hidden" id="livePanel">
 
-<div class="picks">
-  <button class="pick-btn" data-choice="rock" title="Rock">🪨</button>
-  <button class="pick-btn" data-choice="paper" title="Paper">📄</button>
-  <button class="pick-btn" data-choice="scissors" title="Scissors">✂️</button>
+  <!-- lobby / pre-match -->
+  <div class="panel" id="liveLobby">
+    <div class="wager-box">
+      <span class="wager-amt" id="wagerLabel">$1.00 wager</span><br>
+      Winner takes the pot. Best of 5 vs a real player.<br>
+      <strong>10% house fee</strong> comes out of the payout — winner nets <strong id="netLabel">$0.90</strong>.
+    </div>
+    <div class="live-status" id="lobbyStatus">Ready to find a match.</div>
+    <button class="big-btn" id="findBtn" onclick="findMatch()">Find $1 Match</button>
+    <button class="big-btn secondary hidden" id="cancelBtn" onclick="leaveQueue(true)" style="margin-top:12px;">Cancel Search</button>
+    <div class="warn-note" id="liveWarn"></div>
+    <div class="fair-badge">🔒 Provably fair · commit-reveal · true 1-in-3 odds</div>
+  </div>
+
+  <!-- in-match -->
+  <div class="panel hidden" id="liveMatch">
+    <div class="live-status" id="matchStatus">Match starting…</div>
+    <div class="bo5">
+      <div class="score-item">
+        <div class="score-label" id="youName">You</div>
+        <div class="score-val win" id="myWins">0</div>
+        <div class="dots" id="myDots"></div>
+      </div>
+      <div class="score-item">
+        <div class="score-label" id="oppName">Opponent</div>
+        <div class="score-val lose" id="oppWins">0</div>
+        <div class="dots" id="oppDots"></div>
+      </div>
+    </div>
+    <div class="arena">
+      <div class="fighter"><div class="fighter-label" id="youLabel">You</div><div class="fighter-choice" id="livePlayerPick">❓</div></div>
+      <div class="vs">VS</div>
+      <div class="fighter"><div class="fighter-label" id="oppLabel">Opponent</div><div class="fighter-choice" id="liveOppPick">❓</div></div>
+    </div>
+    <div class="result" id="liveResult">&nbsp;</div>
+    <div class="picks" id="livePicks">
+      <button class="pick-btn" data-choice="rock" onclick="livePick('rock')" title="Rock">🪨</button>
+      <button class="pick-btn" data-choice="paper" onclick="livePick('paper')" title="Paper">📄</button>
+      <button class="pick-btn" data-choice="scissors" onclick="livePick('scissors')" title="Scissors">✂️</button>
+    </div>
+    <div class="settle-note" id="settleNote">&nbsp;</div>
+  </div>
+
+  <!-- post-match -->
+  <div class="panel hidden" id="liveDone">
+    <div class="result" id="doneResult">&nbsp;</div>
+    <div class="settle-note" id="doneSettle">&nbsp;</div>
+    <button class="big-btn" id="againBtn" onclick="findMatch()" style="margin-top:18px;">Play Again ($1)</button>
+    <button class="big-btn secondary" onclick="setMode('cpu')" style="margin-top:12px;">Back to Free Mode</button>
+  </div>
+
 </div>
-
-<div class="streak" id="streak">&nbsp;</div>
 
 <script>
+/* ═══════════════════ SHARED ═══════════════════ */
 var EMOJI = {rock:'🪨', paper:'📄', scissors:'✂️'};
 var CHOICES = ['rock','paper','scissors'];
-var wins=0, losses=0, draws=0, streak=0, streakType='';
-var locked = false;
+var HOUSE_WALLET = '2QnrdhxXYt8ythhGYHDz6MtTZE1z2bYvbss8z3ZGj2uJ';
+var HOUSE_CUT = 0.10;
+var WAGER_USD = 1;
+var SOL_FALLBACK = 148;
+var TX_RPC = 'https://solana-rpc.publicnode.com'; // CORS-friendly (per index.html)
+var MODE = 'cpu';
 
-var playerEl = document.getElementById('playerPick');
-var cpuEl    = document.getElementById('cpuPick');
-var resultEl = document.getElementById('result');
-var streakEl = document.getElementById('streak');
-var winsEl   = document.getElementById('wins');
-var lossesEl = document.getElementById('losses');
-var drawsEl  = document.getElementById('draws');
+function $(id){ return document.getElementById(id); }
+function beats(a,b){ return (a==='rock'&&b==='scissors')||(a==='paper'&&b==='rock')||(a==='scissors'&&b==='paper'); }
 
-function getResult(p, c) {
-  if (p === c) return 'draw';
-  if ((p==='rock'&&c==='scissors')||(p==='paper'&&c==='rock')||(p==='scissors'&&c==='paper')) return 'win';
-  return 'lose';
+async function sha256hex(str){
+  var buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(function(b){return ('0'+b.toString(16)).slice(-2);}).join('');
+}
+function randNonce(){
+  var a = new Uint8Array(16); crypto.getRandomValues(a);
+  return Array.from(a).map(function(b){return ('0'+b.toString(16)).slice(-2);}).join('');
 }
 
-document.querySelectorAll('.pick-btn').forEach(function(btn){
-  btn.addEventListener('click', function(){
-    if (locked) return;
-    locked = true;
-    var choice = btn.dataset.choice;
-    var cpuChoice = CHOICES[Math.floor(Math.random()*3)];
+function setMode(m){
+  MODE = m;
+  $('tabCpu').classList.toggle('active', m==='cpu');
+  $('tabLive').classList.toggle('active', m==='live');
+  $('cpuPanel').classList.toggle('hidden', m!=='cpu');
+  $('livePanel').classList.toggle('hidden', m!=='live');
+  if (m==='live') initLive();
+  else leaveQueue(false); // stop searching if leaving live tab
+}
 
-    // reset classes
-    playerEl.className = 'fighter-choice';
-    cpuEl.className = 'fighter-choice';
-    resultEl.className = 'result';
-    document.querySelectorAll('.pick-btn').forEach(function(b){b.classList.add('disabled');});
+/* ═══════════════════ FREE / CPU MODE ═══════════════════ */
+var wins=0, losses=0, draws=0, streak=0, streakType='', cpuLocked=false;
 
-    // shake phase
-    playerEl.textContent = '✊';
-    cpuEl.textContent = '✊';
-    playerEl.classList.add('shaking');
-    cpuEl.classList.add('shaking');
-    resultEl.innerHTML = '&nbsp;';
+function cpuPlay(choice){
+  if (cpuLocked) return;
+  cpuLocked = true;
+  var cpu = CHOICES[Math.floor(Math.random()*3)];
+  var pEl=$('cpuPlayerPick'), cEl=$('cpuCpuPick'), rEl=$('cpuResult');
+  pEl.className='fighter-choice'; cEl.className='fighter-choice'; rEl.className='result';
+  document.querySelectorAll('#cpuPanel .pick-btn').forEach(function(b){b.classList.add('disabled');});
+  pEl.textContent='✊'; cEl.textContent='✊'; pEl.classList.add('shaking'); cEl.classList.add('shaking');
+  rEl.innerHTML='&nbsp;';
+  setTimeout(function(){
+    pEl.classList.remove('shaking'); cEl.classList.remove('shaking');
+    pEl.textContent=EMOJI[choice]; cEl.textContent=EMOJI[cpu];
+    pEl.classList.add('pop'); cEl.classList.add('pop');
+    var res = choice===cpu ? 'draw' : (beats(choice,cpu) ? 'win' : 'lose');
+    if(res==='win'){ wins++; pEl.classList.add('winner'); cEl.classList.add('loser'); rEl.textContent='YOU WIN!'; rEl.classList.add('win-text'); streakType==='win'?streak++:(streak=1,streakType='win'); }
+    else if(res==='lose'){ losses++; cEl.classList.add('winner'); pEl.classList.add('loser'); rEl.textContent='YOU LOSE'; rEl.classList.add('lose-text'); streakType==='lose'?streak++:(streak=1,streakType='lose'); }
+    else { draws++; pEl.classList.add('draw-hi'); cEl.classList.add('draw-hi'); rEl.textContent='DRAW'; rEl.classList.add('draw-text'); streak=0; streakType=''; }
+    $('wins').textContent=wins; $('losses').textContent=losses; $('draws').textContent=draws;
+    $('cpuStreak').innerHTML = streak>=2 ? (streak+'x '+streakType.toUpperCase()+' STREAK!') : '&nbsp;';
+    setTimeout(function(){ cpuLocked=false; document.querySelectorAll('#cpuPanel .pick-btn').forEach(function(b){b.classList.remove('disabled');}); }, 600);
+  }, 900);
+}
 
-    setTimeout(function(){
-      playerEl.classList.remove('shaking');
-      cpuEl.classList.remove('shaking');
+/* ═══════════════════ LIVE / $1 PVP MODE ═══════════════════ */
+var WALLET = null;        // { keypair, pubkey, name }
+var solPrice = SOL_FALLBACK;
+var wagerSol = WAGER_USD / SOL_FALLBACK;
+var _ably = null, _queue = null, _match = null;
+var _liveInited = false;
+var LIVE = null;          // active match state
 
-      // reveal
-      playerEl.textContent = EMOJI[choice];
-      cpuEl.textContent = EMOJI[cpuChoice];
-      playerEl.classList.add('pop');
-      cpuEl.classList.add('pop');
+// Reconstruct the same wallet index.html uses (local keypair keyed by email).
+function loadWallet(){
+  try{
+    if (typeof solanaWeb3 === 'undefined') return null;
+    var uid = localStorage.getItem('sso_current'); if(!uid) return null;
+    var s = JSON.parse(localStorage.getItem('sso_'+uid) || '{}');
+    if(!s.userEmail || !s.walletAddress) return null;
+    var storageKey = 'ss_kp_' + s.userEmail.toLowerCase().replace(/[^a-z0-9]/g,'');
+    var raw = localStorage.getItem(storageKey); if(!raw) return null;
+    var arr = JSON.parse(raw);
+    if(!Array.isArray(arr) || arr.length!==64) return null;
+    var kp = solanaWeb3.Keypair.fromSecretKey(new Uint8Array(arr));
+    var pub = kp.publicKey.toBase58();
+    if(pub !== s.walletAddress) return null; // stored key doesn't match session wallet
+    return { keypair: kp, pubkey: pub, name: (s.userName||'Player') };
+  }catch(e){ return null; }
+}
 
-      var res = getResult(choice, cpuChoice);
+async function initLive(){
+  if (_liveInited) return;
+  _liveInited = true;
+  // live SOL price for the wager display
+  try{
+    var r = await fetch('/api/sol-price');
+    var d = await r.json();
+    if(d && d.price>10 && d.price<5000){ solPrice = d.price; }
+  }catch(e){}
+  wagerSol = +(WAGER_USD / solPrice).toFixed(6);
+  var net = (WAGER_USD*(1-HOUSE_CUT)).toFixed(2);
+  $('netLabel').textContent = '$'+net;
+  $('wagerLabel').textContent = '$1.00 wager  ·  ≈ '+wagerSol.toFixed(4)+' SOL';
 
-      if (res === 'win') {
-        wins++;
-        playerEl.classList.add('winner');
-        cpuEl.classList.add('loser');
-        resultEl.textContent = 'YOU WIN!';
-        resultEl.classList.add('win-text');
-        if (streakType === 'win') streak++; else { streak = 1; streakType = 'win'; }
-      } else if (res === 'lose') {
-        losses++;
-        cpuEl.classList.add('winner');
-        playerEl.classList.add('loser');
-        resultEl.textContent = 'YOU LOSE';
-        resultEl.classList.add('lose-text');
-        if (streakType === 'lose') streak++; else { streak = 1; streakType = 'lose'; }
-      } else {
-        draws++;
-        playerEl.classList.add('draw-hi');
-        cpuEl.classList.add('draw-hi');
-        resultEl.textContent = 'DRAW';
-        resultEl.classList.add('draw-text');
-        streak = 0; streakType = '';
-      }
+  WALLET = loadWallet();
+  if(!WALLET){
+    $('findBtn').setAttribute('disabled','');
+    $('liveWarn').innerHTML = 'You need a signed-in Slither.SOL wallet to play for money. <a href="/">Sign in on the main page</a> first, then come back.';
+    $('lobbyStatus').textContent = 'Not signed in';
+    return;
+  }
+  $('liveWarn').innerHTML = 'Non-custodial: the <strong>loser\'s</strong> browser signs the payout at match end. If a losing player closes their tab before it fires, the transfer can be dodged — same as in-game money drops.';
+  $('youName').textContent = WALLET.name; $('youLabel').textContent = WALLET.name;
+  $('lobbyStatus').textContent = 'Wallet ready: '+WALLET.pubkey.slice(0,4)+'…'+WALLET.pubkey.slice(-4);
+}
 
-      winsEl.textContent = wins;
-      lossesEl.textContent = losses;
-      drawsEl.textContent = draws;
+function showLive(which){
+  $('liveLobby').classList.toggle('hidden', which!=='lobby');
+  $('liveMatch').classList.toggle('hidden', which!=='match');
+  $('liveDone').classList.toggle('hidden', which!=='done');
+}
 
-      if (streak >= 2) {
-        streakEl.textContent = streak + 'x ' + streakType.toUpperCase() + ' STREAK!';
-      } else {
-        streakEl.innerHTML = '&nbsp;';
-      }
-
-      setTimeout(function(){
-        locked = false;
-        document.querySelectorAll('.pick-btn').forEach(function(b){b.classList.remove('disabled');});
-      }, 600);
-    }, 900);
+async function getAblyToken(pubkey){
+  var r = await fetch('/api/rps-auth', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ playerPubkey: pubkey })
   });
-});
+  if(!r.ok){ var e = await r.json().catch(function(){return{};}); throw new Error(e.error||('auth '+r.status)); }
+  return (await r.json()).tokenRequest;
+}
 
-// background particles
+// ── Matchmaking ─────────────────────────────────────────────────────────────
+var _proposingTo = null, _proposeTimer = null, _matched = false;
+
+async function findMatch(){
+  if(!WALLET){ initLive(); return; }
+  showLive('lobby');
+  $('findBtn').classList.add('hidden');
+  $('cancelBtn').classList.remove('hidden');
+  $('lobbyStatus').textContent = 'Connecting…';
+  _matched = false; _proposingTo = null;
+
+  try{
+    if(!_ably){
+      var token = await getAblyToken(WALLET.pubkey);
+      _ably = new Ably.Realtime({
+        authCallback: function(_, cb){ cb(null, token); },
+        clientId: WALLET.pubkey, closeOnUnload: true
+      });
+      await new Promise(function(res,rej){
+        _ably.connection.once('connected', res);
+        _ably.connection.once('failed', function(){ rej(new Error('Ably connection failed')); });
+        setTimeout(function(){ rej(new Error('connect timeout')); }, 12000);
+      });
+    }
+    _queue = _ably.channels.get('rps-queue-1');
+    _queue.subscribe('rps_propose', onPropose);
+    _queue.subscribe('rps_accept', onAccept);
+    _queue.presence.subscribe('enter', evaluatePairing);
+    _queue.presence.subscribe('leave', evaluatePairing);
+    await _queue.presence.enter({ name: WALLET.name });
+    $('lobbyStatus').textContent = 'Searching for an opponent…';
+    setTimeout(evaluatePairing, 400);
+  }catch(e){
+    $('lobbyStatus').textContent = 'Error: '+e.message;
+    $('findBtn').classList.remove('hidden');
+    $('cancelBtn').classList.add('hidden');
+  }
+}
+
+async function evaluatePairing(){
+  if(_matched || !_queue) return;
+  var members;
+  try{ members = await _queue.presence.get(); }catch(e){ return; }
+  if(_matched) return;
+  var others = members.map(function(m){return m.clientId;}).filter(function(c){ return c && c!==WALLET.pubkey; });
+  var greater = others.filter(function(c){ return c > WALLET.pubkey; }).sort();
+  if(greater.length > 0){
+    // I'm the proposer to the smallest free member greater than me.
+    var target = greater[0];
+    if(_proposingTo !== target){
+      _proposingTo = target;
+      _queue.publish('rps_propose', { to: target, matchId: mkMatchId(WALLET.pubkey, target) });
+      clearTimeout(_proposeTimer);
+      _proposeTimer = setTimeout(function(){
+        if(!_matched && _proposingTo===target){ _proposingTo=null; evaluatePairing(); }
+      }, 3500);
+    }
+  } else {
+    _proposingTo = null; // I'm the largest / alone → listen for proposals
+  }
+}
+
+function mkMatchId(a,b){ return [a,b].sort().join('__'); }
+
+function onPropose(msg){
+  if(_matched) return;
+  var d = msg.data||{};
+  if(d.to !== WALLET.pubkey) return;
+  if(_proposingTo) return; // I'm committed to my own proposal; ignore
+  var from = msg.clientId;
+  _matched = true;
+  _queue.publish('rps_accept', { to: from, matchId: d.matchId });
+  beginMatch(d.matchId, from, /*iAmHost*/ WALLET.pubkey < from);
+}
+
+function onAccept(msg){
+  if(_matched) return;
+  var d = msg.data||{};
+  if(d.to !== WALLET.pubkey) return;
+  var from = msg.clientId;
+  if(_proposingTo !== from) return;
+  _matched = true;
+  beginMatch(d.matchId, from, /*iAmHost*/ WALLET.pubkey < from);
+}
+
+async function leaveQueue(backToLobby){
+  clearTimeout(_proposeTimer); _proposingTo=null;
+  if(_queue){
+    try{ _queue.presence.unsubscribe(); _queue.unsubscribe(); await _queue.presence.leave(); }catch(e){}
+  }
+  if(backToLobby){
+    $('findBtn').classList.remove('hidden');
+    $('cancelBtn').classList.add('hidden');
+    $('lobbyStatus').textContent = WALLET ? 'Ready to find a match.' : 'Not signed in';
+  }
+}
+
+// ── The match (best of 5, commit-reveal per round) ──────────────────────────
+async function beginMatch(matchId, oppPub, iAmHost){
+  await leaveQueue(false);
+  LIVE = {
+    matchId: matchId, opp: oppPub, oppName: 'Opponent',
+    myWins: 0, oppWins: 0, round: 0, resolvedMatch: false,
+    // per-round:
+    myPick:null, myNonce:null, myCommitSent:false, oppCommit:null,
+    myRevealSent:false, oppReveal:null, resolved:false, roundTimer:null, locked:false
+  };
+  showLive('match');
+  $('oppName').textContent = oppPub.slice(0,4)+'…'+oppPub.slice(-4);
+  $('oppLabel').textContent = oppPub.slice(0,4)+'…'+oppPub.slice(-4);
+  renderScore();
+
+  _match = _ably.channels.get('rps-match-'+matchId);
+  _match.subscribe('commit', onCommit);
+  _match.subscribe('reveal', onReveal);
+  _match.subscribe('hello', function(m){ if(m.clientId===LIVE.opp && (m.data||{}).name){ LIVE.oppName=m.data.name; $('oppName').textContent=m.data.name; $('oppLabel').textContent=m.data.name; } });
+  _match.presence.subscribe('leave', onOppLeave);
+  await _match.presence.enter({ name: WALLET.name });
+  _match.publish('hello', { name: WALLET.name });
+  startRound();
+}
+
+function renderScore(){
+  $('myWins').textContent = LIVE.myWins;
+  $('oppWins').textContent = LIVE.oppWins;
+  var md='', od='';
+  for(var i=0;i<3;i++){ md += '<div class="dot'+(i<LIVE.myWins?' on-win':'')+'"></div>'; od += '<div class="dot'+(i<LIVE.oppWins?' on-lose':'')+'"></div>'; }
+  $('myDots').innerHTML=md; $('oppDots').innerHTML=od;
+}
+
+function startRound(){
+  if(LIVE.resolvedMatch) return;
+  LIVE.round++;
+  LIVE.myPick=null; LIVE.myNonce=null; LIVE.myCommitSent=false; LIVE.oppCommit=null;
+  LIVE.myRevealSent=false; LIVE.oppReveal=null; LIVE.resolved=false; LIVE.locked=false;
+  var pEl=$('livePlayerPick'), oEl=$('liveOppPick'), rEl=$('liveResult');
+  pEl.className='fighter-choice'; oEl.className='fighter-choice'; rEl.className='result';
+  pEl.textContent='❓'; oEl.textContent='❓'; rEl.innerHTML='&nbsp;';
+  $('matchStatus').textContent = 'Round '+LIVE.round+' — make your pick';
+  document.querySelectorAll('#livePicks .pick-btn').forEach(function(b){b.classList.remove('disabled');});
+  clearTimeout(LIVE.roundTimer);
+  LIVE.roundTimer = setTimeout(onRoundTimeout, 22000);
+}
+
+async function livePick(choice){
+  if(!LIVE || LIVE.locked || LIVE.resolved) return;
+  LIVE.locked = true;
+  LIVE.myPick = choice; LIVE.myNonce = randNonce();
+  document.querySelectorAll('#livePicks .pick-btn').forEach(function(b){b.classList.add('disabled');});
+  var pEl=$('livePlayerPick'); pEl.textContent='✊'; pEl.classList.add('shaking');
+  $('matchStatus').textContent = 'Locked in — waiting for opponent…';
+  var commit = await sha256hex(choice+'|'+LIVE.myNonce+'|'+LIVE.round+'|'+LIVE.matchId);
+  LIVE.myCommitSent = true;
+  _match.publish('commit', { round: LIVE.round, hash: commit });
+  tryReveal();
+}
+
+function onCommit(msg){
+  if(!LIVE || msg.clientId!==LIVE.opp) return;
+  var d=msg.data||{}; if(d.round!==LIVE.round) return;
+  LIVE.oppCommit = d.hash;
+  var oEl=$('liveOppPick'); oEl.textContent='✊'; oEl.classList.add('shaking');
+  tryReveal();
+}
+
+function tryReveal(){
+  if(!LIVE || !LIVE.myCommitSent || !LIVE.oppCommit || LIVE.myRevealSent) return;
+  LIVE.myRevealSent = true;
+  _match.publish('reveal', { round: LIVE.round, pick: LIVE.myPick, nonce: LIVE.myNonce });
+  tryResolve();
+}
+
+function onReveal(msg){
+  if(!LIVE || msg.clientId!==LIVE.opp) return;
+  var d=msg.data||{}; if(d.round!==LIVE.round) return;
+  LIVE.oppReveal = { pick:d.pick, nonce:d.nonce };
+  tryResolve();
+}
+
+async function tryResolve(){
+  if(!LIVE || LIVE.resolved || !LIVE.myRevealSent || !LIVE.oppReveal) return;
+  // verify opponent's reveal matches their earlier commit
+  var check = await sha256hex(LIVE.oppReveal.pick+'|'+LIVE.oppReveal.nonce+'|'+LIVE.round+'|'+LIVE.matchId);
+  if(check !== LIVE.oppCommit || CHOICES.indexOf(LIVE.oppReveal.pick)<0){
+    // opponent tampered → they forfeit the match
+    finishRound('cheat');
+    return;
+  }
+  finishRound('ok');
+}
+
+function finishRound(kind){
+  if(LIVE.resolved) return;
+  LIVE.resolved = true;
+  clearTimeout(LIVE.roundTimer);
+  var pEl=$('livePlayerPick'), oEl=$('liveOppPick'), rEl=$('liveResult');
+  pEl.classList.remove('shaking'); oEl.classList.remove('shaking');
+
+  if(kind==='cheat'){ endMatch(true, 'Opponent sent an invalid move — you win by forfeit.'); return; }
+
+  var me = LIVE.myPick, op = LIVE.oppReveal.pick;
+  pEl.textContent = me?EMOJI[me]:'—'; oEl.textContent = EMOJI[op];
+  pEl.classList.add('pop'); oEl.classList.add('pop');
+
+  var outcome;
+  if(!me) outcome='lose';                 // I never picked (timeout) → I lose round
+  else if(me===op) outcome='draw';
+  else outcome = beats(me,op) ? 'win' : 'lose';
+
+  if(outcome==='win'){ LIVE.myWins++; pEl.classList.add('winner'); oEl.classList.add('loser'); rEl.textContent='Round '+LIVE.round+': WIN'; rEl.classList.add('win-text'); }
+  else if(outcome==='lose'){ LIVE.oppWins++; oEl.classList.add('winner'); pEl.classList.add('loser'); rEl.textContent='Round '+LIVE.round+': LOSE'; rEl.classList.add('lose-text'); }
+  else { pEl.classList.add('draw-hi'); oEl.classList.add('draw-hi'); rEl.textContent='Round '+LIVE.round+': DRAW'; rEl.classList.add('draw-text'); }
+  renderScore();
+
+  if(LIVE.myWins>=3){ setTimeout(function(){ endMatch(true); }, 900); return; }
+  if(LIVE.oppWins>=3){ setTimeout(function(){ endMatch(false); }, 900); return; }
+  setTimeout(startRound, 1400);
+}
+
+function onRoundTimeout(){
+  if(!LIVE || LIVE.resolved) return;
+  var iActed = LIVE.myRevealSent;
+  var oppActed = !!LIVE.oppReveal;
+  // Only award a round when EXACTLY one side acted — both clients then agree on
+  // the winner. If neither acted (mutual AFK), replay the round with no points,
+  // which stays consistent on both sides instead of each awarding it to the other.
+  if(iActed && !oppActed){
+    LIVE.resolved=true; clearTimeout(LIVE.roundTimer); LIVE.myWins++;
+    flashTimeout('Opponent timed out — round to you.'); renderScore(); checkOrNext();
+  } else if(!iActed && oppActed){
+    LIVE.resolved=true; clearTimeout(LIVE.roundTimer); LIVE.oppWins++;
+    flashTimeout('You timed out — round to opponent.'); renderScore(); checkOrNext(true);
+  } else {
+    LIVE.resolved=true; clearTimeout(LIVE.roundTimer);
+    flashTimeout('No moves — replaying round.'); setTimeout(startRound, 1400);
+  }
+}
+function flashTimeout(txt){
+  var rEl=$('liveResult'); rEl.className='result'; rEl.textContent=txt;
+  $('livePlayerPick').classList.remove('shaking'); $('liveOppPick').classList.remove('shaking');
+}
+function checkOrNext(iLostRound){
+  if(LIVE.myWins>=3){ setTimeout(function(){ endMatch(true); }, 800); return; }
+  if(LIVE.oppWins>=3){ setTimeout(function(){ endMatch(false); }, 800); return; }
+  setTimeout(startRound, 1400);
+}
+
+function onOppLeave(member){
+  if(!LIVE || LIVE.resolvedMatch) return;
+  if(member.clientId!==LIVE.opp) return;
+  endMatch(true, 'Opponent disconnected — you win. (If they are offline, the payout may not arrive.)');
+}
+
+async function endMatch(iWon, note){
+  if(LIVE.resolvedMatch) return;
+  LIVE.resolvedMatch = true;
+  clearTimeout(LIVE.roundTimer);
+  document.querySelectorAll('#livePicks .pick-btn').forEach(function(b){b.classList.add('disabled');});
+  var winnerPub = iWon ? WALLET.pubkey : LIVE.opp;
+  try{ if(_match){ await _match.presence.leave(); _match.unsubscribe(); _match.presence.unsubscribe(); } }catch(e){}
+
+  showLive('done');
+  var dR=$('doneResult'), dS=$('doneSettle');
+  if(iWon){
+    dR.className='result win-text'; dR.textContent='🏆 YOU WIN THE MATCH';
+    dS.style.color='var(--green)';
+    dS.textContent = note ? note : ('Winner nets $'+(WAGER_USD*(1-HOUSE_CUT)).toFixed(2)+' — waiting for opponent\'s payout…');
+    if(!note) watchForPayout();
+  } else {
+    dR.className='result lose-text'; dR.textContent='YOU LOST THE MATCH';
+    dS.style.color='var(--gold)'; dS.textContent='Paying the winner $1.00…';
+    try{
+      var sig = await payWinner(LIVE.opp, wagerSol);
+      dS.style.color='var(--green)';
+      dS.textContent='Paid ✓  ('+ (wagerSol*(1-HOUSE_CUT)).toFixed(4) +' SOL to winner, 10% house fee). TX '+sig.slice(0,8)+'…';
+    }catch(e){
+      dS.style.color='var(--red)';
+      dS.textContent='Payout failed: '+e.message+'. Make sure your game wallet has ≥ '+wagerSol.toFixed(4)+' SOL, then retry.';
+      addRetry();
+    }
+  }
+}
+
+function addRetry(){
+  var d=$('liveDone');
+  if($('retryPay')) return;
+  var b=document.createElement('button');
+  b.className='big-btn'; b.id='retryPay'; b.style.marginTop='12px'; b.textContent='Retry Payout';
+  b.onclick=async function(){
+    var dS=$('doneSettle'); dS.style.color='var(--gold)'; dS.textContent='Retrying payout…';
+    try{ var sig=await payWinner(LIVE.opp, wagerSol); dS.style.color='var(--green)'; dS.textContent='Paid ✓ TX '+sig.slice(0,8)+'…'; b.remove(); }
+    catch(e){ dS.style.color='var(--red)'; dS.textContent='Still failing: '+e.message; }
+  };
+  d.insertBefore(b, $('againBtn'));
+}
+
+// Loser signs & sends the wager: 90% to winner, 10% to house. Mirrors _doDropTransfer.
+async function payWinner(winnerPub, amtSol){
+  if(!WALLET || !WALLET.keypair) throw new Error('no wallet');
+  var bhRes = await fetch('/api/blockhash').then(function(r){return r.json();});
+  if(!bhRes || !bhRes.blockhash) throw new Error('no blockhash');
+  var conn = new solanaWeb3.Connection(TX_RPC, { commitment:'confirmed', confirmTransactionInitialTimeout:60000 });
+  var fromKey = new solanaWeb3.PublicKey(WALLET.pubkey);
+  var toKey = new solanaWeb3.PublicKey(winnerPub);
+  var houseKey = new solanaWeb3.PublicKey(HOUSE_WALLET);
+  var klam = Math.floor(amtSol*(1-HOUSE_CUT)*1e9);
+  var hlam = Math.floor(amtSol*HOUSE_CUT*1e9);
+  if(klam < 50) throw new Error('wager too small');
+  var tx = new solanaWeb3.Transaction();
+  tx.recentBlockhash = bhRes.blockhash; tx.lastValidBlockHeight = bhRes.lastValidBlockHeight; tx.feePayer = fromKey;
+  tx.add(solanaWeb3.SystemProgram.transfer({ fromPubkey:fromKey, toPubkey:toKey, lamports:klam }));
+  if(hlam>0) tx.add(solanaWeb3.SystemProgram.transfer({ fromPubkey:fromKey, toPubkey:houseKey, lamports:hlam }));
+  tx.sign(WALLET.keypair);
+  var sig = await conn.sendRawTransaction(tx.serialize(), { skipPreflight:true, maxRetries:4, preflightCommitment:'confirmed' });
+  return sig;
+}
+
+// Winner: poll own balance a few times to confirm the incoming payout landed.
+async function watchForPayout(){
+  try{
+    var conn = new solanaWeb3.Connection(TX_RPC, 'confirmed');
+    var key = new solanaWeb3.PublicKey(WALLET.pubkey);
+    var start = await conn.getBalance(key);
+    var tries = 0;
+    var iv = setInterval(async function(){
+      tries++;
+      var bal;
+      try{ bal = await conn.getBalance(key); }catch(e){ return; }
+      if(bal > start + 1000){
+        clearInterval(iv);
+        $('doneSettle').style.color='var(--green)';
+        $('doneSettle').textContent='Received ✓  +'+((bal-start)/1e9).toFixed(4)+' SOL landed in your wallet.';
+      } else if(tries>=20){ clearInterval(iv); }
+    }, 4000);
+  }catch(e){}
+}
+
+/* ═══════════════════ BACKGROUND PARTICLES ═══════════════════ */
 (function(){
-  var c = document.getElementById('bgCanvas');
-  var ctx = c.getContext('2d');
-  var particles = [];
-  var COLORS = ['#9945FF','#14F195','#00C2FF','#ff4ecd','#ffb800'];
+  var c=$('bgCanvas'), ctx=c.getContext('2d'), particles=[];
+  var COLORS=['#9945FF','#14F195','#00C2FF','#ff4ecd','#ffb800'];
   function resize(){ c.width=window.innerWidth; c.height=window.innerHeight; }
   resize(); window.addEventListener('resize', resize);
-  for(var i=0;i<40;i++){
-    particles.push({
-      x:Math.random()*c.width, y:Math.random()*c.height,
-      r:Math.random()*2+0.5, vx:(Math.random()-.5)*.3, vy:(Math.random()-.5)*.3,
-      color:COLORS[Math.floor(Math.random()*COLORS.length)], alpha:Math.random()*.3+.1
-    });
-  }
+  for(var i=0;i<40;i++){ particles.push({x:Math.random()*c.width,y:Math.random()*c.height,r:Math.random()*2+0.5,vx:(Math.random()-.5)*.3,vy:(Math.random()-.5)*.3,color:COLORS[Math.floor(Math.random()*COLORS.length)],alpha:Math.random()*.3+.1}); }
   function draw(){
     ctx.clearRect(0,0,c.width,c.height);
-    for(var i=0;i<particles.length;i++){
-      var p=particles[i];
-      p.x+=p.vx; p.y+=p.vy;
-      if(p.x<0)p.x=c.width; if(p.x>c.width)p.x=0;
-      if(p.y<0)p.y=c.height; if(p.y>c.height)p.y=0;
-      ctx.globalAlpha=p.alpha;
-      ctx.fillStyle=p.color;
-      ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fill();
-    }
+    for(var i=0;i<particles.length;i++){ var p=particles[i]; p.x+=p.vx; p.y+=p.vy;
+      if(p.x<0)p.x=c.width; if(p.x>c.width)p.x=0; if(p.y<0)p.y=c.height; if(p.y>c.height)p.y=0;
+      ctx.globalAlpha=p.alpha; ctx.fillStyle=p.color; ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fill(); }
     requestAnimationFrame(draw);
   }
   draw();
 })();
+
+window.addEventListener('beforeunload', function(){ try{ if(_queue) _queue.presence.leave(); if(_match) _match.presence.leave(); }catch(e){} });
 </script>
 </body>
 </html>
