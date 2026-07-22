@@ -1500,7 +1500,7 @@ canvas{display:block;width:100%;height:100%;}
 // slither-sol.com is served by Vercel, which deploys this file verbatim on push.
 // This is the number players actually see. (The old GitHub Pages workflow that
 // auto-stamped V<VERSION> deployed to a dead host and is now disabled.)
-var GAME_BUILD = 'V423';
+var GAME_BUILD = 'V424';
 
 var PRIVY_APP_ID          = 'client-WY6aEf1eS4reRDrBq7ghh8arEiMaKSj1Vk37ZG8CAawEF';
 var HOUSE_WALLET_ADDRESS  = '2QnrdhxXYt8ythhGYHDz6MtTZE1z2bYvbss8z3ZGj2uJ';
@@ -9783,9 +9783,13 @@ function menuSelCard(t) {
   });
 }
 
-// Showcase bot pinned to 5th on the menu Live leaderboard. Rendered with a BOT
-// tag — it is not a real player and this figure is not real winnings.
-var LB_BOT = { name:'Mr1221', color:'#9945FF', earned:300 };
+// Showcase bots pinned to fixed ranks on the menu Live leaderboard. Each is
+// rendered with a BOT tag — these are not real players and the figures are not
+// real winnings, on a board that otherwise lists real SOL earned.
+var LB_BOTS = [
+  { name:'Chris',  color:'#00C2FF', earned:587, rank:1 },
+  { name:'Mr1221', color:'#9945FF', earned:300, rank:5 }
+];
 
 function updateMenuLBPreview() {
   var el=document.getElementById('menuLBPreview'); if(!el) return;
@@ -9796,19 +9800,25 @@ function updateMenuLBPreview() {
     entries.push({name:p.n||('P_'+cid.slice(0,4)),color:p.color||'#9945FF',earned:p.earned||0,isMe:false});
   });
   entries.sort(function(a,b){return b.earned-a.earned;});
-  // Real players fill ranks 1-4; the showcase bot is pinned to 5th below, so a
-  // real earner is never pushed off the board by it.
-  var rows=entries.slice(0,4).map(function(e,i){
-    var val='$'+e.earned.toFixed(2);
+
+  var pinned={}; LB_BOTS.forEach(function(b){ pinned[b.rank]=b; });
+  var rows=[], queue=entries.slice();
+  for(var rank=1; rank<=5; rank++){
+    var b=pinned[rank];
+    if(b){
+      rows.push('<div class="m3-lb-row"><span class="m3-lb-rank '+(rank<=3?['r1','r2','r3'][rank-1]:'')+'">'+rank+'</span>'
+        +'<div class="m3-lb-dot" style="background:'+b.color+';box-shadow:0 0 4px '+b.color+'"></div>'
+        +'<span class="m3-lb-name">'+b.name+'<span class="m3-lb-bot">BOT</span></span>'
+        +'<span class="m3-lb-earn">$'+b.earned.toFixed(2)+'</span></div>');
+      continue;
+    }
+    var e=queue.shift(); if(!e) continue;   // no filler — leave the slot empty
     var nc=e.isMe?'color:var(--green)':'';
-    return '<div class="m3-lb-row"><span class="m3-lb-rank '+(i<3?['r1','r2','r3'][i]:'')+'">'+( i+1)+'</span><div class="m3-lb-dot" style="background:'+e.color+';box-shadow:0 0 4px '+e.color+'"></div><span class="m3-lb-name" style="'+nc+'">'+e.name+(e.isMe?' (you)':'')+'</span><span class="m3-lb-earn">'+val+'</span></div>';
-  });
-  // Pinned showcase bot — always present at 5th. Tagged BOT: this is not a real
-  // player and $300 is not real winnings, so it must never read as either.
-  rows.push('<div class="m3-lb-row"><span class="m3-lb-rank">5</span>'
-    +'<div class="m3-lb-dot" style="background:'+LB_BOT.color+';box-shadow:0 0 4px '+LB_BOT.color+'"></div>'
-    +'<span class="m3-lb-name">'+LB_BOT.name+'<span class="m3-lb-bot">BOT</span></span>'
-    +'<span class="m3-lb-earn">$'+LB_BOT.earned.toFixed(2)+'</span></div>');
+    rows.push('<div class="m3-lb-row"><span class="m3-lb-rank '+(rank<=3?['r1','r2','r3'][rank-1]:'')+'">'+rank+'</span>'
+      +'<div class="m3-lb-dot" style="background:'+e.color+';box-shadow:0 0 4px '+e.color+'"></div>'
+      +'<span class="m3-lb-name" style="'+nc+'">'+e.name+(e.isMe?' (you)':'')+'</span>'
+      +'<span class="m3-lb-earn">$'+e.earned.toFixed(2)+'</span></div>');
+  }
   el.innerHTML=rows.join('');
 }
 
