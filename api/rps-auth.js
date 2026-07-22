@@ -30,7 +30,10 @@ module.exports = async function handler(req, res) {
     ttl: TOKEN_TTL_MS,
     capability: JSON.stringify({
       'rps-queue-1': ['publish', 'subscribe', 'presence'],
-      'rps-match-*': ['publish', 'subscribe', 'presence']
+      'rps-match-*': ['publish', 'subscribe', 'presence'],
+      // Shared presence room for the live leaderboard — everyone on the RPS
+      // page sits here and publishes their own W/L + net record.
+      'rps-lobby':   ['publish', 'subscribe', 'presence']
     })
   });
 

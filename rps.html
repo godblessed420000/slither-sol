@@ -166,6 +166,22 @@ body::after{content:'';position:fixed;inset:0;z-index:-1;background:linear-gradi
   .picks{gap:12px;}
   .scoreboard{gap:18px;}
 }
+/* ── LIVE LEADERBOARD ── */
+.rps-lb-card{width:100%;max-width:440px;margin-top:26px;background:rgba(8,13,26,.72);border:1px solid var(--border);border-radius:12px;padding:12px 14px;backdrop-filter:blur(3px);}
+.rps-lb-hdr{display:flex;align-items:center;gap:8px;font-family:'Orbitron',monospace;font-size:.56rem;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--text);margin-bottom:9px;}
+.rps-lb-live{margin-left:auto;font-size:.46rem;color:var(--green);letter-spacing:1px;}
+.rps-lb-list{display:flex;flex-direction:column;gap:4px;min-height:34px;}
+.rps-lb-row{display:flex;align-items:center;gap:8px;font-size:.62rem;padding:3px 4px;border-radius:5px;}
+.rps-lb-row:hover{background:rgba(215,215,215,.04);}
+.rps-lb-rank{width:16px;text-align:center;font-size:.56rem;color:var(--dim);}
+.rps-lb-rank.r1{color:var(--gold);}.rps-lb-rank.r2{color:#c8d4e0;}.rps-lb-rank.r3{color:#cd7f32;}
+.rps-lb-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+.rps-lb-name{flex:1;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.rps-lb-rec{font-size:.5rem;color:var(--dim);font-family:'Orbitron',monospace;}
+.rps-lb-net{font-size:.6rem;font-family:'Orbitron',monospace;min-width:52px;text-align:right;}
+.rps-lb-net.up{color:var(--green);}.rps-lb-net.down{color:var(--red);}.rps-lb-net.flat{color:var(--dim);}
+.rps-lb-empty{font-size:.56rem;color:var(--dim);text-align:center;padding:8px 0;}
+.rps-lb-note{font-size:.48rem;color:var(--dim);margin-top:9px;line-height:1.6;text-align:center;}
 canvas#bgCanvas{position:fixed;top:0;left:0;width:100%;height:100%;z-index:-2;pointer-events:none;}
 </style>
 </head>
@@ -261,6 +277,13 @@ canvas#bgCanvas{position:fixed;top:0;left:0;width:100%;height:100%;z-index:-2;po
     <button class="big-btn secondary" onclick="setMode('cpu')" style="margin-top:12px;">Back to Free Mode</button>
   </div>
 
+  <!-- live leaderboard — real players currently in the RPS lobby -->
+  <div class="rps-lb-card" id="rpsLbCard">
+    <div class="rps-lb-hdr">&#127942; Live Leaderboard <span class="rps-lb-live">&#9679; Live</span></div>
+    <div id="rpsLbList" class="rps-lb-list"><div class="rps-lb-empty">Sign in to see who's playing</div></div>
+    <div class="rps-lb-note">Players currently in the $1 lobby, ranked by net winnings. Records are reported by each player's own client.</div>
+  </div>
+
 </div>
 
 <script>
@@ -326,8 +349,79 @@ function cpuPlay(choice){
 var WALLET = null;        // { keypair, pubkey, name }
 var solPrice = SOL_FALLBACK;
 var wagerSol = WAGER_USD / SOL_FALLBACK;
-var _ably = null, _queue = null, _match = null;
+var _ably = null, _queue = null, _match = null, _lobby = null;
 var LIVE = null;          // active match state
+
+// ── Live leaderboard stats ──────────────────────────────────────────────────
+// Each player's own record, persisted locally and published to the shared
+// rps-lobby presence room. net is in SOL (canonical — payouts are in SOL).
+// Self-reported, same trust model as the snake game's live board.
+var RPS_STATS = { w:0, l:0, net:0 };
+function _statsKey(){ return 'rps_stats_' + (WALLET ? WALLET.pubkey : 'anon'); }
+function loadStats(){
+  try{ var s=JSON.parse(localStorage.getItem(_statsKey())||'{}');
+       RPS_STATS={ w:+s.w||0, l:+s.l||0, net:+s.net||0 }; }
+  catch(e){ RPS_STATS={w:0,l:0,net:0}; }
+}
+function saveStats(){ try{ localStorage.setItem(_statsKey(), JSON.stringify(RPS_STATS)); }catch(e){} }
+function lobbyData(){
+  return { n:(WALLET?WALLET.name:'Player'), color:'#14F195', w:RPS_STATS.w, l:RPS_STATS.l, net:RPS_STATS.net };
+}
+
+// Join the shared lobby presence room so this player shows on everyone's board.
+async function joinLobby(){
+  if(!WALLET || _lobby) return;
+  try{
+    await ensureAbly();
+    _lobby = _ably.channels.get('rps-lobby');
+    _lobby.presence.subscribe('enter',  renderLeaderboard);
+    _lobby.presence.subscribe('leave',  renderLeaderboard);
+    _lobby.presence.subscribe('update', renderLeaderboard);
+    await _lobby.presence.enter(lobbyData());
+    renderLeaderboard();
+  }catch(e){
+    var el=$('rpsLbList'); if(el) el.innerHTML='<div class="rps-lb-empty">Leaderboard offline: '+e.message+'</div>';
+  }
+}
+
+// Persist + republish after a match so every open board updates.
+function pushStats(){
+  saveStats();
+  if(_lobby){ try{ _lobby.presence.update(lobbyData()); }catch(e){} }
+  renderLeaderboard();
+}
+
+async function renderLeaderboard(){
+  var el=$('rpsLbList'); if(!el) return;
+  if(!_lobby){
+    el.innerHTML='<div class="rps-lb-empty">'+(WALLET?'Connecting…':"Sign in to see who's playing")+'</div>';
+    return;
+  }
+  var members; try{ members=await _lobby.presence.get(); }catch(e){ return; }
+  var seen={}, rows=[];
+  members.forEach(function(m){
+    if(!m.clientId || seen[m.clientId]) return;   // one row per wallet
+    seen[m.clientId]=true;
+    var d=m.data||{};
+    rows.push({ name:d.n||m.clientId.slice(0,6), color:d.color||'#9945FF',
+                w:+d.w||0, l:+d.l||0, net:+d.net||0,
+                isMe: !!(WALLET && m.clientId===WALLET.pubkey) });
+  });
+  if(!rows.length){ el.innerHTML='<div class="rps-lb-empty">No players online yet</div>'; return; }
+  rows.sort(function(a,b){ return b.net-a.net; });
+  el.innerHTML=rows.slice(0,8).map(function(r,i){
+    var rank=i+1;
+    var usd=r.net*solPrice;
+    var cls= usd>0.004 ? 'up' : (usd<-0.004 ? 'down' : 'flat');
+    var amt=(usd>=0?'+':'-')+'$'+Math.abs(usd).toFixed(2);
+    return '<div class="rps-lb-row">'
+      +'<span class="rps-lb-rank '+(rank<=3?['r1','r2','r3'][rank-1]:'')+'">'+rank+'</span>'
+      +'<div class="rps-lb-dot" style="background:'+r.color+';box-shadow:0 0 4px '+r.color+'"></div>'
+      +'<span class="rps-lb-name" style="'+(r.isMe?'color:var(--green)':'')+'">'+r.name+(r.isMe?' (you)':'')+'</span>'
+      +'<span class="rps-lb-rec">'+r.w+'W-'+r.l+'L</span>'
+      +'<span class="rps-lb-net '+cls+'">'+amt+'</span></div>';
+  }).join('');
+}
 
 // Reconstruct the same wallet index.html uses (local keypair keyed by email).
 function loadWallet(){
@@ -371,6 +465,8 @@ async function _doInitLive(){
   $('liveWarn').innerHTML = 'Non-custodial: the <strong>loser\'s</strong> browser signs the payout at match end. If a losing player closes their tab before it fires, the transfer can be dodged — same as in-game money drops.';
   $('youName').textContent = WALLET.name; $('youLabel').textContent = WALLET.name;
   $('lobbyStatus').textContent = 'Wallet ready: '+WALLET.pubkey.slice(0,4)+'…'+WALLET.pubkey.slice(-4);
+  loadStats();
+  joinLobby();   // show up on everyone's live board while on this page
 }
 
 function showLive(which){
@@ -677,6 +773,12 @@ function onOppLeave(member){
 
 async function endMatch(iWon, note){
   if(LIVE.resolvedMatch) return;
+  // Record the result. W/L always counts; the money only counts on a normally
+  // decided match — a forfeit (`note`) means the payout may never actually fire,
+  // so crediting SOL there would overstate what was really won.
+  if(iWon) RPS_STATS.w++; else RPS_STATS.l++;
+  if(!note){ RPS_STATS.net += iWon ? wagerSol*(1-HOUSE_CUT) : -wagerSol; }
+  pushStats();
   LIVE.resolvedMatch = true;
   clearTimeout(LIVE.roundTimer);
   document.querySelectorAll('#livePicks .pick-btn').forEach(function(b){b.classList.add('disabled');});
@@ -808,7 +910,7 @@ async function watchForPayout(){
   draw();
 })();
 
-window.addEventListener('beforeunload', function(){ try{ if(_queue) _queue.presence.leave(); if(_match) _match.presence.leave(); }catch(e){} });
+window.addEventListener('beforeunload', function(){ try{ if(_queue) _queue.presence.leave(); if(_match) _match.presence.leave(); if(_lobby) _lobby.presence.leave(); }catch(e){} });
 </script>
 </body>
 </html>
