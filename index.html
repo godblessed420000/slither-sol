@@ -1500,7 +1500,7 @@ canvas{display:block;width:100%;height:100%;}
 // slither-sol.com is served by Vercel, which deploys this file verbatim on push.
 // This is the number players actually see. (The old GitHub Pages workflow that
 // auto-stamped V<VERSION> deployed to a dead host and is now disabled.)
-var GAME_BUILD = 'V426';
+var GAME_BUILD = 'V427';
 
 var PRIVY_APP_ID          = 'client-WY6aEf1eS4reRDrBq7ghh8arEiMaKSj1Vk37ZG8CAawEF';
 var HOUSE_WALLET_ADDRESS  = '2QnrdhxXYt8ythhGYHDz6MtTZE1z2bYvbss8z3ZGj2uJ';
@@ -9786,9 +9786,14 @@ function menuSelCard(t) {
 // Showcase bots pinned to fixed ranks on the menu Live leaderboard. Each is
 // rendered with a BOT tag — these are not real players and the figures are not
 // real winnings, on a board that otherwise lists real SOL earned.
+// NOTE: all five ranks are currently pinned, so the real-player entries built
+// below never reach the board. Unpin a rank here to hand it back to live players.
 var LB_BOTS = [
-  { name:'Eminem', color:'#FF4560', earned:480, rank:2 },
-  { name:'Mr1221', color:'#9945FF', earned:300, rank:5 }
+  { name:'Alpha',   color:'#14F195', earned:82,  rank:1 },
+  { name:'Eminem',  color:'#FF4560', earned:480, rank:2 },
+  { name:'Bravo',   color:'#00C2FF', earned:45,  rank:3 },
+  { name:'Charlie', color:'#FF6B35', earned:31,  rank:4 },
+  { name:'Mr1221',  color:'#9945FF', earned:300, rank:5 }
 ];
 
 function updateMenuLBPreview() {
