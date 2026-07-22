@@ -855,6 +855,10 @@ canvas{display:block;width:100%;height:100%;}
 .m3-friend-row:hover{background:rgba(215,215,215,.03);}
 .m3-friend-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
 .m3-friend-name{flex:1;color:var(--text);}
+.m3-rps-invite{cursor:pointer;transition:color .15s;}
+.m3-rps-invite:hover{color:var(--green);text-shadow:0 0 8px rgba(20,241,149,.5);}
+.m3-rps-emoji{opacity:0;font-size:.55rem;transition:opacity .15s;}
+.m3-rps-invite:hover .m3-rps-emoji{opacity:1;}
 .m3-friend-tier{font-size:.48rem;color:var(--dim);}
 /* Center column */
 .m3-logo{font-family:'Orbitron',monospace;font-size:2rem;font-weight:900;color:#fff;letter-spacing:4px;text-shadow:0 0 24px rgba(255,255,255,.2);line-height:1;}
@@ -1495,7 +1499,7 @@ canvas{display:block;width:100%;height:100%;}
 // slither-sol.com is served by Vercel, which deploys this file verbatim on push.
 // This is the number players actually see. (The old GitHub Pages workflow that
 // auto-stamped V<VERSION> deployed to a dead host and is now disabled.)
-var GAME_BUILD = 'V421';
+var GAME_BUILD = 'V422';
 
 var PRIVY_APP_ID          = 'client-WY6aEf1eS4reRDrBq7ghh8arEiMaKSj1Vk37ZG8CAawEF';
 var HOUSE_WALLET_ADDRESS  = '2QnrdhxXYt8ythhGYHDz6MtTZE1z2bYvbss8z3ZGj2uJ';
@@ -4455,6 +4459,31 @@ function _wpHandleMsg(msg) {
       '</div></div>';
     document.body.appendChild(cdiv);
     toast('⚔️ '+chName+' challenged you to a $'+chStake+' 1v1!','info');
+    return;
+  }
+
+  // ── Incoming Rock Paper Scissors invite ──────────────────────────────────
+  if (type === 'rps_invite') {
+    if (!_wpMyId || d.to !== _wpMyId) return;
+    var riName  = d.n || ('P_' + cid.slice(0,4));
+    var riMatch = String(d.matchId||'').replace(/[^A-Za-z0-9_]/g,'');
+    var riOpp   = String(cid).replace(/[^A-Za-z0-9]/g,'');
+    if(!riMatch || !riOpp) return;
+    var exR=document.getElementById('rpsInviteModal'); if(exR) exR.remove();
+    var rdiv=document.createElement('div');
+    rdiv.id='rpsInviteModal';
+    rdiv.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:9999;display:flex;align-items:center;justify-content:center;';
+    rdiv.innerHTML=
+      '<div style="background:#0d1117;border:1px solid rgba(20,241,149,.5);border-radius:16px;padding:28px 24px;min-width:280px;text-align:center;box-shadow:0 0 40px rgba(20,241,149,.3);">'+
+      '<div style="font-size:.95rem;font-weight:700;color:#14F195;margin-bottom:6px;font-family:Orbitron,monospace;">🎮 Rock Paper Scissors</div>'+
+      '<div style="font-size:.72rem;color:#fff;margin-bottom:4px;"><b>'+riName+'</b> challenged you!</div>'+
+      '<div style="font-size:.62rem;color:#ffd700;margin-bottom:18px;">$1 wager · best of 5 · winner takes the pot</div>'+
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">'+
+        '<button onclick="document.getElementById(\'rpsInviteModal\').remove()" style="background:transparent;border:1px solid #2a2a3a;color:#888;padding:10px;border-radius:8px;cursor:pointer;font-size:.65rem;">Decline</button>'+
+        '<button onclick="_acceptRpsInvite(\''+riMatch+'\',\''+riOpp+'\')" style="background:linear-gradient(135deg,#14F195,#0cb87a);border:none;color:#000;padding:10px;border-radius:8px;cursor:pointer;font-size:.65rem;font-weight:700;">Accept!</button>'+
+      '</div></div>';
+    document.body.appendChild(rdiv);
+    toast('🎮 '+riName+' invited you to Rock Paper Scissors ($1)!','info');
     return;
   }
 
@@ -8482,6 +8511,34 @@ function inviteFriend(id){
   toast('Share this link with '+f.name+': '+link,'info');
 }
 
+// Invite a friend to a live $1 Rock Paper Scissors match. Sends an rps_invite
+// over the presence WebSocket; both players open the SAME rps.html match URL
+// (?match=<id>&opp=<pubkey>) and meet in that match channel — no queue.
+function inviteFriendRPS(id){
+  if(!W.connected){ toast('Sign in first','error'); return; }
+  if(!_wpMyId || _wpMyId.indexOf('guest_')===0){ toast('Connect a wallet to invite friends','error'); return; }
+  var f=null; for(var i=0;i<friendsList.length;i++){ if(friendsList[i].id===id || (friendsList[i].fullAddr||'')===id){ f=friendsList[i]; break; } }
+  if(!f){ return; }
+  var addr=f.fullAddr||f.id;
+  if(!addr || addr.length<32){ toast('That friend has no wallet address','error'); return; }
+  var online = (f.status && f.status!=='offline') || !!_wpPeers[addr];
+  if(!online){ toast(f.name+' is offline — they must be on the start screen to get the invite','error'); return; }
+  if(!_wpWs || _wpWs.readyState!==WebSocket.OPEN){ toast('Presence network offline — try again in a moment','error'); return; }
+  var matchId=[_wpMyId, addr].sort().join('__');
+  _wpWs.send(JSON.stringify({
+    type:'rps_invite', clientId:_wpMyId, tier:'presence',
+    data:{ to:addr, n:_wpMyName(), color:_playerColor, matchId:matchId }
+  }));
+  toast('🎮 RPS invite sent to '+f.name+'! Opening the game…','info');
+  setTimeout(function(){ window.location.href='rps.html?match='+encodeURIComponent(matchId)+'&opp='+encodeURIComponent(addr); }, 700);
+}
+
+// Invitee accepts an incoming RPS invite → open the same match URL.
+function _acceptRpsInvite(matchId, opp){
+  var m=document.getElementById('rpsInviteModal'); if(m) m.remove();
+  window.location.href='rps.html?match='+encodeURIComponent(matchId)+'&opp='+encodeURIComponent(opp);
+}
+
 function removeFriend(id){ friendsList=friendsList.filter(function(f){return f.id!==id;}); _saveFriends(); renderFriendsPanel(); toast('Friend removed'); }
 
 function acceptRequest(id){
@@ -9754,7 +9811,8 @@ function updateMenuFriends() {
     el.innerHTML=arr.map(function(f){
       var dot=f.color||'#9945FF';
       var tier=f.tier?'$'+f.tier:'';
-      return '<div class="m3-friend-row"><div class="m3-friend-dot" style="background:'+dot+';box-shadow:0 0 4px '+dot+'"></div><span class="m3-friend-name">'+f.name+'</span><span class="m3-friend-tier">'+tier+'</span></div>';
+      var nmEsc=String(f.name).replace(/'/g,'').replace(/"/g,'');
+      return '<div class="m3-friend-row"><div class="m3-friend-dot" style="background:'+dot+';box-shadow:0 0 4px '+dot+'"></div><span class="m3-friend-name m3-rps-invite" title="Challenge '+nmEsc+' to Rock Paper Scissors ($1)" onclick="inviteFriendRPS(\''+f.id+'\')">'+f.name+' <span class="m3-rps-emoji">🎮</span></span><span class="m3-friend-tier">'+tier+'</span></div>';
     }).join('');
   }
   renderList('menuFriendsPlaying',playing,'No friends playing');

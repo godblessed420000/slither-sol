@@ -323,7 +323,6 @@ var WALLET = null;        // { keypair, pubkey, name }
 var solPrice = SOL_FALLBACK;
 var wagerSol = WAGER_USD / SOL_FALLBACK;
 var _ably = null, _queue = null, _match = null;
-var _liveInited = false;
 var LIVE = null;          // active match state
 
 // Reconstruct the same wallet index.html uses (local keypair keyed by email).
@@ -344,9 +343,9 @@ function loadWallet(){
   }catch(e){ return null; }
 }
 
-async function initLive(){
-  if (_liveInited) return;
-  _liveInited = true;
+var _liveInitPromise = null;
+function initLive(){ if(!_liveInitPromise) _liveInitPromise = _doInitLive(); return _liveInitPromise; }
+async function _doInitLive(){
   // live SOL price for the wager display
   try{
     var r = await fetch('/api/sol-price');
@@ -388,6 +387,20 @@ async function getAblyToken(pubkey){
 // ── Matchmaking ─────────────────────────────────────────────────────────────
 var _proposingTo = null, _proposeTimer = null, _matched = false;
 
+async function ensureAbly(){
+  if(_ably && _ably.connection.state === 'connected') return;
+  var token = await getAblyToken(WALLET.pubkey);
+  _ably = new Ably.Realtime({
+    authCallback: function(_, cb){ cb(null, token); },
+    clientId: WALLET.pubkey, closeOnUnload: true
+  });
+  await new Promise(function(res,rej){
+    _ably.connection.once('connected', res);
+    _ably.connection.once('failed', function(){ rej(new Error('Ably connection failed')); });
+    setTimeout(function(){ if(_ably.connection.state!=='connected') rej(new Error('connect timeout')); }, 12000);
+  });
+}
+
 async function findMatch(){
   if(!WALLET){ initLive(); return; }
   showLive('lobby');
@@ -397,18 +410,7 @@ async function findMatch(){
   _matched = false; _proposingTo = null;
 
   try{
-    if(!_ably){
-      var token = await getAblyToken(WALLET.pubkey);
-      _ably = new Ably.Realtime({
-        authCallback: function(_, cb){ cb(null, token); },
-        clientId: WALLET.pubkey, closeOnUnload: true
-      });
-      await new Promise(function(res,rej){
-        _ably.connection.once('connected', res);
-        _ably.connection.once('failed', function(){ rej(new Error('Ably connection failed')); });
-        setTimeout(function(){ rej(new Error('connect timeout')); }, 12000);
-      });
-    }
+    await ensureAbly();
     _queue = _ably.channels.get('rps-queue-1');
     _queue.subscribe('rps_propose', onPropose);
     _queue.subscribe('rps_accept', onAccept);
@@ -487,7 +489,7 @@ async function beginMatch(matchId, oppPub, iAmHost){
   await leaveQueue(false);
   LIVE = {
     matchId: matchId, opp: oppPub, oppName: 'Opponent',
-    myWins: 0, oppWins: 0, round: 0, resolvedMatch: false,
+    myWins: 0, oppWins: 0, round: 0, resolvedMatch: false, started: false, joinTimer: null,
     // per-round:
     myPick:null, myNonce:null, myCommitSent:false, oppCommit:null,
     myRevealSent:false, oppReveal:null, resolved:false, roundTimer:null, locked:false
@@ -495,6 +497,7 @@ async function beginMatch(matchId, oppPub, iAmHost){
   showLive('match');
   $('oppName').textContent = oppPub.slice(0,4)+'…'+oppPub.slice(-4);
   $('oppLabel').textContent = oppPub.slice(0,4)+'…'+oppPub.slice(-4);
+  $('matchStatus').textContent = 'Waiting for opponent to join…';
   renderScore();
 
   _match = _ably.channels.get('rps-match-'+matchId);
@@ -502,9 +505,37 @@ async function beginMatch(matchId, oppPub, iAmHost){
   _match.subscribe('reveal', onReveal);
   _match.subscribe('hello', function(m){ if(m.clientId===LIVE.opp && (m.data||{}).name){ LIVE.oppName=m.data.name; $('oppName').textContent=m.data.name; $('oppLabel').textContent=m.data.name; } });
   _match.presence.subscribe('leave', onOppLeave);
+  _match.presence.subscribe('enter', checkBothPresent);
   await _match.presence.enter({ name: WALLET.name });
   _match.publish('hello', { name: WALLET.name });
-  startRound();
+  // Round 1 must not start until BOTH players are subscribed + present, or the
+  // first commits fly before the other side is listening and the round deadlocks.
+  LIVE.joinTimer = setTimeout(function(){
+    if(LIVE && !LIVE.started && !LIVE.resolvedMatch) cancelMatch('Opponent never joined — no wager was charged.');
+  }, 45000);
+  checkBothPresent();
+}
+
+async function checkBothPresent(){
+  if(!LIVE || LIVE.started || LIVE.resolvedMatch || !_match) return;
+  var members; try{ members = await _match.presence.get(); }catch(e){ return; }
+  if(!LIVE || LIVE.started || LIVE.resolvedMatch) return;
+  var oppHere = members.some(function(m){ return m.clientId === LIVE.opp; });
+  if(oppHere){
+    LIVE.started = true;
+    clearTimeout(LIVE.joinTimer);
+    startRound();
+  }
+}
+
+// End a match with NO settlement (opponent no-show / cancel) — nobody pays.
+async function cancelMatch(note){
+  if(LIVE && LIVE.resolvedMatch) return;
+  if(LIVE){ LIVE.resolvedMatch = true; clearTimeout(LIVE.joinTimer); clearTimeout(LIVE.roundTimer); }
+  try{ if(_match){ await _match.presence.leave(); _match.unsubscribe(); _match.presence.unsubscribe(); } }catch(e){}
+  showLive('done');
+  $('doneResult').className = 'result draw-text'; $('doneResult').textContent = 'MATCH CANCELLED';
+  $('doneSettle').style.color = 'var(--dim)'; $('doneSettle').textContent = note || 'No wager was charged.';
 }
 
 function renderScore(){
@@ -635,6 +666,8 @@ function checkOrNext(iLostRound){
 function onOppLeave(member){
   if(!LIVE || LIVE.resolvedMatch) return;
   if(member.clientId!==LIVE.opp) return;
+  // Left before the first round started → treat as a no-show, no wager.
+  if(!LIVE.started){ cancelMatch('Opponent left before the match started — no wager was charged.'); return; }
   endMatch(true, 'Opponent disconnected — you win. (If they are offline, the payout may not arrive.)');
 }
 
@@ -721,6 +754,38 @@ async function watchForPayout(){
     }, 4000);
   }catch(e){}
 }
+
+/* ═══════════════════ DIRECT INVITE ENTRY ═══════════════════ */
+// A friend invite from the main game lands here as ?match=<id>&opp=<pubkey>.
+// Both players open the same URL and join the same match channel directly,
+// skipping the queue. The "wait for both present" gate in beginMatch handles
+// whoever arrives first.
+(async function handleInvite(){
+  var p = new URLSearchParams(location.search);
+  var mid = p.get('match'), opp = p.get('opp');
+  if(!mid || !opp) return;
+  setMode('live');
+  await initLive();
+  if(!WALLET){
+    showLive('lobby');
+    $('lobbyStatus').textContent = 'Sign in on the main page first, then use the invite again.';
+    $('liveWarn').innerHTML = 'You need a signed-in Slither.SOL wallet. <a href="/">Sign in on the main page</a>, then click the invite again.';
+    return;
+  }
+  showLive('lobby');
+  $('findBtn').classList.add('hidden');
+  $('cancelBtn').classList.add('hidden');
+  $('lobbyStatus').textContent = 'Joining match…';
+  try{
+    await ensureAbly();
+    _matched = true; // never enter the public queue for an invite match
+    beginMatch(mid, opp, WALLET.pubkey < opp);
+  }catch(e){
+    showLive('lobby');
+    $('findBtn').classList.remove('hidden');
+    $('lobbyStatus').textContent = 'Could not join: ' + e.message;
+  }
+})();
 
 /* ═══════════════════ BACKGROUND PARTICLES ═══════════════════ */
 (function(){
