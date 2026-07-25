@@ -238,6 +238,22 @@ body::after{content:'';position:fixed;inset:0;z-index:-1;background:linear-gradi
   box-shadow:0 0 12px rgba(20,241,149,.4);transition:transform .12s,box-shadow .12s;}
 .rps-join-btn:hover{transform:scale(1.06);box-shadow:0 0 18px rgba(20,241,149,.65);}
 .rps-join-btn:active{transform:scale(.97);}
+/* ── Stake tier selector ── */
+.rps-stake-row{display:flex;flex-wrap:wrap;justify-content:center;gap:6px;max-width:460px;margin:16px auto 0;}
+.rps-stake-btn{cursor:pointer;font-family:'Orbitron',monospace;font-size:.56rem;font-weight:800;letter-spacing:.5px;
+  color:var(--text);padding:7px 11px;border-radius:9px;border:1px solid rgba(255,255,255,.1);
+  background:rgba(255,255,255,.04);transition:transform .12s,border-color .12s,box-shadow .12s,background .12s;}
+.rps-stake-btn:hover{border-color:rgba(153,69,255,.5);transform:translateY(-1px);}
+.rps-stake-btn.sel{color:#031018;background:linear-gradient(120deg,var(--green),var(--blue));border-color:transparent;
+  box-shadow:0 0 14px rgba(20,241,149,.5);}
+.rps-stake-btn.free{color:var(--gold);}
+.rps-stake-btn.free.sel{color:#2b2400;background:linear-gradient(120deg,#ffd700,#ffa726);box-shadow:0 0 14px rgba(255,215,0,.5);}
+.rps-custom-row{display:flex;justify-content:center;margin:8px auto 0;max-width:460px;}
+.rps-custom-input{width:130px;font-family:'Orbitron',monospace;font-size:.58rem;color:var(--text);text-align:center;
+  padding:7px 10px;border-radius:9px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.03);outline:none;}
+.rps-custom-input:focus{border-color:rgba(0,194,255,.55);box-shadow:0 0 12px rgba(0,194,255,.25);}
+.rps-open-stake{flex-shrink:0;font-family:'Orbitron',monospace;font-size:.5rem;font-weight:800;color:var(--gold);
+  padding:2px 7px;border-radius:6px;background:rgba(255,215,0,.1);border:1px solid rgba(255,215,0,.3);}
 canvas#bgCanvas{position:fixed;top:0;left:0;width:100%;height:100%;z-index:-2;pointer-events:none;}
 </style>
 </head>
@@ -255,7 +271,7 @@ canvas#bgCanvas{position:fixed;top:0;left:0;width:100%;height:100%;z-index:-2;po
 
 <div class="modes">
   <div class="mode-tab active" id="tabCpu" onclick="setMode('cpu')">Free · vs CPU</div>
-  <div class="mode-tab live" id="tabLive" onclick="setMode('live')">$1 Live · PvP</div>
+  <div class="mode-tab live" id="tabLive" onclick="setMode('live')">💰 Live · PvP</div>
 </div>
 
 <!-- ══════════ CPU (FREE) PANEL ══════════ -->
@@ -289,8 +305,15 @@ canvas#bgCanvas{position:fixed;top:0;left:0;width:100%;height:100%;z-index:-2;po
       Winner takes the pot. Best of 5 vs a real player.<br>
       <strong>10% house fee</strong> comes out of the payout — winner nets <strong id="netLabel">$0.90</strong>.
     </div>
+
+    <!-- STAKE SELECTOR — pick a tier or enter a custom amount -->
+    <div class="rps-stake-row" id="rpsStakeRow"></div>
+    <div class="rps-custom-row">
+      <input id="rpsCustomStake" class="rps-custom-input" type="number" min="0.25" step="0.25" placeholder="Custom $" oninput="onCustomStake(this.value)">
+    </div>
+
     <div class="live-status" id="lobbyStatus">Ready to find a match.</div>
-    <button class="big-btn" id="findBtn" onclick="findMatch()">Find $1 Match</button>
+    <button class="big-btn" id="findBtn" onclick="findMatch()">Play $1</button>
     <button class="big-btn secondary hidden" id="cancelBtn" onclick="leaveQueue(true)" style="margin-top:12px;">Cancel Search</button>
 
     <!-- OPEN LOBBIES — players currently searching; click JOIN to challenge directly -->
@@ -300,7 +323,7 @@ canvas#bgCanvas{position:fixed;top:0;left:0;width:100%;height:100%;z-index:-2;po
         <span class="rps-lb-live"><i></i>LIVE</span>
       </div>
       <div id="rpsOpenList" class="rps-open-list"><div class="rps-lb-empty">Sign in to see open lobbies</div></div>
-      <div class="rps-lb-note">Anyone who clicks “Find $1 Match” appears here. Pick one to challenge them directly.</div>
+      <div class="rps-lb-note">Players searching appear here with their stake. JOIN matches you at that amount.</div>
     </div>
 
     <div class="warn-note" id="liveWarn"></div>
@@ -352,7 +375,7 @@ canvas#bgCanvas{position:fixed;top:0;left:0;width:100%;height:100%;z-index:-2;po
         <span class="rps-lb-live"><i></i>LIVE</span>
       </div>
       <div id="rpsLbList" class="rps-lb-list"><div class="rps-lb-empty">Sign in to see who's playing</div></div>
-      <div class="rps-lb-note">Players currently in the $1 lobby, ranked by net winnings. Records are reported by each player's own client.</div>
+      <div class="rps-lb-note">Players currently in the live lobby, ranked by net winnings. Records are reported by each player's own client.</div>
     </div>
   </div>
 
@@ -364,8 +387,12 @@ var EMOJI = {rock:'🪨', paper:'📄', scissors:'✂️'};
 var CHOICES = ['rock','paper','scissors'];
 var HOUSE_WALLET = '2QnrdhxXYt8ythhGYHDz6MtTZE1z2bYvbss8z3ZGj2uJ';
 var HOUSE_CUT = 0.10;
-var WAGER_USD = 1;
+var WAGER_USD = 1;                 // legacy default; live wager is _selectedStake
 var SOL_FALLBACK = 148;
+// Stake tiers players can pick (USD). 0 = FREE (no wager, just play). Plus custom.
+var RPS_STAKES = [0, 0.5, 1, 2, 5, 10, 15, 25, 50];
+var RPS_STAKE_MIN = 0.25, RPS_STAKE_MAX = 500;
+var _selectedStake = 1;            // currently selected stake in USD
 var TX_RPC = 'https://solana-rpc.publicnode.com'; // CORS-friendly (per index.html)
 var MODE = 'cpu';
 
@@ -387,7 +414,7 @@ function setMode(m){
   $('tabLive').classList.toggle('active', m==='live');
   $('cpuPanel').classList.toggle('hidden', m!=='cpu');
   $('livePanel').classList.toggle('hidden', m!=='live');
-  if (m==='live') initLive();
+  if (m==='live'){ refreshStakeUI(); initLive(); } // render tiers instantly; init is async
   else leaveQueue(false); // stop searching if leaving live tab
 }
 
@@ -446,7 +473,7 @@ function saveStats(){ try{ localStorage.setItem(_statsKey(), JSON.stringify(RPS_
 // searching=true advertises this player as an OPEN LOBBY others can join directly.
 var _searching = false;
 function lobbyData(){
-  return { n:(WALLET?WALLET.name:'Player'), color:'#14F195', w:RPS_STATS.w, l:RPS_STATS.l, net:RPS_STATS.net, searching:_searching };
+  return { n:(WALLET?WALLET.name:'Player'), color:'#14F195', w:RPS_STATS.w, l:RPS_STATS.l, net:RPS_STATS.net, searching:_searching, stake:_selectedStake };
 }
 // Update our advertised state (searching flag) on the shared lobby presence so every
 // other client's open-lobby list updates in real time.
@@ -454,6 +481,39 @@ function setSearching(on){
   _searching = !!on;
   if(_lobby){ try{ _lobby.presence.update(lobbyData()); }catch(e){} }
   renderLeaderboard();
+}
+
+// ── Stake selection ──────────────────────────────────────────────────────────
+function fmtUsd(u){ return (u===0)?'FREE':'$'+(Math.round(u*100)/100); }
+function stakeSol(usd){ return usd>0 ? +(usd/solPrice).toFixed(6) : 0; }
+function renderStakeRow(){
+  var row=$('rpsStakeRow'); if(!row) return;
+  row.innerHTML=RPS_STAKES.map(function(v){
+    return '<button class="rps-stake-btn'+(v===0?' free':'')+(v===_selectedStake?' sel':'')+'" onclick="selectStake('+v+')">'+fmtUsd(v)+'</button>';
+  }).join('');
+}
+function refreshStakeUI(){
+  renderStakeRow();
+  var fb=$('findBtn'); if(fb) fb.textContent=(_selectedStake===0)?'Play FREE':'Play '+fmtUsd(_selectedStake);
+  var ab=$('againBtn'); if(ab) ab.textContent=(_selectedStake===0)?'Play Again (Free)':'Play Again ('+fmtUsd(_selectedStake)+')';
+  var wl=$('wagerLabel'); if(wl) wl.textContent=(_selectedStake===0)?'FREE play':(fmtUsd(_selectedStake)+' wager  ·  ≈ '+stakeSol(_selectedStake).toFixed(4)+' SOL');
+  var nl=$('netLabel'); if(nl) nl.textContent=(_selectedStake===0)?'$0.00':'$'+(_selectedStake*(1-HOUSE_CUT)).toFixed(2);
+}
+// Pick a stake tier (or custom). Republishes our advertised stake and, if actively
+// searching, updates the queue presence so we only pair with same-stake opponents.
+function selectStake(usd, fromCustom){
+  usd=+usd;
+  if(usd!==0) usd=Math.max(RPS_STAKE_MIN, Math.min(RPS_STAKE_MAX, usd));
+  _selectedStake=usd;
+  if(!fromCustom){ var ci=$('rpsCustomStake'); if(ci) ci.value=''; }
+  refreshStakeUI();
+  if(_lobby){ try{ _lobby.presence.update(lobbyData()); }catch(e){} renderLeaderboard(); }
+  if(_queue){ try{ _queue.presence.update({ name:WALLET.name, stake:_selectedStake }); }catch(e){} _proposingTo=null; evaluatePairing(); }
+}
+function onCustomStake(val){
+  var v=parseFloat(val);
+  if(!isFinite(v)||v<=0) return;
+  selectStake(v, true);
 }
 
 // Join the shared lobby presence room so this player shows on everyone's board.
@@ -499,7 +559,7 @@ async function renderLeaderboard(){
     rows.push({ name:d.n||m.clientId.slice(0,6), color:d.color||'#9945FF',
                 w:+d.w||0, l:+d.l||0, net:+d.net||0, isMe:isMe });
     // A player advertising searching=true is an OPEN LOBBY anyone can join directly.
-    if(d.searching && !isMe){ openLobbies.push({ pub:m.clientId, name:d.n||m.clientId.slice(0,6), color:d.color||'#9945FF', w:+d.w||0, l:+d.l||0 }); }
+    if(d.searching && !isMe){ openLobbies.push({ pub:m.clientId, name:d.n||m.clientId.slice(0,6), color:d.color||'#9945FF', w:+d.w||0, l:+d.l||0, stake:(d.stake==null?1:+d.stake) }); }
   });
   renderOpenLobbies(openLobbies);
   if(!rows.length){ el.innerHTML='<div class="rps-lb-empty">No players online yet</div>'; return; }
@@ -522,25 +582,28 @@ async function renderLeaderboard(){
 }
 
 // Render the list of OPEN LOBBIES (players advertising searching=true) with JOIN buttons.
-var _openLobbyNames = {};
+var _openLobbyNames = {}, _openLobbyStakes = {};
 function renderOpenLobbies(list){
   var el=$('rpsOpenList'); if(!el) return;
-  _openLobbyNames={};
+  _openLobbyNames={}; _openLobbyStakes={};
   var n=(list?list.length:0);
   var cnt=$('rpsOpenCount'); if(cnt) cnt.textContent=n;
   if(!n){
-    el.innerHTML='<div class="rps-lb-empty">No open lobbies right now — click “Find $1 Match” to open one, or wait for a player to appear.</div>';
+    el.innerHTML='<div class="rps-lb-empty">No open lobbies right now — click “Play” to open one, or wait for a player to appear.</div>';
     return;
   }
+  // Highest stakes first so the biggest games are on top.
+  list.sort(function(a,b){ return b.stake-a.stake; });
   el.innerHTML=list.map(function(r){
-    _openLobbyNames[r.pub]=r.name;
+    _openLobbyNames[r.pub]=r.name; _openLobbyStakes[r.pub]=r.stake;
     var nm=_esc(r.name), col=_safeColor(r.color);
     var initial=_esc((r.name||'?').trim().charAt(0).toUpperCase()||'?');
     return '<div class="rps-open-row">'
       +'<span class="rps-lb-av" style="background:linear-gradient(135deg,'+col+','+col+'99);box-shadow:0 0 9px '+col+'99">'+initial+'</span>'
       +'<span class="rps-open-name">'+nm+'</span>'
+      +'<span class="rps-open-stake">'+fmtUsd(r.stake)+'</span>'
       +'<span class="rps-open-rec">'+r.w+'W '+r.l+'L</span>'
-      +'<button class="rps-join-btn" onclick="joinOpenLobby(\''+r.pub+'\')">JOIN $1</button>'
+      +'<button class="rps-join-btn" onclick="joinOpenLobby(\''+r.pub+'\',null,'+r.stake+')">JOIN '+fmtUsd(r.stake)+'</button>'
       +'</div>';
   }).join('');
 }
@@ -573,9 +636,7 @@ async function _doInitLive(){
     if(d && d.price>10 && d.price<5000){ solPrice = d.price; }
   }catch(e){}
   wagerSol = +(WAGER_USD / solPrice).toFixed(6);
-  var net = (WAGER_USD*(1-HOUSE_CUT)).toFixed(2);
-  $('netLabel').textContent = '$'+net;
-  $('wagerLabel').textContent = '$1.00 wager  ·  ≈ '+wagerSol.toFixed(4)+' SOL';
+  refreshStakeUI(); // wager/net labels now reflect the selected stake at the live price
 
   WALLET = loadWallet();
   if(!WALLET){
@@ -588,6 +649,7 @@ async function _doInitLive(){
   $('youName').textContent = WALLET.name; $('youLabel').textContent = WALLET.name;
   $('lobbyStatus').textContent = 'Wallet ready: '+WALLET.pubkey.slice(0,4)+'…'+WALLET.pubkey.slice(-4);
   loadStats();
+  refreshStakeUI(); // render stake tiers + labels for the current selection
   joinLobby();   // show up on everyone's live board while on this page
 }
 
@@ -633,7 +695,8 @@ async function ensureQueue(){
   _queue.subscribe('rps_accept', onAccept);
   _queue.presence.subscribe('enter', evaluatePairing);
   _queue.presence.subscribe('leave', evaluatePairing);
-  await _queue.presence.enter({ name: WALLET.name });
+  _queue.presence.subscribe('update', evaluatePairing); // stake changes re-trigger pairing
+  await _queue.presence.enter({ name: WALLET.name, stake: _selectedStake });
 }
 
 async function findMatch(){
@@ -647,7 +710,7 @@ async function findMatch(){
   try{
     await ensureQueue();
     setSearching(true);   // advertise as an OPEN LOBBY others can join directly
-    $('lobbyStatus').textContent = 'Searching for an opponent… (or pick a lobby below)';
+    $('lobbyStatus').textContent = (_selectedStake===0?'Free match':'$'+(Math.round(_selectedStake*100)/100))+' — searching… (or pick a lobby below)';
     setTimeout(evaluatePairing, 400);
   }catch(e){
     $('lobbyStatus').textContent = 'Error: '+e.message;
@@ -656,23 +719,25 @@ async function findMatch(){
   }
 }
 
-// Directly challenge a specific open lobby (a player advertising searching=true).
-async function joinOpenLobby(hostPub, hostName){
+// Directly challenge a specific open lobby. Adopts THAT lobby's stake so both agree.
+async function joinOpenLobby(hostPub, hostName, hostStake){
   if(!WALLET){ initLive(); return; }
   if(hostPub===WALLET.pubkey) return;
   hostName = hostName || _openLobbyNames[hostPub] || hostPub.slice(0,6);
+  if(hostStake==null) hostStake = _openLobbyStakes[hostPub];
+  if(hostStake!=null){ selectStake(hostStake); } // match their amount before challenging
   showLive('lobby');
   $('findBtn').classList.add('hidden');
   $('cancelBtn').classList.remove('hidden');
-  $('lobbyStatus').textContent = 'Joining '+(hostName||hostPub.slice(0,6))+'…';
+  $('lobbyStatus').textContent = 'Joining '+hostName+' ('+fmtUsd(_selectedStake)+')…';
   _matched = false;
   try{
     await ensureQueue();
     setSearching(true); // become joinable too, in case they cancel and re-pick
     // Propose directly to the chosen host — they are searching, so subscribed to the
-    // queue and will accept. Deterministic matchId keeps both clients in sync.
+    // queue and will accept. Deterministic matchId + agreed stake keep both in sync.
     _proposingTo = hostPub;
-    _queue.publish('rps_propose', { to: hostPub, matchId: mkMatchId(WALLET.pubkey, hostPub) });
+    _queue.publish('rps_propose', { to: hostPub, matchId: mkMatchId(WALLET.pubkey, hostPub), stake: _selectedStake });
     clearTimeout(_proposeTimer);
     _proposeTimer = setTimeout(function(){
       if(!_matched && _proposingTo===hostPub){ _proposingTo=null; $('lobbyStatus').textContent='No response — searching for anyone…'; evaluatePairing(); }
@@ -689,14 +754,16 @@ async function evaluatePairing(){
   var members;
   try{ members = await _queue.presence.get(); }catch(e){ return; }
   if(_matched) return;
-  var others = members.map(function(m){return m.clientId;}).filter(function(c){ return c && c!==WALLET.pubkey; });
+  // Only pair with opponents at the SAME stake as ours.
+  var others = members.filter(function(m){ return m.clientId && m.clientId!==WALLET.pubkey && ((m.data||{}).stake) === _selectedStake; })
+                      .map(function(m){ return m.clientId; });
   var greater = others.filter(function(c){ return c > WALLET.pubkey; }).sort();
   if(greater.length > 0){
     // I'm the proposer to the smallest free member greater than me.
     var target = greater[0];
     if(_proposingTo !== target){
       _proposingTo = target;
-      _queue.publish('rps_propose', { to: target, matchId: mkMatchId(WALLET.pubkey, target) });
+      _queue.publish('rps_propose', { to: target, matchId: mkMatchId(WALLET.pubkey, target), stake: _selectedStake });
       clearTimeout(_proposeTimer);
       _proposeTimer = setTimeout(function(){
         if(!_matched && _proposingTo===target){ _proposingTo=null; evaluatePairing(); }
@@ -713,6 +780,8 @@ function onPropose(msg){
   if(_matched) return;
   var d = msg.data||{};
   if(d.to !== WALLET.pubkey) return;
+  var stake = (d.stake==null) ? _selectedStake : d.stake;
+  if(stake !== _selectedStake) return; // different stake — not a match for us
   var from = msg.clientId;
   // If committed to a DIFFERENT target, ignore. If we both proposed to EACH OTHER
   // (mutual), break the tie deterministically: the smaller pubkey stays proposer and
@@ -720,8 +789,8 @@ function onPropose(msg){
   if(_proposingTo && _proposingTo !== from) return;
   if(_proposingTo === from && WALLET.pubkey < from) return; // I'm smaller — keep mine, they accept
   _matched = true;
-  _queue.publish('rps_accept', { to: from, matchId: d.matchId });
-  beginMatch(d.matchId, from, /*iAmHost*/ WALLET.pubkey < from);
+  _queue.publish('rps_accept', { to: from, matchId: d.matchId, stake: stake });
+  beginMatch(d.matchId, from, /*iAmHost*/ WALLET.pubkey < from, stake);
 }
 
 function onAccept(msg){
@@ -731,7 +800,7 @@ function onAccept(msg){
   var from = msg.clientId;
   if(_proposingTo !== from) return;
   _matched = true;
-  beginMatch(d.matchId, from, /*iAmHost*/ WALLET.pubkey < from);
+  beginMatch(d.matchId, from, /*iAmHost*/ WALLET.pubkey < from, (d.stake==null?_selectedStake:d.stake));
 }
 
 async function leaveQueue(backToLobby){
@@ -749,10 +818,12 @@ async function leaveQueue(backToLobby){
 }
 
 // ── The match (best of 5, commit-reveal per round) ──────────────────────────
-async function beginMatch(matchId, oppPub, iAmHost){
+async function beginMatch(matchId, oppPub, iAmHost, stakeUsd){
   await leaveQueue(false);
+  stakeUsd = (stakeUsd==null) ? _selectedStake : stakeUsd;
   LIVE = {
     matchId: matchId, opp: oppPub, oppName: 'Opponent',
+    stakeUsd: stakeUsd, wagerSol: (stakeUsd>0 ? +(stakeUsd/solPrice).toFixed(6) : 0),
     myWins: 0, oppWins: 0, round: 0, resolvedMatch: false, started: false, joinTimer: null,
     // per-round:
     myPick:null, myNonce:null, myCommitSent:false, oppCommit:null,
@@ -940,13 +1011,15 @@ async function endMatch(iWon, note){
   // Record the result. W/L always counts; the money only counts on a normally
   // decided match — a forfeit (`note`) means the payout may never actually fire,
   // so crediting SOL there would overstate what was really won.
+  var _wSol = (LIVE.wagerSol!=null) ? LIVE.wagerSol : wagerSol;
+  var _stakeUsd = (LIVE.stakeUsd!=null) ? LIVE.stakeUsd : WAGER_USD;
+  var _isFree = !(_wSol>0);
   if(iWon) RPS_STATS.w++; else RPS_STATS.l++;
-  if(!note){ RPS_STATS.net += iWon ? wagerSol*(1-HOUSE_CUT) : -wagerSol; }
+  if(!note && !_isFree){ RPS_STATS.net += iWon ? _wSol*(1-HOUSE_CUT) : -_wSol; }
   pushStats();
   LIVE.resolvedMatch = true;
   clearTimeout(LIVE.roundTimer);
   document.querySelectorAll('#livePicks .pick-btn').forEach(function(b){b.classList.add('disabled');});
-  var winnerPub = iWon ? WALLET.pubkey : LIVE.opp;
   try{ if(_match){ await _match.presence.leave(); _match.unsubscribe(); _match.presence.unsubscribe(); } }catch(e){}
 
   showLive('done');
@@ -954,18 +1027,19 @@ async function endMatch(iWon, note){
   if(iWon){
     dR.className='result win-text'; dR.textContent='🏆 YOU WIN THE MATCH';
     dS.style.color='var(--green)';
-    dS.textContent = note ? note : ('Winner nets $'+(WAGER_USD*(1-HOUSE_CUT)).toFixed(2)+' — waiting for opponent\'s payout…');
-    if(!note) watchForPayout();
+    if(_isFree){ dS.textContent = note ? note : 'Free match — nice win! No wager.'; }
+    else { dS.textContent = note ? note : ('Winner nets $'+(_stakeUsd*(1-HOUSE_CUT)).toFixed(2)+' — waiting for opponent\'s payout…'); if(!note) watchForPayout(); }
   } else {
     dR.className='result lose-text'; dR.textContent='YOU LOST THE MATCH';
-    dS.style.color='var(--gold)'; dS.textContent='Paying the winner $1.00…';
+    if(_isFree){ dS.style.color='var(--gold)'; dS.textContent='Free match — no payment owed. GG!'; return; }
+    dS.style.color='var(--gold)'; dS.textContent='Paying the winner $'+_stakeUsd.toFixed(2)+'…';
     try{
-      var sig = await payWinner(LIVE.opp, wagerSol);
+      var sig = await payWinner(LIVE.opp, _wSol);
       dS.style.color='var(--green)';
-      dS.textContent='Paid ✓  ('+ (wagerSol*(1-HOUSE_CUT)).toFixed(4) +' SOL to winner, 10% house fee). TX '+sig.slice(0,8)+'…';
+      dS.textContent='Paid ✓  ('+ (_wSol*(1-HOUSE_CUT)).toFixed(4) +' SOL to winner, 10% house fee). TX '+sig.slice(0,8)+'…';
     }catch(e){
       dS.style.color='var(--red)';
-      dS.textContent='Payout failed: '+e.message+'. Make sure your game wallet has ≥ '+wagerSol.toFixed(4)+' SOL, then retry.';
+      dS.textContent='Payout failed: '+e.message+'. Make sure your game wallet has ≥ '+_wSol.toFixed(4)+' SOL, then retry.';
       addRetry();
     }
   }
@@ -978,7 +1052,7 @@ function addRetry(){
   b.className='big-btn'; b.id='retryPay'; b.style.marginTop='12px'; b.textContent='Retry Payout';
   b.onclick=async function(){
     var dS=$('doneSettle'); dS.style.color='var(--gold)'; dS.textContent='Retrying payout…';
-    try{ var sig=await payWinner(LIVE.opp, wagerSol); dS.style.color='var(--green)'; dS.textContent='Paid ✓ TX '+sig.slice(0,8)+'…'; b.remove(); }
+    try{ var sig=await payWinner(LIVE.opp, (LIVE.wagerSol!=null?LIVE.wagerSol:wagerSol)); dS.style.color='var(--green)'; dS.textContent='Paid ✓ TX '+sig.slice(0,8)+'…'; b.remove(); }
     catch(e){ dS.style.color='var(--red)'; dS.textContent='Still failing: '+e.message; }
   };
   d.insertBefore(b, $('againBtn'));
