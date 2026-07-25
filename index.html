@@ -314,6 +314,16 @@ canvas{display:block;width:100%;height:100%;}
 /* ══ GAMES TAB BUTTON ══ */
 #gamesBtn{position:fixed;bottom:72px;left:14px;z-index:300;display:flex;align-items:center;gap:8px;background:linear-gradient(135deg,#9945FF,#14F195);border:none;border-radius:24px;padding:10px 18px;cursor:pointer;font-family:'Orbitron',monospace;font-size:.62rem;font-weight:700;color:#fff;letter-spacing:1px;text-decoration:none;box-shadow:0 0 18px rgba(153,69,255,.45);transition:transform .18s,box-shadow .18s;white-space:nowrap;}
 #gamesBtn:hover{transform:scale(1.07);box-shadow:0 0 32px rgba(20,241,149,.7);}
+/* ══ GAMES MENU POPUP ══ */
+#gamesMenu{position:fixed;bottom:118px;left:14px;z-index:301;display:none;flex-direction:column;gap:8px;width:230px;padding:10px;background:rgba(14,18,32,.97);border:1px solid rgba(153,69,255,.5);border-radius:16px;box-shadow:0 12px 40px rgba(0,0,0,.6);backdrop-filter:blur(8px);font-family:'Orbitron',monospace;}
+#gamesMenu.open{display:flex;}
+#gamesMenu .gm-title{font-size:.5rem;letter-spacing:1.5px;color:#8a94ad;padding:2px 4px 4px;}
+#gamesMenu a.gm-item{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:10px;text-decoration:none;color:#fff;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06);transition:background .15s,border-color .15s,transform .15s;}
+#gamesMenu a.gm-item:hover{background:rgba(153,69,255,.16);border-color:rgba(20,241,149,.45);transform:translateX(2px);}
+#gamesMenu a.gm-item.current{opacity:.55;pointer-events:none;}
+#gamesMenu .gm-ico{width:30px;height:30px;flex:0 0 30px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:1rem;background:linear-gradient(135deg,#9945FF,#14F195);}
+#gamesMenu .gm-name{display:block;font-size:.62rem;font-weight:700;letter-spacing:.5px;}
+#gamesMenu .gm-sub{display:block;font-size:.44rem;color:#8a94ad;letter-spacing:.5px;margin-top:3px;}
 /* ══ DISCORD BUTTON ══ */
 #discordBtn{position:fixed;bottom:24px;left:14px;z-index:300;display:flex;align-items:center;gap:8px;background:#5865F2;border:none;border-radius:24px;padding:10px 18px;cursor:pointer;font-family:'Orbitron',monospace;font-size:.62rem;font-weight:700;color:#fff;letter-spacing:1px;text-decoration:none;box-shadow:0 0 18px rgba(88,101,242,.55);transition:transform .18s,box-shadow .18s;white-space:nowrap;}
 #discordBtn:hover{transform:scale(1.07);box-shadow:0 0 32px rgba(88,101,242,.85);}
@@ -10230,13 +10240,51 @@ window.addEventListener('load', function() {
 </div>
 
 <!-- ══ GAMES TAB BUTTON ══ -->
-<a id="gamesBtn" href="/rps.html" title="Rock Paper Scissors">
+<button id="gamesBtn" type="button" title="More games" onclick="toggleGamesMenu(event)">
   <svg width="18" height="18" viewBox="0 0 24 24" fill="#ffffff" xmlns="http://www.w3.org/2000/svg">
     <path d="M19.5 10.5c0-.23-.01-.45-.03-.68l1.86-1.07-2-3.46-1.88 1.08c-.36-.28-.76-.51-1.18-.69V3.5h-4v2.18c-.42.18-.82.41-1.18.69L9.21 5.29l-2 3.46 1.86 1.07c-.02.23-.03.45-.03.68s.01.45.03.68l-1.86 1.07 2 3.46 1.88-1.08c.36.28.76.51 1.18.69v2.18h4v-2.18c.42-.18.82-.41 1.18-.69l1.88 1.08 2-3.46-1.86-1.07c.02-.23.03-.45.03-.68zm-5.25 2.25a2.25 2.25 0 1 1 0-4.5 2.25 2.25 0 0 1 0 4.5z"/>
     <path d="M5.5 18.5c0-.17.01-.34.04-.5H3.27l-1 1.73 1.42.82c.27-.21.57-.39.89-.52V18.5z" opacity=".6"/>
   </svg>
   GAMES
-</a>
+</button>
+
+<!-- ══ GAMES MENU POPUP ══ -->
+<div id="gamesMenu">
+  <div class="gm-title">CHOOSE A GAME</div>
+  <a class="gm-item current" href="/" title="You're playing this">
+    <span class="gm-ico">🐍</span>
+    <span><span class="gm-name">Slither.SOL</span><span class="gm-sub">You're here</span></span>
+  </a>
+  <a class="gm-item" href="/rps.html" title="Rock Paper Scissors">
+    <span class="gm-ico">✊</span>
+    <span><span class="gm-name">Rock Paper Scissors</span><span class="gm-sub">$1 PvP</span></span>
+  </a>
+  <a class="gm-item" id="gmOrbit" href="#" title="SolOrbit">
+    <span class="gm-ico">🪐</span>
+    <span><span class="gm-name">SolOrbit</span><span class="gm-sub">Eat &amp; cash out</span></span>
+  </a>
+</div>
+<script>
+// Destination for the SolOrbit game (separate Node+WebSocket host — NOT Vercel).
+// Set this to the deployed URL once the server is live (e.g. Fly.io).
+var SOLORBIT_URL = 'https://solorbit.fly.dev';
+(function(){
+  var a = document.getElementById('gmOrbit');
+  if (a) a.href = SOLORBIT_URL;
+})();
+function toggleGamesMenu(e){
+  if(e) e.stopPropagation();
+  var m = document.getElementById('gamesMenu');
+  if(m) m.classList.toggle('open');
+}
+document.addEventListener('click', function(e){
+  var m = document.getElementById('gamesMenu');
+  var b = document.getElementById('gamesBtn');
+  if(!m || !m.classList.contains('open')) return;
+  if(m.contains(e.target) || (b && b.contains(e.target))) return;
+  m.classList.remove('open');
+});
+</script>
 
 <!-- ══ DISCORD BUTTON ══ -->
 <a id="discordBtn" href="https://discord.gg/2Ez7wNRZ" target="_blank" rel="noopener" title="Join our Discord">
