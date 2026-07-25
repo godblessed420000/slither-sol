@@ -891,6 +891,35 @@ canvas{display:block;width:100%;height:100%;}
 .m3-stat-num{font-family:'Orbitron',monospace;font-size:.95rem;font-weight:900;color:var(--gold);}
 .m3-stat-lbl{font-size:.45rem;color:var(--dim);margin-top:3px;text-transform:uppercase;letter-spacing:.5px;}
 @media(max-width:900px){#menuLayout{grid-template-columns:1fr;grid-template-rows:auto;height:auto;max-height:none;overflow-y:auto;}#menu3Left,#menu3Right{flex-direction:row;flex-wrap:wrap;}#menu3Left .m3card,#menu3Right .m3card{flex:1;min-width:200px;}}
+/* ══ EVENT PANELS (Free Entry Grind + Recruiter) ══ */
+.ev-cards-row{display:flex;gap:10px;width:100%;}
+.ev-grind-card{flex:1;background:#0a0c15;border:2px solid rgba(255,215,0,.55);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:7px;box-shadow:0 0 18px rgba(255,215,0,.12);}
+.ev-ref-card{flex:1;background:#060d0a;border:2px solid rgba(20,241,149,.45);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:7px;box-shadow:0 0 18px rgba(20,241,149,.10);}
+.ev-live-badge{display:inline-flex;align-items:center;gap:5px;font-family:'Share Tech Mono',monospace;font-size:.5rem;color:var(--gold);letter-spacing:1px;}
+.ev-live-dot{width:6px;height:6px;background:var(--gold);border-radius:50%;animation:titleFlash 1.4s ease-in-out infinite;}
+.ev-ref-live-badge{display:inline-flex;align-items:center;gap:5px;font-family:'Share Tech Mono',monospace;font-size:.5rem;color:var(--green);letter-spacing:1px;}
+.ev-ref-live-dot{width:6px;height:6px;background:var(--green);border-radius:50%;animation:titleFlash 1.4s ease-in-out infinite;}
+.ev-card-title{font-family:'Orbitron',monospace;font-size:.72rem;font-weight:900;color:#fff;letter-spacing:1.5px;text-transform:uppercase;}
+.ev-card-desc{font-size:.52rem;color:rgba(215,215,215,.7);line-height:1.45;}
+.ev-countdown{font-family:'Orbitron',monospace;font-size:.9rem;font-weight:900;color:var(--green);letter-spacing:2px;text-align:center;padding:4px 0;}
+.ev-reward-box{background:rgba(0,0,0,.4);border:1px solid rgba(255,215,0,.3);border-radius:7px;text-align:center;padding:6px 10px;}
+.ev-reward-lbl{font-family:'Share Tech Mono',monospace;font-size:.45rem;color:var(--dim);letter-spacing:1px;text-transform:uppercase;}
+.ev-reward-amt{font-family:'Orbitron',monospace;font-size:.85rem;font-weight:900;color:var(--gold);}
+.ev-prog-wrap{display:flex;flex-direction:column;gap:4px;}
+.ev-prog-bar{background:rgba(255,255,255,.07);border-radius:20px;height:8px;overflow:hidden;}
+.ev-prog-fill{height:100%;background:linear-gradient(90deg,var(--gold),#ffa500);border-radius:20px;transition:width .4s ease;}
+.ev-prog-lbl{font-family:'Share Tech Mono',monospace;font-size:.48rem;color:var(--dim);text-align:center;}
+.ev-ref-hdr{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+.ev-ref-title{font-family:'Orbitron',monospace;font-size:.62rem;font-weight:900;color:var(--green);text-transform:uppercase;letter-spacing:1px;}
+.ev-ref-prize{margin-left:auto;font-family:'Share Tech Mono',monospace;font-size:.48rem;color:var(--gold);}
+.ev-ref-desc{font-size:.5rem;color:rgba(215,215,215,.65);line-height:1.45;}
+.ev-ref-input-lbl{font-family:'Share Tech Mono',monospace;font-size:.44rem;color:var(--dim);text-transform:uppercase;letter-spacing:1px;}
+.ev-ref-row{display:flex;gap:6px;align-items:center;}
+.ev-ref-input{flex:1;background:rgba(20,241,149,.06);border:1px solid rgba(20,241,149,.3);color:var(--green);border-radius:6px;padding:6px 8px;font-family:'Share Tech Mono',monospace;font-size:.5rem;min-width:0;outline:none;}
+.ev-ref-copy{background:rgba(20,241,149,.15);border:1px solid rgba(20,241,149,.5);color:var(--green);border-radius:6px;padding:6px 10px;font-family:'Orbitron',monospace;font-size:.48rem;font-weight:700;cursor:pointer;white-space:nowrap;transition:background .15s;}
+.ev-ref-copy:hover{background:rgba(20,241,149,.3);}
+.ev-ref-status{font-size:.48rem;color:var(--dim);text-align:center;font-family:'Share Tech Mono',monospace;}
+@media(max-width:680px){.ev-cards-row{flex-direction:column;}}
 </style>
 
 <!-- ── Combat Tuning Suite panel (private) ──────────────────────────────── -->
@@ -1289,6 +1318,43 @@ canvas{display:block;width:100%;height:100%;}
         </div>
       </div>
 
+      <!-- ── Event Panels ── -->
+      <div class="ev-cards-row">
+
+        <!-- Free Entry Grind -->
+        <div class="ev-grind-card">
+          <div class="ev-live-badge"><div class="ev-live-dot"></div>NOW &middot; LIVE</div>
+          <div class="ev-card-title">&#9889; FREE ENTRY GRIND</div>
+          <div class="ev-card-desc">Play 10 paid $5 games this hour &amp; earn a FREE $5 entry. No cap &mdash; everyone who hits 10 gets one.</div>
+          <div class="ev-countdown" id="evGrindTimer">-- : -- : --</div>
+          <div class="ev-prog-wrap">
+            <div class="ev-prog-bar"><div class="ev-prog-fill" id="evGrindFill" style="width:0%"></div></div>
+            <div class="ev-prog-lbl" id="evGrindLbl">0 / 10 $5 games this hour</div>
+          </div>
+          <div class="ev-reward-box">
+            <div class="ev-reward-lbl">Reward</div>
+            <div class="ev-reward-amt">FREE $5</div>
+          </div>
+        </div>
+
+        <!-- Recruiter of the Week -->
+        <div class="ev-ref-card">
+          <div class="ev-ref-live-badge"><div class="ev-ref-live-dot"></div>WEEKLY</div>
+          <div class="ev-ref-hdr">
+            <div class="ev-ref-title">&#127942; RECRUITER OF THE WEEK</div>
+            <div class="ev-ref-prize">$10 &middot; ENDS IN <span id="evRefTimer">--d --h</span></div>
+          </div>
+          <div class="ev-ref-desc">Share your link. Every friend who plays a paid lobby counts as a recruit. Most recruits this week wins <strong style="color:var(--green)">$10 in SOL</strong>. Alts don&apos;t count &mdash; they have to deposit &amp; play for real.</div>
+          <div class="ev-ref-input-lbl">YOUR INVITE LINK</div>
+          <div class="ev-ref-row">
+            <input class="ev-ref-input" id="evRefInput" readonly value="https://slither-sol.com/?ref=...">
+            <button class="ev-ref-copy" onclick="_copyRefLink()">&#9632; COPY</button>
+          </div>
+          <div class="ev-ref-status" id="evRefStatus">Loading your invite link&hellip;</div>
+        </div>
+
+      </div>
+
       <div style="font-size:.52rem;color:var(--dim);text-align:center;">Mouse to steer &middot; Hold LMB / Space to boost &middot; Hold Q (1s) to cash out</div>
 
       <div id="versionBadge" style="display:inline-flex;align-items:center;gap:5px;background:rgba(20,241,149,.08);border:1px solid rgba(20,241,149,.25);border-radius:8px;padding:4px 12px;font-family:'Share Tech Mono',monospace;font-size:.65rem;font-weight:700;color:#14F195;cursor:pointer;letter-spacing:1px;" title="Game version — click to copy" onclick="(function(v){navigator.clipboard&&navigator.clipboard.writeText(v).catch(function(){});toast('Version copied: '+v);})(this.dataset.v)" data-v="V1">
@@ -1499,7 +1565,7 @@ canvas{display:block;width:100%;height:100%;}
 // slither-sol.com is served by Vercel, which deploys this file verbatim on push.
 // This is the number players actually see. (The old GitHub Pages workflow that
 // auto-stamped V<VERSION> deployed to a dead host and is now disabled.)
-var GAME_BUILD = 'V429';
+var GAME_BUILD = 'V430';
 
 var PRIVY_APP_ID          = 'client-WY6aEf1eS4reRDrBq7ghh8arEiMaKSj1Vk37ZG8CAawEF';
 var HOUSE_WALLET_ADDRESS  = '2QnrdhxXYt8ythhGYHDz6MtTZE1z2bYvbss8z3ZGj2uJ';
@@ -4740,6 +4806,75 @@ function renderShop(){
   });
 }
 
+// ════════════════ EVENT PANELS ════════════════
+var _evTimerInterval=null;
+
+function _evGrindKey(){
+  var n=new Date(); return 'grind_'+n.getUTCFullYear()+'_'+(n.getUTCMonth()+1)+'_'+n.getUTCDate()+'_'+n.getUTCHours();
+}
+function _grindGames(){ return parseInt(_ls.getItem(_evGrindKey())||'0',10); }
+function _grindIncrement(){
+  var k=_evGrindKey(), v=_grindGames()+1; _ls.setItem(k,v);
+  _evUpdateGrind();
+  if(v===10) toast('🎉 FREE $5 ENTRY EARNED! You played 10 paid $5 games this hour.','info');
+}
+function _evUpdateGrind(){
+  var g=_grindGames(), pct=Math.min(g/10*100,100);
+  var fill=document.getElementById('evGrindFill'), lbl=document.getElementById('evGrindLbl');
+  if(fill) fill.style.width=pct+'%';
+  if(lbl) lbl.textContent=(g>=10?'✓ EARNED! ':'')+g+' / 10 $5 games this hour';
+}
+function _evTickAll(){
+  var now=new Date();
+  // Grind countdown: time to end of current UTC hour
+  var secsLeft=3600 - now.getUTCMinutes()*60 - now.getUTCSeconds();
+  var gm=Math.floor(secsLeft/60), gs=secsLeft%60;
+  var gt=document.getElementById('evGrindTimer'); if(gt) gt.textContent='ENDS IN '+String(gm).padStart(2,'0')+'m '+String(gs).padStart(2,'0')+'s';
+  // Recruiter countdown: days+hours to next Monday 00:00 UTC
+  var msLeft = (8 - now.getUTCDay())*86400000 - now.getUTCHours()*3600000 - now.getUTCMinutes()*60000 - now.getUTCSeconds()*1000;
+  if(msLeft<=0) msLeft+=7*86400000;
+  var rd=Math.floor(msLeft/86400000), rh=Math.floor((msLeft%86400000)/3600000);
+  var rt=document.getElementById('evRefTimer'); if(rt) rt.textContent=rd+'d '+rh+'h';
+}
+function _evSetRefLink(){
+  // Build a short code from wallet pubkey, or a random code stored in localStorage
+  var code=_ls.getItem('ref_code');
+  if(!code){
+    var src=W.pubkey||_wsClientId||('');
+    if(src.length>=6){ code=src.slice(0,8).replace(/[^A-Za-z0-9]/g,'').toUpperCase().slice(0,8); }
+    if(!code||code.length<4){ code=Math.random().toString(36).slice(2,8).toUpperCase(); }
+    _ls.setItem('ref_code',code);
+  }
+  var link='https://slither-sol.com/?ref='+code;
+  var inp=document.getElementById('evRefInput'); if(inp) inp.value=link;
+  // Track how many recruits have come in via localStorage
+  var recruits=parseInt(_ls.getItem('ref_recruits')||'0',10);
+  var st=document.getElementById('evRefStatus');
+  if(st) st.textContent=recruits>0?'YOU: '+recruits+' recruit'+(recruits===1?'':'s')+' — keep sharing!':'No recruits yet — be the first. Share your link!';
+  // Handle inbound ?ref= on page load: credit the referrer locally
+  try{
+    var _urlRef=new URLSearchParams(window.location.search).get('ref');
+    if(_urlRef&&!_ls.getItem('ref_used_'+_urlRef)){
+      _ls.setItem('ref_used_'+_urlRef,'1');
+      // Track referral on your own device — server-side counting TBD
+    }
+  }catch(_){}
+}
+function _copyRefLink(){
+  var inp=document.getElementById('evRefInput'); if(!inp) return;
+  var link=inp.value;
+  if(navigator.clipboard){ navigator.clipboard.writeText(link).then(function(){ toast('Invite link copied! 🔗','info'); }).catch(function(){ _evRefFallbackCopy(link); }); }
+  else _evRefFallbackCopy(link);
+}
+function _evRefFallbackCopy(t){ var ta=document.createElement('textarea'); ta.value=t; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); toast('Invite link copied! 🔗','info'); }
+function _evInit(){
+  _evUpdateGrind();
+  _evSetRefLink();
+  _evTickAll();
+  if(_evTimerInterval) clearInterval(_evTimerInterval);
+  _evTimerInterval=setInterval(_evTickAll,1000);
+}
+
 function showStart() {
   _inGameSession=false;
   _wsLeave(); // close any lingering Ably/WS connection (spectating, death screen, etc.)
@@ -4756,6 +4891,7 @@ function showStart() {
   else {
     var ov2=document.getElementById('ovStart'); if(ov2) ov2.classList.remove('hidden');
     refreshCards(); updateWalletDisplays(); renderColorPicker(); renderSkinPicker(); _startLobbyCountPoll(); _startNotifWatch();
+    _evInit();
     setTimeout(_refreshMenuOnShow, 100);
     // Silently refresh on-chain balance when lobby screen opens.
     // Pass null so a timeout never shows an error toast — cached balance stays valid.
@@ -4819,6 +4955,7 @@ async function doJoinGame() {
   await sleep(180);
   document.getElementById('privyOverlay').classList.add('hidden');
   activeTier=selectedLobbyTier;
+  if(selectedLobbyTier===5) _grindIncrement(); // track toward Free Entry Grind
   enterLobby(selectedLobbyTier,null);
   } finally { _joiningInProgress = false; }
 }
