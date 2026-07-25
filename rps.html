@@ -713,8 +713,12 @@ function onPropose(msg){
   if(_matched) return;
   var d = msg.data||{};
   if(d.to !== WALLET.pubkey) return;
-  if(_proposingTo) return; // I'm committed to my own proposal; ignore
   var from = msg.clientId;
+  // If committed to a DIFFERENT target, ignore. If we both proposed to EACH OTHER
+  // (mutual), break the tie deterministically: the smaller pubkey stays proposer and
+  // the larger accepts — otherwise both sides ignore and neither match ever starts.
+  if(_proposingTo && _proposingTo !== from) return;
+  if(_proposingTo === from && WALLET.pubkey < from) return; // I'm smaller — keep mine, they accept
   _matched = true;
   _queue.publish('rps_accept', { to: from, matchId: d.matchId });
   beginMatch(d.matchId, from, /*iAmHost*/ WALLET.pubkey < from);
