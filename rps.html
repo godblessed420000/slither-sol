@@ -783,11 +783,12 @@ function onPropose(msg){
   var stake = (d.stake==null) ? _selectedStake : d.stake;
   if(stake !== _selectedStake) return; // different stake — not a match for us
   var from = msg.clientId;
-  // If committed to a DIFFERENT target, ignore. If we both proposed to EACH OTHER
-  // (mutual), break the tie deterministically: the smaller pubkey stays proposer and
-  // the larger accepts — otherwise both sides ignore and neither match ever starts.
-  if(_proposingTo && _proposingTo !== from) return;
-  if(_proposingTo === from && WALLET.pubkey < from) return; // I'm smaller — keep mine, they accept
+  // Mutual-propose tiebreaker: if we both proposed to each other simultaneously,
+  // the smaller pubkey stays as proposer (waits for accept) and the larger accepts.
+  if(_proposingTo === from && WALLET.pubkey < from) return;
+  // Note: we do NOT guard against _proposingTo !== from. A direct-join propose (B
+  // clicks JOIN on my open lobby) must be accepted even if I'm mid-auto-propose to
+  // someone else — otherwise the joiner always gets "No response".
   _matched = true;
   _queue.publish('rps_accept', { to: from, matchId: d.matchId, stake: stake });
   beginMatch(d.matchId, from, /*iAmHost*/ WALLET.pubkey < from, stake);
