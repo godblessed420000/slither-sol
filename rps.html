@@ -229,6 +229,8 @@ body::after{content:'';position:fixed;inset:0;z-index:-1;background:linear-gradi
 .big-btn.secondary{background:rgba(153,69,255,.18);border:1px solid rgba(153,69,255,.55);color:#fff;box-shadow:0 0 14px rgba(153,69,255,.25);}
 .big-btn.secondary::after{display:none;}
 .big-btn[disabled]{opacity:.5;pointer-events:none;}
+.search-actions{display:flex;gap:10px;justify-content:center;margin-top:12px;flex-wrap:wrap;}
+.search-actions.hidden{display:none;}
 .warn-note{font-size:.56rem;color:var(--dim);line-height:1.7;max-width:440px;text-align:center;margin-top:16px;}
 .warn-note a{color:var(--purple);}
 .settle-note{font-family:'Orbitron',monospace;font-size:.58rem;letter-spacing:1px;min-height:1.2em;margin-top:10px;text-align:center;color:var(--gold);}
@@ -411,7 +413,10 @@ canvas#bgCanvas{position:fixed;top:0;left:0;width:100%;height:100%;z-index:-2;po
 
     <div class="live-status" id="lobbyStatus">Ready to find a match.</div>
     <button class="big-btn" id="findBtn" onclick="findMatch()">Play $1</button>
-    <button class="big-btn secondary hidden" id="cancelBtn" onclick="leaveQueue(true)" style="margin-top:12px;">Cancel Search</button>
+    <div id="searchActions" class="search-actions hidden">
+      <button class="big-btn secondary" id="cancelBtn" onclick="leaveQueue(true)">Cancel Search</button>
+      <button class="big-btn secondary" id="shareBtn" onclick="shareRps()" title="Copy an invite link">🔗 Invite a friend</button>
+    </div>
 
     <!-- OPEN LOBBIES — players currently searching; click JOIN to challenge directly -->
     <div class="rps-open-card">
@@ -511,7 +516,18 @@ function setMode(m){
   $('tabLive').classList.toggle('active', m==='live');
   $('cpuPanel').classList.toggle('hidden', m!=='cpu');
   $('livePanel').classList.toggle('hidden', m!=='live');
-  if (m==='live'){ refreshStakeUI(); initLive(); } // render tiers instantly; init is async
+  if (m==='live'){
+    // Invite link handler: if URL was #play=<stake>, pre-select that stake so
+    // the invitee lands on the SAME lobby amount as the host (auto-match works).
+    if (window.__pendingInviteStake != null) {
+      try { selectStake(window.__pendingInviteStake); } catch(e){}
+      var _stake = window.__pendingInviteStake;
+      window.__pendingInviteStake = null;
+      // Auto-start the search after LIVE finishes booting.
+      setTimeout(function(){ try{ if(!_matched) findMatch(); }catch(e){} }, 1200);
+    }
+    refreshStakeUI(); initLive();
+  } // render tiers instantly; init is async
   else leaveQueue(false); // stop searching if leaving live tab
 }
 
@@ -740,7 +756,12 @@ function renderOpenLobbies(list){
   var n=(list?list.length:0);
   var cnt=$('rpsOpenCount'); if(cnt) cnt.textContent=n;
   if(!n){
-    el.innerHTML='<div class="rps-lb-empty">No open lobbies right now — click “Play” to open one, or wait for a player to appear.</div>';
+    var searching = document.getElementById('searchActions') && !document.getElementById('searchActions').classList.contains('hidden');
+    if (searching) {
+      el.innerHTML='<div class="rps-lb-empty">🕹 You’re the only one here right now. Leave this tab open — new players joining any stake will see you and can click JOIN.<br><br>Want a match faster? Tap <b>🔗 Invite a friend</b> above to copy a link.</div>';
+    } else {
+      el.innerHTML='<div class="rps-lb-empty">No open lobbies right now — click “Play” to open one, or wait for a player to appear.</div>';
+    }
     return;
   }
   // Highest stakes first so the biggest games are on top.
@@ -854,7 +875,7 @@ async function findMatch(){
   if(!WALLET){ initLive(); return; }
   showLive('lobby');
   $('findBtn').classList.add('hidden');
-  $('cancelBtn').classList.remove('hidden');
+  $('searchActions').classList.remove('hidden');
   $('lobbyStatus').textContent = 'Connecting…';
   _matched = false; _proposingTo = null;
 
@@ -866,7 +887,7 @@ async function findMatch(){
   }catch(e){
     $('lobbyStatus').textContent = 'Error: '+e.message;
     $('findBtn').classList.remove('hidden');
-    $('cancelBtn').classList.add('hidden');
+    $('searchActions').classList.add('hidden');
   }
 }
 
@@ -879,7 +900,7 @@ async function joinOpenLobby(hostPub, hostName, hostStake){
   if(hostStake!=null){ selectStake(hostStake); } // match their amount before challenging
   showLive('lobby');
   $('findBtn').classList.add('hidden');
-  $('cancelBtn').classList.remove('hidden');
+  $('searchActions').classList.remove('hidden');
   $('lobbyStatus').textContent = 'Joining '+hostName+' ('+fmtUsd(_selectedStake)+')…';
   _matched = false;
   try{
@@ -896,7 +917,7 @@ async function joinOpenLobby(hostPub, hostName, hostStake){
   }catch(e){
     $('lobbyStatus').textContent = 'Error: '+e.message;
     $('findBtn').classList.remove('hidden');
-    $('cancelBtn').classList.add('hidden');
+    $('searchActions').classList.add('hidden');
   }
 }
 
@@ -926,6 +947,33 @@ async function evaluatePairing(){
 }
 
 function mkMatchId(a,b){ return [a,b].sort().join('__'); }
+
+// Copy an invite link to the clipboard so the user can bring a friend into the
+// LIVE PvP tab (matchmaking is a chicken-and-egg problem when nobody else is
+// searching — this fixes it without touching the wire protocol).
+function shareRps(){
+  var url = location.origin + location.pathname + '#play=' + (_selectedStake || 1);
+  var msg = 'Play me at Slither.SOL Rock Paper Scissors for $' + (_selectedStake || 1) + ' → ' + url;
+  var btn = document.getElementById('shareBtn');
+  var done = function(t){ if(!btn) return; var o=btn.textContent; btn.textContent=t; setTimeout(function(){btn.textContent=o;},1800); };
+  try {
+    if (navigator.share) { navigator.share({ title:'Slither.SOL RPS', text:msg, url:url }).catch(function(){}); done('✓ Sharing…'); return; }
+  } catch(e){}
+  try { navigator.clipboard.writeText(msg); done('✓ Link copied — send it!'); return; } catch(e){}
+  window.prompt('Copy this invite link:', msg);
+}
+// On load, if URL has #play=<stake>, auto-pick that stake and auto-switch to
+// LIVE — the invite link becomes a one-click "meet me at $X" flow.
+(function(){
+  try {
+    var m = /#play=([0-9.]+)/.exec(location.hash || '');
+    if (!m) return;
+    window.__pendingInviteStake = parseFloat(m[1]);
+    var run = function(){ try { setMode('live'); } catch(e){} };
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run);
+    else setTimeout(run, 0);
+  } catch(e){}
+})();
 
 function onPropose(msg){
   if(_matched) return;
@@ -964,7 +1012,7 @@ async function leaveQueue(backToLobby){
   }
   if(backToLobby){
     $('findBtn').classList.remove('hidden');
-    $('cancelBtn').classList.add('hidden');
+    $('searchActions').classList.add('hidden');
     $('lobbyStatus').textContent = WALLET ? 'Ready to find a match.' : 'Not signed in';
   }
 }
@@ -1270,7 +1318,7 @@ async function watchForPayout(){
   }
   showLive('lobby');
   $('findBtn').classList.add('hidden');
-  $('cancelBtn').classList.add('hidden');
+  $('searchActions').classList.add('hidden');
   $('lobbyStatus').textContent = 'Joining match…';
   try{
     await ensureAbly();
