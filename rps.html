@@ -174,7 +174,14 @@ body::after{content:'';position:fixed;inset:0;z-index:-1;background:linear-gradi
 @keyframes pickRing{to{transform:rotate(360deg);}}
 
 .streak{font-family:'Orbitron',monospace;font-size:.5rem;color:var(--gold);letter-spacing:2px;margin-top:16px;min-height:1em;text-shadow:0 0 10px rgba(255,215,0,.4);}
-.cpu-lb-card{margin-top:22px;background:linear-gradient(135deg,rgba(153,69,255,.35),rgba(20,241,149,.35));}
+.rps-lb-card.cpu-lb-card{position:fixed;top:70px;left:14px;width:290px;max-width:calc(100vw - 28px);z-index:40;margin-top:0;
+  background:linear-gradient(135deg,rgba(153,69,255,.55),rgba(20,241,149,.55));
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+  box-shadow:0 12px 32px rgba(0,0,0,.6), 0 0 26px rgba(153,69,255,.4);}
+.rps-lb-card.cpu-lb-card .rps-lb-inner{background:rgba(6,10,20,.9);}
+@media(max-width:900px){
+  .rps-lb-card.cpu-lb-card{position:static;top:auto;left:auto;width:100%;max-width:460px;margin:22px auto 0;backdrop-filter:none;-webkit-backdrop-filter:none;}
+}
 .cpu-lb-nick{display:flex;align-items:center;gap:8px;margin-bottom:12px;}
 .cpu-lb-nick label{font-family:'Orbitron',monospace;font-size:.48rem;letter-spacing:1.5px;color:var(--dim);font-weight:700;}
 .cpu-lb-nick input{flex:1;font-family:'Orbitron',monospace;font-size:.62rem;padding:7px 11px;border-radius:8px;
@@ -190,7 +197,13 @@ body::after{content:'';position:fixed;inset:0;z-index:-1;background:linear-gradi
 .pop{animation:pop .35s ease-out;}
 
 /* live-specific */
-.live-status{font-family:'Orbitron',monospace;font-size:.62rem;letter-spacing:1px;color:var(--blue);min-height:1.2em;margin-bottom:12px;text-align:center;}
+.live-status{font-family:'Orbitron',monospace;font-size:.62rem;letter-spacing:1.5px;color:var(--blue);min-height:1.2em;margin-bottom:14px;text-align:center;
+  display:inline-flex;align-items:center;gap:8px;padding:8px 18px;border-radius:999px;
+  background:rgba(0,194,255,.08);border:1px solid rgba(0,194,255,.4);
+  box-shadow:0 0 18px rgba(0,194,255,.22), inset 0 0 12px rgba(0,194,255,.08);
+  text-shadow:0 0 8px rgba(0,194,255,.5);animation:liveStatusGlow 2.6s ease-in-out infinite;}
+.live-status::before{content:'';width:8px;height:8px;border-radius:50%;background:var(--blue);box-shadow:0 0 10px var(--blue);animation:lbLivePulse 1.4s ease-in-out infinite;flex-shrink:0;}
+@keyframes liveStatusGlow{0%,100%{box-shadow:0 0 18px rgba(0,194,255,.22), inset 0 0 12px rgba(0,194,255,.08);}50%{box-shadow:0 0 28px rgba(0,194,255,.4), inset 0 0 18px rgba(0,194,255,.14);}}
 .wager-box{background:linear-gradient(180deg,rgba(20,241,149,.10),rgba(255,215,0,.05));border:1px solid rgba(20,241,149,.35);border-radius:14px;padding:14px 22px;margin-bottom:20px;text-align:center;font-size:.62rem;line-height:1.75;color:rgba(240,255,240,.85);max-width:460px;position:relative;box-shadow:0 0 24px rgba(20,241,149,.15), inset 0 0 20px rgba(20,241,149,.06);}
 .wager-box strong{color:var(--green);text-shadow:0 0 8px rgba(20,241,149,.5);}
 .wager-amt{font-family:'Orbitron',monospace;font-size:1.5rem;font-weight:900;color:var(--gold);text-shadow:0 0 20px rgba(255,215,0,.7), 0 0 40px rgba(255,215,0,.3);letter-spacing:1px;display:inline-block;animation:wagerGlow 2.4s ease-in-out infinite;}
@@ -306,14 +319,16 @@ body::after{content:'';position:fixed;inset:0;z-index:-1;background:linear-gradi
 .rps-join-btn:active{transform:scale(.97);}
 /* ── Stake tier selector ── */
 .rps-stake-row{display:flex;flex-wrap:wrap;justify-content:center;gap:6px;max-width:460px;margin:16px auto 0;}
-.rps-stake-btn{cursor:pointer;font-family:'Orbitron',monospace;font-size:.56rem;font-weight:800;letter-spacing:.5px;
-  color:var(--text);padding:7px 11px;border-radius:9px;border:1px solid rgba(255,255,255,.1);
-  background:rgba(255,255,255,.04);transition:transform .12s,border-color .12s,box-shadow .12s,background .12s;}
-.rps-stake-btn:hover{border-color:rgba(153,69,255,.5);transform:translateY(-1px);}
+.rps-stake-btn{cursor:pointer;font-family:'Orbitron',monospace;font-size:.62rem;font-weight:800;letter-spacing:.5px;
+  color:#dde6f0;padding:9px 14px;border-radius:11px;border:1px solid rgba(255,255,255,.12);
+  background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,.01));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.08), 0 2px 6px rgba(0,0,0,.4);
+  transition:transform .14s cubic-bezier(.34,1.56,.64,1),border-color .14s,box-shadow .14s,background .14s;}
+.rps-stake-btn:hover{border-color:rgba(153,69,255,.6);transform:translateY(-2px) scale(1.04);box-shadow:0 0 16px rgba(153,69,255,.35), inset 0 1px 0 rgba(255,255,255,.14);}
 .rps-stake-btn.sel{color:#031018;background:linear-gradient(120deg,var(--green),var(--blue));border-color:transparent;
-  box-shadow:0 0 14px rgba(20,241,149,.5);}
+  box-shadow:0 0 22px rgba(20,241,149,.65), inset 0 -3px 8px rgba(0,0,0,.15);text-shadow:0 1px 0 rgba(255,255,255,.3);transform:translateY(-1px);}
 .rps-stake-btn.free{color:var(--gold);}
-.rps-stake-btn.free.sel{color:#2b2400;background:linear-gradient(120deg,#ffd700,#ffa726);box-shadow:0 0 14px rgba(255,215,0,.5);}
+.rps-stake-btn.free.sel{color:#2b2400;background:linear-gradient(120deg,#ffd700,#ffa726);box-shadow:0 0 22px rgba(255,215,0,.65), inset 0 -3px 8px rgba(0,0,0,.15);}
 .rps-custom-row{display:flex;justify-content:center;margin:8px auto 0;max-width:460px;}
 .rps-custom-input{width:130px;font-family:'Orbitron',monospace;font-size:.58rem;color:var(--text);text-align:center;
   padding:7px 10px;border-radius:9px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.03);outline:none;}
@@ -358,22 +373,22 @@ canvas#bgCanvas{position:fixed;top:0;left:0;width:100%;height:100%;z-index:-2;po
     <button class="pick-btn" data-choice="scissors" onclick="cpuPlay('scissors')" title="Scissors">✂️</button>
   </div>
   <div class="streak" id="cpuStreak">&nbsp;</div>
+</div>
 
-  <!-- Local TOP STREAKS leaderboard (this device) -->
-  <div class="rps-lb-card cpu-lb-card">
-    <div class="rps-lb-inner">
-      <div class="rps-lb-hdr">
-        <span class="rps-lb-title">🏆 Top Streaks — This Device</span>
-        <span class="rps-lb-live"><i></i>LIVE</span>
-      </div>
-      <div class="cpu-lb-nick">
-        <label>PLAYING AS</label>
-        <input id="cpuNickInput" maxlength="16" placeholder="Your name" oninput="onCpuNickChange(this.value)">
-        <button class="cpu-lb-reset" onclick="resetCpuLb()" title="Clear leaderboard">CLEAR</button>
-      </div>
-      <div id="cpuLbList" class="rps-lb-list"></div>
-      <div class="rps-lb-note">Personal-best streaks are saved on this device. Beat your record!</div>
+<!-- Local TOP STREAKS leaderboard (top-left, persistent across modes) -->
+<div class="rps-lb-card cpu-lb-card">
+  <div class="rps-lb-inner">
+    <div class="rps-lb-hdr">
+      <span class="rps-lb-title">🏆 Top Streaks — This Device</span>
+      <span class="rps-lb-live"><i></i>LIVE</span>
     </div>
+    <div class="cpu-lb-nick">
+      <label>PLAYING AS</label>
+      <input id="cpuNickInput" maxlength="16" placeholder="Your name" oninput="onCpuNickChange(this.value)">
+      <button class="cpu-lb-reset" onclick="resetCpuLb()" title="Clear leaderboard">CLEAR</button>
+    </div>
+    <div id="cpuLbList" class="rps-lb-list"></div>
+    <div class="rps-lb-note">Personal-best streaks are saved on this device. Beat your record!</div>
   </div>
 </div>
 
