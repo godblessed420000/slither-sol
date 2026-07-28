@@ -756,6 +756,10 @@ var _openLobbyNames = {}, _openLobbyStakes = {};
 function renderOpenLobbies(list){
   var el=$('rpsOpenList'); if(!el) return;
   _openLobbyNames={}; _openLobbyStakes={};
+  // Hide players we recently failed to reach — their tab probably closed and
+  // Ably hasn't cleaned up presence yet. Auto-unhide after the blacklist expires.
+  var now = Date.now();
+  if (list) list = list.filter(function(r){ return !(_deadLobbies[r.pub] > now); });
   var n=(list?list.length:0);
   var cnt=$('rpsOpenCount'); if(cnt) cnt.textContent=n;
   if(!n){
@@ -845,6 +849,10 @@ async function getAblyToken(pubkey){
 
 // ── Matchmaking ─────────────────────────────────────────────────────────────
 var _proposingTo = null, _proposeTimer = null, _matched = false;
+// Recently non-responsive opponents. Pubkey -> expiry timestamp. Skipped in
+// evaluatePairing to prevent hammering ghosts whose Ably presence hasn't yet
+// timed out after their tab closed.
+var _deadLobbies = {};
 
 async function ensureAbly(){
   if(_ably && _ably.connection.state === 'connected') return;
@@ -915,7 +923,15 @@ async function joinOpenLobby(hostPub, hostName, hostStake){
     _queue.publish('rps_propose', { to: hostPub, matchId: mkMatchId(WALLET.pubkey, hostPub), stake: _selectedStake });
     clearTimeout(_proposeTimer);
     _proposeTimer = setTimeout(function(){
-      if(!_matched && _proposingTo===hostPub){ _proposingTo=null; $('lobbyStatus').textContent='No response — searching for anyone…'; evaluatePairing(); }
+      if(!_matched && _proposingTo===hostPub){
+        _proposingTo=null;
+        // Blacklist this stale/dead lobby for 30s so evaluatePairing doesn't
+        // loop-propose to the same non-responsive player until their presence
+        // times out on Ably's side (~15s but sometimes longer).
+        _deadLobbies[hostPub] = Date.now() + 30000;
+        $('lobbyStatus').textContent = (hostName||'That player')+' didn’t answer — auto-matching…';
+        evaluatePairing();
+      }
     }, 4000);
   }catch(e){
     $('lobbyStatus').textContent = 'Error: '+e.message;
@@ -930,8 +946,12 @@ async function evaluatePairing(){
   try{ members = await _queue.presence.get(); }catch(e){ return; }
   if(_matched) return;
   // Only pair with opponents at the SAME stake as ours.
-  var others = members.filter(function(m){ return m.clientId && m.clientId!==WALLET.pubkey && ((m.data||{}).stake) === _selectedStake; })
-                      .map(function(m){ return m.clientId; });
+  var now = Date.now();
+  var others = members.filter(function(m){
+    if (!m.clientId || m.clientId===WALLET.pubkey) return false;
+    if ((_deadLobbies[m.clientId]||0) > now) return false; // recently non-responsive → skip
+    return ((m.data||{}).stake) === _selectedStake;
+  }).map(function(m){ return m.clientId; });
   var greater = others.filter(function(c){ return c > WALLET.pubkey; }).sort();
   if(greater.length > 0){
     // I'm the proposer to the smallest free member greater than me.
@@ -941,7 +961,11 @@ async function evaluatePairing(){
       _queue.publish('rps_propose', { to: target, matchId: mkMatchId(WALLET.pubkey, target), stake: _selectedStake });
       clearTimeout(_proposeTimer);
       _proposeTimer = setTimeout(function(){
-        if(!_matched && _proposingTo===target){ _proposingTo=null; evaluatePairing(); }
+        if(!_matched && _proposingTo===target){
+          _proposingTo=null;
+          _deadLobbies[target] = Date.now() + 30000; // blacklist non-responsive target
+          evaluatePairing();
+        }
       }, 3500);
     }
   } else {
