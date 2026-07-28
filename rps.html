@@ -174,6 +174,15 @@ body::after{content:'';position:fixed;inset:0;z-index:-1;background:linear-gradi
 @keyframes pickRing{to{transform:rotate(360deg);}}
 
 .streak{font-family:'Orbitron',monospace;font-size:.5rem;color:var(--gold);letter-spacing:2px;margin-top:16px;min-height:1em;text-shadow:0 0 10px rgba(255,215,0,.4);}
+.cpu-lb-card{margin-top:22px;background:linear-gradient(135deg,rgba(153,69,255,.35),rgba(20,241,149,.35));}
+.cpu-lb-nick{display:flex;align-items:center;gap:8px;margin-bottom:12px;}
+.cpu-lb-nick label{font-family:'Orbitron',monospace;font-size:.48rem;letter-spacing:1.5px;color:var(--dim);font-weight:700;}
+.cpu-lb-nick input{flex:1;font-family:'Orbitron',monospace;font-size:.62rem;padding:7px 11px;border-radius:8px;
+  background:rgba(0,0,0,.35);border:1px solid rgba(153,69,255,.35);color:#fff;letter-spacing:.5px;outline:none;transition:border-color .15s,box-shadow .15s;}
+.cpu-lb-nick input:focus{border-color:var(--green);box-shadow:0 0 12px rgba(20,241,149,.35);}
+.cpu-lb-reset{font-family:'Orbitron',monospace;font-size:.44rem;letter-spacing:1px;padding:6px 10px;border-radius:8px;
+  background:rgba(255,69,96,.12);border:1px solid rgba(255,69,96,.4);color:#ff8894;cursor:pointer;font-weight:700;}
+.cpu-lb-reset:hover{background:rgba(255,69,96,.24);}
 
 @keyframes shake{0%,100%{transform:rotate(0deg);}25%{transform:rotate(-15deg);}75%{transform:rotate(15deg);}50%{transform:rotate(0deg);}}
 .shaking{animation:shake .3s ease-in-out 3;}
@@ -323,7 +332,6 @@ canvas#bgCanvas{position:fixed;top:0;left:0;width:100%;height:100%;z-index:-2;po
   SLITHER.SOL
 </a>
 
-<div class="rps-title">ROCK PAPER SCISSORS</div>
 <div class="subtitle">Choose your weapon</div>
 
 <div class="modes">
@@ -350,6 +358,23 @@ canvas#bgCanvas{position:fixed;top:0;left:0;width:100%;height:100%;z-index:-2;po
     <button class="pick-btn" data-choice="scissors" onclick="cpuPlay('scissors')" title="Scissors">✂️</button>
   </div>
   <div class="streak" id="cpuStreak">&nbsp;</div>
+
+  <!-- Local TOP STREAKS leaderboard (this device) -->
+  <div class="rps-lb-card cpu-lb-card">
+    <div class="rps-lb-inner">
+      <div class="rps-lb-hdr">
+        <span class="rps-lb-title">🏆 Top Streaks — This Device</span>
+        <span class="rps-lb-live"><i></i>LIVE</span>
+      </div>
+      <div class="cpu-lb-nick">
+        <label>PLAYING AS</label>
+        <input id="cpuNickInput" maxlength="16" placeholder="Your name" oninput="onCpuNickChange(this.value)">
+        <button class="cpu-lb-reset" onclick="resetCpuLb()" title="Clear leaderboard">CLEAR</button>
+      </div>
+      <div id="cpuLbList" class="rps-lb-list"></div>
+      <div class="rps-lb-note">Personal-best streaks are saved on this device. Beat your record!</div>
+    </div>
+  </div>
 </div>
 
 <!-- ══════════ LIVE ($1) PANEL ══════════ -->
@@ -478,6 +503,59 @@ function setMode(m){
 /* ═══════════════════ FREE / CPU MODE ═══════════════════ */
 var wins=0, losses=0, draws=0, streak=0, streakType='', cpuLocked=false;
 
+/* ═══ Local CPU leaderboard (this-device top streaks by nickname) ═══ */
+var CPU_LB_KEY = 'rps_cpu_lb_v1';
+var CPU_NICK_KEY = 'rps_cpu_nick_v1';
+function cpuLbLoad(){ try { return JSON.parse(localStorage.getItem(CPU_LB_KEY) || '[]'); } catch(e){ return []; } }
+function cpuLbSave(list){ try { localStorage.setItem(CPU_LB_KEY, JSON.stringify(list)); } catch(e){} }
+function getCpuNick(){ return (localStorage.getItem(CPU_NICK_KEY) || '').trim() || 'Guest'; }
+function setCpuNick(n){ try { localStorage.setItem(CPU_NICK_KEY, String(n||'').slice(0,16)); } catch(e){} }
+function onCpuNickChange(v){ setCpuNick(v); renderCpuLb(); }
+function resetCpuLb(){ if(!confirm('Clear the local RPS leaderboard?')) return; cpuLbSave([]); renderCpuLb(); }
+function cpuLbRecordResult(res){
+  // Update this player's entry after each game (win/lose/draw).
+  var nick = getCpuNick();
+  var list = cpuLbLoad();
+  var me = list.find(function(r){ return r.name === nick; });
+  if (!me) { me = { name: nick, w:0, l:0, d:0, best:0, updated: Date.now() }; list.push(me); }
+  if (res === 'win') me.w++; else if (res === 'lose') me.l++; else me.d++;
+  // Update best streak only if the current live streak beats it.
+  if (streakType === 'win' && streak > me.best) me.best = streak;
+  me.updated = Date.now();
+  cpuLbSave(list);
+  renderCpuLb();
+}
+function renderCpuLb(){
+  var el = document.getElementById('cpuLbList');
+  var inp = document.getElementById('cpuNickInput');
+  if (!el || !inp) return;
+  if (inp.value !== getCpuNick() && document.activeElement !== inp) inp.value = getCpuNick();
+  var nick = getCpuNick();
+  var list = cpuLbLoad().slice()
+    .sort(function(a,b){ return (b.best - a.best) || (b.w - a.w) || (a.l - b.l); })
+    .slice(0, 5);
+  if (!list.length) { el.innerHTML = '<div class="rps-lb-empty">No streaks yet — play a game!</div>'; return; }
+  el.innerHTML = list.map(function(r, i){
+    var rankCls = i===0 ? 'r1' : i===1 ? 'r2' : i===2 ? 'r3' : '';
+    var isMe = r.name === nick;
+    var rowCls = (i===0 ? 'top1 ' : '') + (isMe ? 'me' : '');
+    var av = (r.name[0] || '?').toUpperCase();
+    var crown = i===0 ? '<span class="rps-lb-crown">👑</span>' : '';
+    var youtag = isMe ? '<span class="rps-lb-youtag">YOU</span>' : '';
+    var rec = '<b>'+r.w+'W</b> · <i>'+r.l+'L</i> · '+r.d+'D';
+    return '<div class="rps-lb-row '+rowCls+'">'
+      + '<span class="rps-lb-rank '+rankCls+'">'+(i+1)+'</span>'
+      + '<span class="rps-lb-av" style="background:hsl('+((r.name.charCodeAt(0)*13)%360)+',60%,20%);color:hsl('+((r.name.charCodeAt(0)*13)%360)+',80%,70%)">'+av+'</span>'
+      + '<span class="rps-lb-name">'+escapeHtml(r.name)+crown+youtag+'</span>'
+      + '<span class="rps-lb-rec">'+rec+'</span>'
+      + '<span class="rps-lb-net up">🔥 '+r.best+'</span>'
+      + '</div>';
+  }).join('');
+}
+function escapeHtml(s){ return String(s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+// Initial paint after DOM is ready.
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', renderCpuLb); else renderCpuLb();
+
 function cpuPlay(choice){
   if (cpuLocked) return;
   cpuLocked = true;
@@ -497,6 +575,7 @@ function cpuPlay(choice){
     else { draws++; pEl.classList.add('draw-hi'); cEl.classList.add('draw-hi'); rEl.textContent='DRAW'; rEl.classList.add('draw-text'); streak=0; streakType=''; }
     $('wins').textContent=wins; $('losses').textContent=losses; $('draws').textContent=draws;
     $('cpuStreak').innerHTML = streak>=2 ? (streak+'x '+streakType.toUpperCase()+' STREAK!') : '&nbsp;';
+    try { cpuLbRecordResult(res); } catch(e){}
     setTimeout(function(){ cpuLocked=false; document.querySelectorAll('#cpuPanel .pick-btn').forEach(function(b){b.classList.remove('disabled');}); }, 600);
   }, 900);
 }
