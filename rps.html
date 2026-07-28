@@ -492,7 +492,10 @@ var HOUSE_CUT = 0.10;
 var WAGER_USD = 1;                 // legacy default; live wager is _selectedStake
 var SOL_FALLBACK = 148;
 // Stake tiers players can pick (USD). 0 = FREE (no wager, just play). Plus custom.
-var RPS_STAKES = [0, 0.5, 1, 2, 5, 10, 15, 25, 50];
+// Trimmed from 9 tiers to 3 so a small pool of concurrent players clusters
+// into the same lobbies. Custom stake input is still available for anyone who
+// needs an off-tier amount; the invite link (#play=<stake>) also supports any value.
+var RPS_STAKES = [0, 1, 5];
 var RPS_STAKE_MIN = 0.25, RPS_STAKE_MAX = 500;
 var _selectedStake = 1;            // currently selected stake in USD
 var TX_RPC = 'https://solana-rpc.publicnode.com'; // CORS-friendly (per index.html)
