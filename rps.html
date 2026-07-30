@@ -258,6 +258,13 @@ body::after{content:'';position:fixed;inset:0;z-index:-1;background:linear-gradi
 .chal-status{font-family:'Orbitron',monospace;font-size:.58rem;color:var(--blue);text-align:center;letter-spacing:1px;min-height:1em;margin-top:10px;}
 .chal-actions{display:flex;gap:10px;padding:12px 18px 18px;justify-content:center;}
 .chal-actions .big-btn{padding:12px 22px;font-size:.65rem;letter-spacing:1.5px;}
+.chal-custom-row{display:flex;justify-content:center;margin:10px auto 0;}
+.chal-custom-row input{width:150px;font-family:'Orbitron',monospace;font-size:.72rem;font-weight:700;color:#fff;text-align:center;
+  padding:9px 12px;border-radius:10px;border:1px solid rgba(255,215,0,.35);background:rgba(255,215,0,.04);outline:none;letter-spacing:.5px;
+  transition:border-color .14s,box-shadow .14s;}
+.chal-custom-row input:focus{border-color:rgba(255,215,0,.75);box-shadow:0 0 14px rgba(255,215,0,.35);background:rgba(255,215,0,.08);}
+.chal-custom-row input::-webkit-outer-spin-button,.chal-custom-row input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
+.chal-custom-row input.sel-custom{border-color:#14f195;background:rgba(20,241,149,.1);color:#14f195;box-shadow:0 0 14px rgba(20,241,149,.35);}
 .warn-note{font-size:.56rem;color:var(--dim);line-height:1.7;max-width:440px;text-align:center;margin-top:16px;}
 .warn-note a{color:var(--purple);}
 .settle-note{font-family:'Orbitron',monospace;font-size:.58rem;letter-spacing:1px;min-height:1.2em;margin-top:10px;text-align:center;color:var(--gold);}
@@ -517,6 +524,9 @@ canvas#bgCanvas{position:fixed;top:0;left:0;width:100%;height:100%;z-index:-2;po
     <div class="chal-body">
       <div class="chal-label">STAKE</div>
       <div class="chal-stakes" id="chalStakeRow"></div>
+      <div class="chal-custom-row">
+        <input id="chalCustomInput" type="number" min="0.10" step="0.05" placeholder="Custom $" oninput="onChalCustomStake(this.value)">
+      </div>
       <div class="chal-status" id="chalStatus"></div>
     </div>
     <div class="chal-actions">
@@ -1074,10 +1084,39 @@ function openChallengeModal(pub, name){
       window.__chalPickedStake = v;
       row.querySelectorAll('.rps-stake-btn').forEach(function(x){ x.classList.remove('sel'); });
       b.classList.add('sel');
+      // Deselect the custom input when a preset is picked.
+      var ci = document.getElementById('chalCustomInput');
+      if (ci) { ci.value = ''; ci.classList.remove('sel-custom'); }
+      $('chalSendBtn').disabled = false; $('chalSendBtn').textContent = 'Send Challenge';
     };
     row.appendChild(b);
   });
+  // Reset the custom input each time the modal opens.
+  var ci = document.getElementById('chalCustomInput');
+  if (ci) { ci.value = ''; ci.classList.remove('sel-custom'); }
   $('challengeSendModal').classList.remove('hidden');
+}
+// Custom amount picker inside the challenge modal — any positive dollar amount.
+function onChalCustomStake(v){
+  var n = parseFloat(v);
+  var input = document.getElementById('chalCustomInput');
+  var row = document.getElementById('chalStakeRow');
+  if (!isFinite(n) || n <= 0) {
+    // Invalid / empty — leave whichever preset was last picked as-is.
+    if (input) input.classList.remove('sel-custom');
+    return;
+  }
+  if (n < 0.10) {
+    if (input) input.classList.remove('sel-custom');
+    $('chalStatus').textContent = 'Minimum challenge is $0.10.';
+    $('chalSendBtn').disabled = true;
+    return;
+  }
+  window.__chalPickedStake = Math.round(n * 100) / 100;
+  if (row) row.querySelectorAll('.rps-stake-btn').forEach(function(x){ x.classList.remove('sel'); });
+  if (input) input.classList.add('sel-custom');
+  $('chalStatus').textContent = 'Custom stake: ' + fmtUsd(window.__chalPickedStake);
+  $('chalSendBtn').disabled = false; $('chalSendBtn').textContent = 'Send Challenge';
 }
 function closeChallengeModal(evt){
   if (evt && evt.target && evt.target.id !== 'challengeSendModal' && evt.type === 'click') return;
