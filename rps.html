@@ -1315,6 +1315,7 @@ async function cancelMatch(note){
   if(LIVE && LIVE.resolvedMatch) return;
   if(LIVE){ LIVE.resolvedMatch = true; clearTimeout(LIVE.joinTimer); clearTimeout(LIVE.roundTimer); }
   try{ if(_match){ await _match.presence.leave(); _match.unsubscribe(); _match.presence.unsubscribe(); } }catch(e){}
+  setSearching(false); // remove from open-lobby list — _queue already nulled by leaveQueue in beginMatch
   showLive('done');
   $('doneResult').className = 'result draw-text'; $('doneResult').textContent = 'MATCH CANCELLED';
   $('doneSettle').style.color = 'var(--dim)'; $('doneSettle').textContent = note || 'No wager was charged.';
@@ -1468,6 +1469,7 @@ async function endMatch(iWon, note){
   clearTimeout(LIVE.roundTimer);
   document.querySelectorAll('#livePicks .pick-btn').forEach(function(b){b.classList.add('disabled');});
   try{ if(_match){ await _match.presence.leave(); _match.unsubscribe(); _match.presence.unsubscribe(); } }catch(e){}
+  setSearching(false); // remove from open-lobby list — _queue already nulled by leaveQueue in beginMatch
 
   showLive('done');
   var dR=$('doneResult'), dS=$('doneSettle');
