@@ -4,7 +4,48 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>RINGER — Marble Knockout</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
 <style>
+  /* ── wallet card — matches SolOrbit / agar-solana exactly ── */
+  .wcard{background:rgba(8,12,22,.55);border:1px solid rgba(20,241,149,.22);
+    border-radius:16px;padding:16px 16px 14px;font-family:'Orbitron',monospace;margin-top:16px}
+  .wc-head{display:flex;align-items:center;justify-content:space-between}
+  .wc-title{display:flex;align-items:center;gap:9px;font-size:13px;font-weight:700;letter-spacing:2px;color:#eef4ff}
+  .wc-dot{width:11px;height:11px;border-radius:50%;
+    background:radial-gradient(circle at 35% 30%,#ff9d6e,#e8563d);box-shadow:0 0 8px rgba(232,86,61,.6)}
+  .wc-icons{display:flex;gap:8px}
+  .wc-icon{width:38px;height:38px;border-radius:9px;background:rgba(20,241,149,.06);
+    border:1px solid rgba(63,208,224,.5);color:#7fe6f5;font-size:15px;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;transition:all .14s}
+  .wc-icon:hover{background:rgba(63,208,224,.18);box-shadow:0 0 12px rgba(63,208,224,.35)}
+  .wc-mid{display:flex;align-items:center;justify-content:space-between;margin-top:14px;gap:10px}
+  .wc-addr{font-family:'Share Tech Mono',monospace;font-size:13px;color:#14f195;cursor:pointer;letter-spacing:.5px}
+  .wc-addr:hover{color:#7dffc6}
+  .wc-net{display:inline-flex;align-items:center;gap:6px;font-size:10px;font-weight:700;letter-spacing:1.5px;
+    color:#14f195;border:1px solid rgba(20,241,149,.5);border-radius:999px;padding:5px 11px;
+    background:rgba(20,241,149,.06);white-space:nowrap}
+  .wc-net::before{content:'';width:6px;height:6px;border-radius:50%;background:#14f195;box-shadow:0 0 6px #14f195}
+  .wc-bal{margin-top:12px;font-size:34px;font-weight:900;letter-spacing:1px;color:#14f195;
+    text-shadow:0 0 14px rgba(20,241,149,.4);line-height:1}
+  .wc-unit{font-size:20px;font-weight:700;margin-left:6px}
+  .wc-usd{margin-top:6px;font-size:14px;color:#8a94ad}
+  .wc-actions{display:flex;gap:10px;margin-top:16px}
+  .wc-btn{flex:1;padding:13px 10px;border-radius:11px;font-family:'Orbitron',monospace;font-size:13px;
+    font-weight:700;letter-spacing:1px;cursor:pointer;transition:all .14s}
+  .wc-btn.green{border:0;background:linear-gradient(135deg,#14f195,#0fbf77);color:#04121a;box-shadow:0 0 18px rgba(20,241,149,.25)}
+  .wc-btn.green:hover{box-shadow:0 0 26px rgba(20,241,149,.5)}
+  .wc-btn.cyan{background:transparent;border:1.5px solid #3fd0e0;color:#7fe6f5}
+  .wc-btn.cyan:hover{background:rgba(63,208,224,.14);box-shadow:0 0 18px rgba(63,208,224,.3)}
+  .wc-btn:disabled{opacity:.5;cursor:not-allowed;box-shadow:none}
+  .wc-foot{display:flex;align-items:center;justify-content:space-between;margin-top:14px}
+  .wc-ref{display:inline-flex;align-items:center;gap:6px;font-family:'Orbitron',monospace;font-size:10px;
+    letter-spacing:.5px;color:#7fe6f5;background:rgba(63,208,224,.08);border:1px solid rgba(63,208,224,.3);
+    border-radius:9px;padding:8px 10px;cursor:pointer;line-height:1.15;text-align:left}
+  .wc-ref:hover{background:rgba(63,208,224,.16)}
+  .wc-dc{font-family:'Orbitron',monospace;font-size:10px;letter-spacing:1px;color:#8a94ad;background:none;border:0;cursor:pointer}
+  .wc-dc:hover{color:#ff6b6b}
   :root{
     --p1:#ff5252; --p2:#4da3ff; --p3:#4fd97e; --p4:#ffc73d;
     --ink:#f4ece0; --dim:#a99c8b;
@@ -165,6 +206,31 @@
       </div>
     </div>
     <button class="big" id="bStart">SHOOT MARBLES</button>
+
+    <!-- ══ WALLET ══ -->
+    <div class="wcard" id="wcard">
+      <div class="wc-head">
+        <div class="wc-title"><span class="wc-dot"></span>WALLET</div>
+        <div class="wc-icons">
+          <button class="wc-icon" id="wcCopy" title="Copy address">&#10689;</button>
+          <button class="wc-icon" id="wcScan" title="View on Solscan">&#9649;</button>
+        </div>
+      </div>
+      <div class="wc-mid">
+        <span class="wc-addr" id="wcAddr">not connected</span>
+        <span class="wc-net">MAINNET</span>
+      </div>
+      <div class="wc-bal"><span id="wcBal">0.0000</span><span class="wc-unit">SOL</span></div>
+      <div class="wc-usd" id="wcUsd">&asymp; $0.00</div>
+      <div class="wc-actions">
+        <button class="wc-btn green" id="wcDeposit">DEPOSIT</button>
+        <button class="wc-btn cyan" id="wcCashout">CASH OUT</button>
+      </div>
+      <div class="wc-foot">
+        <button class="wc-ref" id="wcRef">&#128184; Referral<br>earnings</button>
+        <button class="wc-dc" id="wcDisconnect">DISCONNECT</button>
+      </div>
+    </div>
     <details>
       <summary>HOW TO PLAY</summary>
       <ul>
@@ -1375,6 +1441,87 @@ if(!CanvasRenderingContext2D.prototype.roundRect){
     this.arcTo(x,y+h,x,y,r); this.arcTo(x,y,x+w,y,r); this.closePath(); return this;
   };
 }
+/* ======================================================================
+   wallet panel — reads the wallet the main site already signed in with,
+   shows live mainnet balance. Money play talks to the Ringer game server.
+   ====================================================================== */
+const RINGER_SERVER = 'https://ringer-solana.fly.dev';
+const WALLET = { address:null, sol:0, usd:0, price:0, serverUp:false };
+
+function short(a){ return a ? a.slice(0,6)+'…'+a.slice(-4) : 'not connected'; }
+function walletRender(){
+  document.getElementById('wcAddr').textContent = short(WALLET.address);
+  document.getElementById('wcBal').textContent = WALLET.sol.toFixed(4);
+  document.getElementById('wcUsd').innerHTML = '&asymp; $' + WALLET.usd.toFixed(2);
+  const on = !!WALLET.address;
+  ['wcCopy','wcScan','wcCashout','wcRef','wcDisconnect'].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.disabled = !on;
+  });
+  document.getElementById('wcDeposit').textContent = on ? 'DEPOSIT' : 'CONNECT';
+}
+
+/* the main slither-sol.com session stashes the signed-in pubkey; reuse it */
+function readSiteWallet(){
+  for(const k of ['ss_pubkey','privy:address','walletAddress','solana_pubkey']){
+    try{
+      const v = localStorage.getItem(k);
+      if(v && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(v.replace(/"/g,''))) return v.replace(/"/g,'');
+    }catch(e){}
+  }
+  const q = new URLSearchParams(location.search).get('pubkey');
+  return q && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(q) ? q : null;
+}
+
+async function walletRefresh(){
+  WALLET.address = readSiteWallet();
+  if(!WALLET.address){ walletRender(); return; }
+  try{
+    const r = await fetch(`${RINGER_SERVER}/balance?pubkey=${WALLET.address}`);
+    if(r.ok){
+      const j = await r.json();
+      WALLET.sol = j.sol || 0; WALLET.price = j.solPriceUsd || 0;
+      WALLET.usd = WALLET.sol * WALLET.price;
+      WALLET.serverUp = true;
+    }
+  }catch(e){ WALLET.serverUp = false; }   // game server not up yet → free play only
+  walletRender();
+}
+
+document.getElementById('wcCopy').onclick = ()=>{
+  if(!WALLET.address) return;
+  navigator.clipboard?.writeText(WALLET.address);
+  const el=document.getElementById('wcAddr'); const old=el.textContent;
+  el.textContent='COPIED!'; setTimeout(()=>{ el.textContent=old; }, 1100);
+};
+document.getElementById('wcScan').onclick = ()=>{
+  if(WALLET.address) window.open('https://solscan.io/account/'+WALLET.address,'_blank','noopener');
+};
+document.getElementById('wcDeposit').onclick = ()=>{
+  if(!WALLET.address){ window.location.href = '/'; return; }   // sign in on the main site
+  navigator.clipboard?.writeText(WALLET.address);
+  say('address copied &mdash; send mainnet SOL to it, then hit refresh', '#14f195');
+  setupEl.classList.add('hidden');
+};
+document.getElementById('wcCashout').onclick = ()=>{
+  say(WALLET.serverUp
+      ? 'winnings are paid straight to your wallet when a table ends'
+      : '$1 tables aren\'t live yet &mdash; Ringer is free play for now', '#14f195');
+  setupEl.classList.add('hidden');
+};
+document.getElementById('wcRef').onclick = ()=>{
+  if(!WALLET.address) return;
+  navigator.clipboard?.writeText(location.origin+'/ringer.html?ref='+WALLET.address);
+  say('referral link copied', '#14f195');
+  setupEl.classList.add('hidden');
+};
+document.getElementById('wcDisconnect').onclick = ()=>{
+  WALLET.address=null; WALLET.sol=0; WALLET.usd=0; walletRender();
+};
+
+walletRender();
+walletRefresh();
+setInterval(walletRefresh, 30000);
+
 resize();
 requestAnimationFrame(frame);
 startGame(true);              // attract mode rolls behind the menu
