@@ -929,6 +929,9 @@ async function getAblyToken(pubkey){
 
 // ── Matchmaking ─────────────────────────────────────────────────────────────
 var _proposingTo = null, _proposeTimer = null, _matched = false;
+// Pubkey of a lobby we joined by an explicit JOIN click. While set, evaluatePairing
+// must not run — it would clobber _proposingTo and make us discard the host's accept.
+var _directJoin = null;
 // Recently non-responsive opponents. Pubkey -> expiry timestamp. Skipped in
 // evaluatePairing to prevent hammering ghosts whose Ably presence hasn't yet
 // timed out after their tab closed.
@@ -968,7 +971,7 @@ async function findMatch(){
   $('findBtn').classList.add('hidden');
   $('searchActions').classList.remove('hidden');
   $('lobbyStatus').textContent = 'Connecting…';
-  _matched = false; _proposingTo = null;
+  _matched = false; _proposingTo = null; _directJoin = null;
 
   try{
     await ensureQueue();
@@ -988,6 +991,9 @@ async function joinOpenLobby(hostPub, hostName, hostStake){
   if(hostPub===WALLET.pubkey) return;
   hostName = hostName || _openLobbyNames[hostPub] || hostPub.slice(0,6);
   if(hostStake==null) hostStake = _openLobbyStakes[hostPub];
+  // Lock before selectStake: selectStake fires evaluatePairing when we're already in
+  // the queue, and that async call would otherwise repoint _proposingTo at someone else.
+  _directJoin = hostPub;
   if(hostStake!=null){ selectStake(hostStake); } // match their amount before challenging
   showLive('lobby');
   $('findBtn').classList.add('hidden');
@@ -1004,7 +1010,7 @@ async function joinOpenLobby(hostPub, hostName, hostStake){
     clearTimeout(_proposeTimer);
     _proposeTimer = setTimeout(function(){
       if(!_matched && _proposingTo===hostPub){
-        _proposingTo=null;
+        _proposingTo=null; _directJoin=null; // release the lock so auto-match can resume
         // Blacklist this stale/dead lobby for 30s so evaluatePairing doesn't
         // loop-propose to the same non-responsive player until their presence
         // times out on Ably's side (~15s but sometimes longer).
@@ -1021,7 +1027,7 @@ async function joinOpenLobby(hostPub, hostName, hostStake){
 }
 
 async function evaluatePairing(){
-  if(_matched || !_queue) return;
+  if(_matched || !_queue || _directJoin) return;
   var members;
   try{ members = await _queue.presence.get(); }catch(e){ return; }
   if(_matched) return;
@@ -1245,13 +1251,13 @@ function onAccept(msg){
   var d = msg.data||{};
   if(d.to !== WALLET.pubkey) return;
   var from = msg.clientId;
-  if(_proposingTo !== from) return;
+  if(_proposingTo !== from && _directJoin !== from) return;
   _matched = true;
   beginMatch(d.matchId, from, /*iAmHost*/ WALLET.pubkey < from, (d.stake==null?_selectedStake:d.stake));
 }
 
 async function leaveQueue(backToLobby){
-  clearTimeout(_proposeTimer); _proposingTo=null;
+  clearTimeout(_proposeTimer); _proposingTo=null; _directJoin=null;
   setSearching(false); // no longer an open lobby
   if(_queue){
     try{ _queue.presence.unsubscribe(); _queue.unsubscribe(); await _queue.presence.leave(); }catch(e){}
