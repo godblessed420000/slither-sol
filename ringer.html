@@ -1,0 +1,1384 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>RINGER — Marble Knockout</title>
+<style>
+  :root{
+    --p1:#ff5252; --p2:#4da3ff; --p3:#4fd97e; --p4:#ffc73d;
+    --ink:#f4ece0; --dim:#a99c8b;
+    --panel:#241d18; --panel2:#2f2620; --edge:#4a3c31;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:radial-gradient(120% 90% at 50% -10%,#3a2e25 0%,#1a1512 60%,#100d0b 100%);
+    color:var(--ink);
+    font-family:"Trebuchet MS","Segoe UI",system-ui,sans-serif;
+    overflow:hidden; -webkit-user-select:none; user-select:none; touch-action:none;
+  }
+  #app{display:flex;flex-direction:column;height:100%;padding:6px 8px 8px;gap:5px}
+
+  /* ---------- HUD ---------- */
+  #hud{display:flex;align-items:center;gap:10px;flex:0 0 auto}
+  #players{display:flex;gap:8px;flex:1 1 auto;min-width:0}
+  .pcard{
+    flex:1 1 0;min-width:0;
+    background:linear-gradient(180deg,#332a22,#1c1611);
+    border:1px solid #55442f;
+    border-radius:11px;padding:4px 9px;display:flex;align-items:center;gap:8px;
+    box-shadow:inset 0 1px 0 #ffdca722, 0 6px 16px -8px #000;
+    transition:transform .16s, box-shadow .16s, border-color .16s; position:relative; overflow:hidden;
+  }
+  .pcard .dot{width:18px;height:18px;border-radius:50%;flex:0 0 auto;
+    background:radial-gradient(circle at 32% 30%,#fff9,transparent 55%),var(--c);
+    box-shadow:0 0 0 2px #0006 inset,0 2px 4px #0008}
+  .pcard .nm{font-size:13px;font-weight:700;letter-spacing:.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .pcard .sub{font-size:10px;color:var(--dim);letter-spacing:.6px}
+  .pcard .sc{margin-left:auto;font-size:19px;font-weight:800;font-variant-numeric:tabular-nums;line-height:1}
+  .btn{padding:7px 11px}
+  .pcard.active{border-color:var(--c);box-shadow:0 0 0 1px var(--c),0 0 28px -6px var(--c),inset 0 1px 0 #fff2;transform:translateY(-2px)}
+  .pcard.active .dot{animation:bob 1.4s ease-in-out infinite}
+  @keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-2px)}}
+  .pcard.active::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,transparent 40%,var(--c));opacity:.14}
+  .pcard.gone{opacity:.45;filter:grayscale(.6)}
+  .btn{
+    background:linear-gradient(180deg,var(--panel2),#1d1712);border:2px solid var(--edge);color:var(--ink);
+    border-radius:10px;padding:8px 12px;font:inherit;font-size:12px;font-weight:700;letter-spacing:.6px;
+    cursor:pointer;white-space:nowrap;
+    text-decoration:none;display:inline-flex;align-items:center
+  }
+  .btn:hover{border-color:#7a6350;background:linear-gradient(180deg,#3a2f26,#241d18)}
+  .btn.on{border-color:#c9a227;color:#ffd76a}
+  #tools{display:flex;gap:6px;flex:0 0 auto;align-items:center}
+  #status{font-size:11px;font-weight:800;letter-spacing:1.2px;color:#e8d9be;white-space:nowrap;
+    background:#171210;border:1px solid var(--edge);border-radius:9px;padding:7px 11px}
+  #status b{color:#ffd76a}
+
+  /* ---------- stage ---------- */
+  #stage{flex:1 1 auto;position:relative;display:flex;align-items:center;justify-content:center;min-height:0}
+  #wrap{position:relative;max-height:100%;aspect-ratio:1/1;width:min(100%,calc(100vh - 64px))}
+  canvas{display:block;width:100%;height:100%;border-radius:16px;
+    box-shadow:0 26px 70px -14px #000e, 0 0 0 1px #6b563f66, 0 0 90px -30px #ffab4d55}
+  #banner{
+    position:absolute;left:50%;bottom:14px;transform:translateX(-50%);
+    background:#140f0cd9;border:2px solid var(--edge);border-radius:999px;padding:8px 18px;
+    font-size:14px;font-weight:700;letter-spacing:.6px;white-space:nowrap;
+    box-shadow:0 6px 20px #0008;backdrop-filter:blur(3px);pointer-events:none;max-width:94%;overflow:hidden;text-overflow:ellipsis
+  }
+  #banner b{color:var(--hi,#ffd76a)}
+
+  /* ---------- overlays ---------- */
+  .overlay{position:fixed;inset:0;background:radial-gradient(90% 70% at 50% 45%,#0b0908b0,#07060595 60%,#040303e8);
+    backdrop-filter:blur(5px) saturate(.85);display:flex;align-items:center;justify-content:center;
+    padding:16px;z-index:20;overflow:auto}
+  .overlay.hidden{display:none}
+  .sheet{width:min(720px,100%);background:linear-gradient(180deg,#2e2620f2,#17120ff7);
+    border:1px solid #6b563f;border-radius:20px;padding:24px;
+    box-shadow:0 40px 90px -20px #000,0 0 0 1px #0008,inset 0 1px 0 #ffdca733,inset 0 -60px 90px -60px #ffb45a2e}
+  h1{font-size:42px;letter-spacing:9px;text-align:center;
+     background:linear-gradient(180deg,#fff4d0,#ffd76a 45%,#b8801d);-webkit-background-clip:text;background-clip:text;color:transparent;
+     filter:drop-shadow(0 2px 1px #0009) drop-shadow(0 0 22px #ffb43a55)}
+  .tag{text-align:center;color:var(--dim);letter-spacing:3px;font-size:11px;margin:2px 0 18px}
+  .slots{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+  .slot{background:#181310;border:2px solid var(--edge);border-radius:12px;padding:10px;display:flex;align-items:center;gap:10px}
+  .slot .dot{width:26px;height:26px;border-radius:50%;flex:0 0 auto;
+    background:radial-gradient(circle at 32% 28%,#fff9,transparent 52%),var(--c);box-shadow:0 0 0 2px #0006 inset}
+  .slot .lbl{font-weight:800;letter-spacing:1px;font-size:13px}
+  .seg{margin-left:auto;display:flex;border:2px solid var(--edge);border-radius:9px;overflow:hidden}
+  .seg button{background:#0f0c0a;border:0;color:var(--dim);font:inherit;font-size:11px;font-weight:700;
+    letter-spacing:.8px;padding:6px 9px;cursor:pointer}
+  .seg button.sel{background:var(--c);color:#17110c}
+  .row{display:flex;gap:10px;align-items:center;justify-content:center;margin-top:16px;flex-wrap:wrap}
+  .row .lab{font-size:11px;letter-spacing:2px;color:var(--dim)}
+  .big{width:100%;margin-top:18px;padding:15px;font-size:17px;letter-spacing:3px;
+    background:linear-gradient(180deg,#ffd76a,#c9962f);color:#20170c;border:0;border-radius:12px;font-weight:800;cursor:pointer}
+  .big:hover{filter:brightness(1.08)}
+  .big:disabled{filter:grayscale(1) brightness(.6);cursor:not-allowed}
+  details{margin-top:16px;border-top:1px solid var(--edge);padding-top:12px}
+  summary{cursor:pointer;font-size:12px;letter-spacing:2px;color:var(--dim)}
+  details ul{margin:10px 0 0 18px;font-size:13px;line-height:1.65;color:#d9cdbd}
+  #standings{margin:14px 0 4px}
+  .stand{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:10px;background:#181310;
+    border:2px solid var(--edge);margin-bottom:8px}
+  .stand .dot{width:22px;height:22px;border-radius:50%;background:radial-gradient(circle at 32% 28%,#fff9,transparent 52%),var(--c)}
+  .stand .pl{font-size:12px;color:var(--dim);width:26px}
+  .stand .sc{margin-left:auto;font-size:22px;font-weight:800}
+  .stand.win{border-color:#ffd76a;box-shadow:0 0 24px -6px #ffd76a}
+  @media (max-width:640px){
+    h1{font-size:30px;letter-spacing:5px}
+    .slots{grid-template-columns:1fr}
+    .pcard{padding:5px 7px;gap:6px}
+    .pcard .sc{font-size:18px}
+    #banner{font-size:12px;padding:6px 12px}
+  }
+</style>
+</head>
+<body>
+
+<div id="app">
+  <div id="hud">
+    <div id="players"></div>
+    <div id="tools">
+      <div id="status">&nbsp;</div>
+      <a class="btn" id="bSite" href="/" title="Back to Slither.SOL">&#8592; SLITHER.SOL</a>
+      <button class="btn" id="bSound" title="Sound">&#128266;</button>
+      <button class="btn" id="bAssist" title="Aim assist">ASSIST</button>
+      <button class="btn" id="bMenu">MENU</button>
+    </div>
+  </div>
+  <div id="stage">
+    <div id="wrap">
+      <canvas id="cv"></canvas>
+      <div id="banner">&nbsp;</div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= SETUP ================= -->
+<div class="overlay" id="setup">
+  <div class="sheet">
+    <h1>RINGER</h1>
+    <div class="tag">MARBLE KNOCKOUT &nbsp;&middot;&nbsp; 1&ndash;4 PLAYERS &nbsp;&middot;&nbsp; HOT SEAT PVP</div>
+    <div class="slots" id="slots"></div>
+    <div class="row">
+      <span class="lab">MARBLES</span>
+      <div class="seg" id="segCount" style="--c:#ffd76a">
+        <button data-v="9">9</button><button data-v="13" class="sel">13</button><button data-v="17">17</button>
+      </div>
+      <span class="lab">CPU SKILL</span>
+      <div class="seg" id="segSkill" style="--c:#ffd76a">
+        <button data-v="0">CHILL</button><button data-v="1" class="sel">KEEN</button><button data-v="2">SHARP</button>
+      </div>
+    </div>
+    <div class="row">
+      <span class="lab">FRAME</span>
+      <div class="seg" id="segSkin" style="--c:#ffd76a">
+        <button data-v="0" class="sel">WALNUT</button><button data-v="1">MIDNIGHT</button><button data-v="2">JADE</button><button data-v="3">CRIMSON</button>
+      </div>
+    </div>
+    <div class="row">
+      <span class="lab">SHOTS PER TURN</span>
+      <div class="seg" id="segCap" style="--c:#ffd76a">
+        <button data-v="2">2</button><button data-v="3" class="sel">3</button><button data-v="0">UNLIMITED</button>
+      </div>
+    </div>
+    <button class="big" id="bStart">SHOOT MARBLES</button>
+    <details>
+      <summary>HOW TO PLAY</summary>
+      <ul>
+        <li>Marbles are set in an <b>X</b> inside a chalk ring. Take turns firing your big <b>shooter</b> (taw) into the pack.</li>
+        <li><b>Place</b> your shooter anywhere on the ring line, then <b>drag back and release</b> to fire &mdash; like a slingshot.</li>
+        <li>Any marble knocked <b>completely outside</b> the ring is yours to keep.</li>
+        <li>Knock one out and you <b>shoot again</b>, from wherever your shooter came to rest &mdash; up to the shots-per-turn limit (set it to UNLIMITED for the purist rule).</li>
+        <li>Miss and your shooter <b>stays in the pot</b> &mdash; rivals who knock it out of the ring <b>steal a marble</b> from you.</li>
+        <li>Ring empty = game over. Most marbles wins.</li>
+      </ul>
+    </details>
+  </div>
+</div>
+
+<!-- ================= GAME OVER ================= -->
+<div class="overlay hidden" id="over">
+  <div class="sheet">
+    <h1 id="overTitle">WINNER</h1>
+    <div class="tag" id="overSub">&nbsp;</div>
+    <div id="standings"></div>
+    <button class="big" id="bAgain">REMATCH</button>
+    <button class="btn" id="bBack" style="width:100%;margin-top:10px;padding:12px">CHANGE PLAYERS</button>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* ======================================================================
+   RINGER — classic ring-knockout marbles, 1-4 player hot-seat PvP
+   ====================================================================== */
+
+/* ---------- world constants ---------- */
+const W = 1000, H = 1000;           // square board — the ring owns the whole frame
+const CX = 500, CY = 500;
+const BASE_RING = 400;              // 2-player ring; grows with the field
+let RING = BASE_RING;
+// bounded by the rail: RING <= CY - (SR*2 + 3) - WALL  ==  430
+const ringFor = n => BASE_RING + Math.max(0, n-2) * 15;
+const TR = 17;                      // target marble radius
+const SR = 22.5;                    // shooter (taw) radius
+const WALL = 22;                    // rail thickness (visual + physical)
+const DRAG_K = 2.0;                 // velocity damping (1/s)
+const REST = 0.94;                  // marble restitution
+const WALL_REST = 0.5;
+const STOP_V = 11;                  // px/s below which a marble halts
+const MAX_SPEED = 2100;
+const MAX_DRAG = 277;               // px of pull for full power
+const PHYS_DT = 1/240;
+
+/* frame skins: [rail wood stops], [metal stops], glow rgb, outer lip */
+const SKINS = [
+  {name:'WALNUT',  wood:['#5b3f26','#3d2917','#4d351f','#2b1c10','#3a2716'],
+   metal:['#ffe6a8','#c79331','#8a6420','#e5c374'], glow:'255,176,72', lip:'#0d0906', hair:'255,206,140'},
+  {name:'MIDNIGHT',wood:['#33405f','#1b2338','#26314f','#12172a','#222c48'],
+   metal:['#eaf3ff','#93a9c9','#495a7a','#cfdbee'], glow:'120,176,255', lip:'#070a12', hair:'190,215,255'},
+  {name:'JADE',    wood:['#24493f','#132a25','#1d3e35','#0d1f1a','#183329'],
+   metal:['#fff1bc','#d5ad42','#7d5c15','#f0d68d'], glow:'96,236,180', lip:'#050f0c', hair:'170,255,220'},
+  {name:'CRIMSON', wood:['#632723','#3c1613','#51201b','#28100e','#401814'],
+   metal:['#ffd9b4','#c8783c','#7a4218','#eaae76'], glow:'255,118,70', lip:'#100403', hair:'255,190,160'}
+];
+
+const PCOL = ['#ff5252','#4da3ff','#4fd97e','#ffc73d'];
+const PHUE = [0, 210, 140, 44];
+const PNAME = ['PLAYER 1','PLAYER 2','PLAYER 3','PLAYER 4'];
+
+/* ---------- dom ---------- */
+const cv = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+const bannerEl = document.getElementById('banner');
+const playersEl = document.getElementById('players');
+const setupEl = document.getElementById('setup');
+const overEl = document.getElementById('over');
+
+/* ---------- game state ---------- */
+const G = {
+  state:'setup',        // setup | place | aim | sim | over
+  players:[], cur:0,
+  marbles:[],           // targets + shooters on the board
+  fx:[], pops:[], waves:[], flash:0,
+  shake:0, t:0,
+  scoredThisShot:0, shotsFired:0, turnShots:0, turnCap:3,
+  placedThisTurn:false, // shooter was placed this turn (so re-place is allowed)
+  aim:{active:false, x:0, y:0}, ghostA:null, turnTimer:0,
+  cpu:null,
+  skill:1, count:13, skin:0,
+  assist:true, muted:false
+};
+
+/* ======================================================================
+   audio — tiny procedural clacks
+   ====================================================================== */
+let AC = null;
+function ac(){ if(!AC){ try{ AC = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } return AC; }
+let noiseBuf = null;
+function noise(){
+  const c = ac(); if(!c) return null;
+  if(!noiseBuf){
+    noiseBuf = c.createBuffer(1, 2048, c.sampleRate);
+    const d = noiseBuf.getChannelData(0);
+    for(let i=0;i<d.length;i++) d[i] = Math.random()*2-1;
+  }
+  return noiseBuf;
+}
+function clack(vol, freq){
+  if(G.muted || G.demo) return; const c = ac(); if(!c) return;
+  const t = c.currentTime;
+  const o = c.createOscillator(), g = c.createGain();
+  o.type='triangle'; o.frequency.setValueAtTime(freq, t);
+  o.frequency.exponentialRampToValueAtTime(freq*0.55, t+0.07);
+  g.gain.setValueAtTime(Math.min(0.5,vol), t);
+  g.gain.exponentialRampToValueAtTime(0.0001, t+0.09);
+  o.connect(g).connect(c.destination); o.start(t); o.stop(t+0.1);
+  const n = c.createBufferSource(); n.buffer = noise();
+  const bp = c.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=freq*1.7; bp.Q.value=1.2;
+  const ng = c.createGain(); ng.gain.setValueAtTime(Math.min(0.32,vol*0.7), t);
+  ng.gain.exponentialRampToValueAtTime(0.0001, t+0.045);
+  n.connect(bp).connect(ng).connect(c.destination); n.start(t); n.stop(t+0.05);
+}
+function tone(freq, dur, vol, type){
+  if(G.muted || G.demo) return; const c = ac(); if(!c) return;
+  const t = c.currentTime;
+  const o = c.createOscillator(), g = c.createGain();
+  o.type = type||'sine'; o.frequency.value = freq;
+  g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(vol,t+0.012);
+  g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+  o.connect(g).connect(c.destination); o.start(t); o.stop(t+dur+0.02);
+}
+function chime(){ tone(880,0.22,0.16,'sine'); setTimeout(()=>tone(1320,0.26,0.12,'sine'),70); }
+function fanfare(){ [523,659,784,1047].forEach((f,i)=>setTimeout(()=>tone(f,0.42,0.15,'triangle'), i*130)); }
+
+/* ======================================================================
+   helpers
+   ====================================================================== */
+const clamp=(v,a,b)=>v<a?a:v>b?b:v;
+const len=(x,y)=>Math.hypot(x,y);
+const rnd=(a,b)=>a+Math.random()*(b-a);
+function gauss(s){ let u=0,v=0; while(!u)u=Math.random(); while(!v)v=Math.random();
+  return s*Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v); }
+
+function makeMarble(x,y,r,kind,hue,owner){
+  return {x,y,vx:0,vy:0,r,kind,hue,owner:owner===undefined?null:owner,
+          m:r*r*r/1000, out:false, fade:1, spin:rnd(0,6.28), spinV:0,
+          enteredRing:false, hit:0, trail:[]};
+}
+
+/* ======================================================================
+   setup screen
+   ====================================================================== */
+const slotDefs = [
+  {type:'human'}, {type:'cpu'}, {type:'off'}, {type:'off'}
+];
+function buildSlots(){
+  const host = document.getElementById('slots');
+  host.innerHTML = '';
+  slotDefs.forEach((s,i)=>{
+    const d = document.createElement('div');
+    d.className='slot'; d.style.setProperty('--c',PCOL[i]);
+    d.innerHTML = `<div class="dot"></div><div><div class="lbl">${PNAME[i]}</div></div>
+      <div class="seg" style="--c:${PCOL[i]}">
+        <button data-t="off">OFF</button><button data-t="human">HUMAN</button><button data-t="cpu">CPU</button>
+      </div>`;
+    d.querySelectorAll('.seg button').forEach(b=>{
+      if(b.dataset.t===s.type) b.classList.add('sel');
+      b.onclick = ()=>{
+        slotDefs[i].type = b.dataset.t;
+        d.querySelectorAll('.seg button').forEach(x=>x.classList.toggle('sel', x===b));
+        refreshStart();
+      };
+    });
+    host.appendChild(d);
+  });
+  refreshStart();
+}
+let countTouched = false;
+function refreshStart(){
+  const n = slotDefs.filter(s=>s.type!=='off').length;
+  if(!countTouched){                       // more players → a fuller ring
+    const want = n>=3 ? 17 : 13;
+    G.count = want;
+    document.querySelectorAll('#segCount button').forEach(x=>x.classList.toggle('sel', +x.dataset.v===want));
+  }
+  const humans = slotDefs.filter(s=>s.type==='human').length;
+  const b = document.getElementById('bStart');
+  b.disabled = n<2 || humans<1;
+  b.textContent = b.disabled ? (humans<1 ? 'NEED AT LEAST 1 HUMAN' : 'NEED AT LEAST 2 PLAYERS') : 'SHOOT MARBLES';
+}
+document.querySelectorAll('#segCount button').forEach(b=>b.onclick=()=>{
+  G.count = +b.dataset.v; countTouched = true;
+  document.querySelectorAll('#segCount button').forEach(x=>x.classList.toggle('sel',x===b));
+});
+document.querySelectorAll('#segSkill button').forEach(b=>b.onclick=()=>{
+  G.skill = +b.dataset.v;
+  document.querySelectorAll('#segSkill button').forEach(x=>x.classList.toggle('sel',x===b));
+});
+document.querySelectorAll('#segSkin button').forEach(b=>b.onclick=()=>{
+  G.skin = +b.dataset.v;
+  document.querySelectorAll('#segSkin button').forEach(x=>x.classList.toggle('sel',x===b));
+  makeGround();                       // repaint the rail immediately, even mid-game
+});
+document.querySelectorAll('#segCap button').forEach(b=>b.onclick=()=>{
+  G.turnCap = +b.dataset.v;
+  document.querySelectorAll('#segCap button').forEach(x=>x.classList.toggle('sel',x===b));
+});
+document.getElementById('bStart').onclick = ()=>{ ac(); startGame(false); };
+document.getElementById('bAgain').onclick = ()=>{ overEl.classList.add('hidden'); startGame(false); };
+document.getElementById('bBack').onclick = ()=>{ overEl.classList.add('hidden'); startGame(true); setupEl.classList.remove('hidden'); };
+document.getElementById('bMenu').onclick = ()=>{ setupEl.classList.remove('hidden'); };
+// click the backdrop to dismiss the menu and get back to a game in progress
+setupEl.addEventListener('pointerdown', e=>{
+  if(e.target===setupEl && !G.demo && G.state!=='over') setupEl.classList.add('hidden');
+});
+document.getElementById('bSound').onclick = (e)=>{ G.muted=!G.muted; e.currentTarget.textContent = G.muted?'\u{1F507}':'\u{1F50A}'; };
+document.getElementById('bAssist').onclick = (e)=>{ G.assist=!G.assist; e.currentTarget.style.opacity = G.assist?1:.45; };
+buildSlots();
+
+/* ======================================================================
+   game start / rack
+   ====================================================================== */
+function startGame(demo){
+  if(!demo) setupEl.classList.add('hidden');
+  clearTimeout(G.turnTimer);
+  G.demo = !!demo;
+  G.players = [];
+  const defs = demo ? [{type:'cpu'},{type:'cpu'},{type:'cpu'},{type:'cpu'}] : slotDefs;
+  defs.forEach((s,i)=>{
+    if(s.type==='off') return;
+    G.players.push({idx:G.players.length, slot:i, name:PNAME[i], color:PCOL[i], hue:PHUE[i],
+                    type:s.type, score:0, shooter:null});
+  });
+  G.marbles = []; G.fx=[]; G.pops=[]; G.waves=[]; G.flash=0; G.cur = 0; G.shake=0; G.cpu=null;
+  G.scoredThisShot=0; G.shotsFired=0; G.turnShots=0; G.aim.active=false; G.ghostA=null;
+  RING = ringFor(G.players.length);   // more players → more elbow room
+  makeGround();
+  rack(demo ? 17 : G.count);
+  buildHUD();
+  G.state='place';
+  beginTurn(true);
+}
+
+function rack(n){
+  // classic X / cross formation: 1 centre + equal arms on the diagonals
+  const per = Math.max(1, Math.round((n-1)/4));
+  const step = TR*3.6 * (RING/BASE_RING), d = Math.SQRT1_2;   // pack scales with the ring
+  const dirs = [[d,d],[d,-d],[-d,d],[-d,-d]];
+  const hues = [12,196,272,340,96,42,168,308,228,64,258,132,4,178,318,88,20];
+  let k = 0;
+  const add=(x,y)=>{ G.marbles.push(makeMarble(x,y,TR,'target',hues[k%hues.length],null)); k++; };
+  add(CX,CY);
+  for(let a=0;a<4 && k<n;a++){
+    for(let s=1;s<=per && k<n;s++){
+      add(CX + dirs[a][0]*step*s, CY + dirs[a][1]*step*s);
+    }
+  }
+  // spare marbles (when n-1 isn't divisible by 4) go on the axes
+  const ax=[[1,0],[0,1],[-1,0],[0,-1]]; let a=0;
+  while(k<n){ G.marbles.push(makeMarble(CX+ax[a%4][0]*step*(1+((a/4)|0)), CY+ax[a%4][1]*step*(1+((a/4)|0)), TR,'target',hues[k%hues.length],null)); k++; a++; }
+  G.marbles.forEach(m=>{ m.spin = rnd(0,6.283); });
+}
+
+/* ======================================================================
+   HUD
+   ====================================================================== */
+function buildHUD(){
+  playersEl.innerHTML='';
+  G.players.forEach(p=>{
+    const d = document.createElement('div');
+    d.className='pcard'; d.style.setProperty('--c',p.color); d.dataset.i=p.idx;
+    d.innerHTML=`<div class="dot"></div>
+      <div style="min-width:0"><div class="nm">P${p.slot+1}</div><div class="sub">${p.type==='cpu'?'CPU':'HUMAN'}</div></div>
+      <div class="sc">0</div>`;
+    playersEl.appendChild(d);
+  });
+  updHUD();
+}
+function updHUD(){
+  [...playersEl.children].forEach((el,i)=>{
+    const p = G.players[i];
+    el.querySelector('.sc').textContent = p.score;
+    el.classList.toggle('active', i===G.cur && G.state!=='over');
+  });
+}
+function say(html, hi){
+  bannerEl.innerHTML = html;
+  bannerEl.style.setProperty('--hi', hi||'#ffd76a');
+}
+
+/* ======================================================================
+   turn flow
+   ====================================================================== */
+function cp(){ return G.players[G.cur]; }
+
+function beginTurn(fresh){
+  const p = cp();
+  G.scoredThisShot = 0;
+  G.aim.active=false;
+  updHUD();
+  if(p.shooter){
+    G.placedThisTurn = false;
+    G.state='aim';
+    say(`<b>${p.name}</b> &mdash; shoot from where it lies: drag back &amp; release`, p.color);
+  }else{
+    G.placedThisTurn = true;
+    G.state='place';
+    say(`<b>${p.name}</b> &mdash; ${p.type==='cpu'?'is taking aim…':'click the ring to place your shooter'}`, p.color);
+  }
+  if(p.type==='cpu'){
+    G.cpu = { phase:'think', t:0, plan:null };
+  }else{
+    G.cpu = null;
+  }
+}
+
+function nextPlayer(){
+  G.cur = (G.cur+1) % G.players.length;
+  G.turnShots = 0;
+  beginTurn();
+}
+
+function fire(dirx, diry, power){
+  const p = cp(); const s = p.shooter; if(!s) return;
+  const sp = MAX_SPEED * clamp(power,0,1);
+  s.vx = dirx*sp; s.vy = diry*sp;
+  s.enteredRing = len(s.x-CX, s.y-CY) < RING - s.r*0.5;
+  G.scoredThisShot = 0; G.shotsFired++; G.turnShots++;
+  G.state='sim'; G.aim.active=false; G.cpu=null;
+  clack(0.28, 300);
+  say('&nbsp;');
+  // launch dust
+  for(let i=0;i<10;i++) G.fx.push({x:s.x-dirx*s.r, y:s.y-diry*s.r,
+    vx:-dirx*rnd(20,90)+gauss(30), vy:-diry*rnd(20,90)+gauss(30),
+    r:rnd(1.5,3.6), life:rnd(.25,.5), t:0, c:'rgba(226,208,180,'});
+}
+
+function settle(){
+  if(G.state!=='sim') return;
+  G.state = 'resolve';              // one-shot: never re-enter while the board rests
+  clearTimeout(G.turnTimer);
+  const p = cp();
+  // clean up: remove knocked-out marbles, pick up shooters that stopped outside
+  for(const m of G.marbles){
+    if(m.out) continue;
+    if(m.kind==='shooter'){
+      const d = len(m.x-CX, m.y-CY);
+      if(d - m.r > RING){ m.pickedUp = true; }
+    }
+  }
+  G.marbles = G.marbles.filter(m=>{
+    if(m.out){ if(m.kind==='shooter' && m.owner!=null) G.players[m.owner].shooter=null; return false; }
+    if(m.pickedUp){ if(m.owner!=null) G.players[m.owner].shooter=null; return false; }
+    return true;
+  });
+
+  const targetsLeft = G.marbles.filter(m=>m.kind==='target').length;
+  if(targetsLeft===0){ return gameOver(); }
+
+  const capped = G.turnCap>0 && G.turnShots >= G.turnCap;
+  if(G.scoredThisShot>0 && !capped){
+    say(`<b>${p.name}</b> scores ${G.scoredThisShot} &mdash; shoot again!`, p.color);
+    G.turnTimer = setTimeout(()=>{ if(G.state==='resolve') beginTurn(); }, 620);
+  }else if(G.scoredThisShot>0){
+    say(`<b>${p.name}</b> scores ${G.scoredThisShot} &mdash; but that's ${G.turnCap} shots, turn over`, p.color);
+    G.turnTimer = setTimeout(()=>{ if(G.state==='resolve') nextPlayer(); }, 900);
+  }else{
+    say(`<b>${p.name}</b> misses &mdash; shooter stays in the pot`, p.color);
+    G.turnTimer = setTimeout(()=>{ if(G.state==='resolve') nextPlayer(); }, 620);
+  }
+}
+
+function knockOut(m){
+  m.out = true;
+  const p = cp();
+  const at = {x:m.x, y:m.y};
+  if(m.kind==='target'){
+    p.score++; G.scoredThisShot++;
+    G.pops.push({x:at.x, y:at.y-14, txt:'+1', c:p.color, t:0});
+    chime();
+  }else{
+    // a shooter left the ring
+    if(m.owner === p.idx){
+      G.pops.push({x:at.x, y:at.y-14, txt:'OUT', c:'#c9bba8', t:0});
+    }else{
+      const victim = G.players[m.owner];
+      if(victim.score>0){ victim.score--; p.score++;
+        G.pops.push({x:at.x, y:at.y-14, txt:'STEAL +1', c:p.color, t:0});
+      }else{
+        G.pops.push({x:at.x, y:at.y-14, txt:'KNOCKED OUT', c:p.color, t:0});
+      }
+      G.scoredThisShot++;
+      chime();
+    }
+  }
+  // chalk dust + sparks at the ring crossing
+  const a = Math.atan2(m.y-CY, m.x-CX);
+  const ex = CX+Math.cos(a)*RING, ey = CY+Math.sin(a)*RING;
+  for(let i=0;i<16;i++) G.fx.push({x:ex+gauss(6), y:ey+gauss(6),
+    vx:gauss(70)+Math.cos(a)*60, vy:gauss(70)+Math.sin(a)*60,
+    r:rnd(1.5,4), life:rnd(.4,.8), t:0, c:'rgba(240,232,214,'});
+  for(let i=0;i<10;i++) G.fx.push({x:m.x, y:m.y,
+    vx:gauss(120), vy:gauss(120), r:rnd(1,2.6), life:rnd(.3,.6), t:0,
+    c:`hsla(${m.hue},80%,70%,`});
+  G.waves.push({x:ex, y:ey, r0:8, r1:160, t:0, life:.6, w:6.5, c:'255,250,235'});
+  G.waves.push({x:m.x, y:m.y, r0:5, r1:95, t:0, life:.45, w:4, c:'255,224,150'});
+  G.flash = Math.max(G.flash, 0.34);
+  G.shake = Math.min(9, G.shake+5);
+  updHUD();
+}
+
+function gameOver(){
+  G.state='over';
+  updHUD();
+  if(G.demo){ setTimeout(()=>{ if(G.demo) startGame(true); }, 1800); return; }
+  const sorted = [...G.players].sort((a,b)=>b.score-a.score);
+  const top = sorted[0].score;
+  const winners = sorted.filter(p=>p.score===top);
+  document.getElementById('overTitle').textContent = winners.length>1 ? 'TIE GAME' : 'WINNER';
+  document.getElementById('overSub').textContent = winners.length>1
+    ? winners.map(p=>p.name).join('  &  ') + ` — ${top} MARBLES EACH`
+    : `${winners[0].name} TAKES ${top} MARBLE${top===1?'':'S'}`;
+  const host = document.getElementById('standings'); host.innerHTML='';
+  sorted.forEach((p,i)=>{
+    const d = document.createElement('div');
+    d.className = 'stand' + (p.score===top?' win':'');
+    d.style.setProperty('--c',p.color);
+    d.innerHTML = `<div class="pl">${i+1}</div><div class="dot"></div>
+      <div style="font-weight:800;letter-spacing:1px">${p.name}</div>
+      <div class="sc">${p.score}</div>`;
+    host.appendChild(d);
+  });
+  setTimeout(()=>{ overEl.classList.remove('hidden'); fanfare(); }, 900);
+  say('ring cleared!');
+}
+
+/* ======================================================================
+   physics
+   ====================================================================== */
+function stepPhysics(dt){
+  const damp = Math.exp(-DRAG_K*dt);
+  for(const m of G.marbles){
+    if(m.vx===0 && m.vy===0) continue;
+    m.x += m.vx*dt; m.y += m.vy*dt;
+    m.vx *= damp; m.vy *= damp;
+    m.spin += m.spinV*dt; m.spinV *= damp;
+    const sp = len(m.vx,m.vy);
+    if(sp < STOP_V){ m.vx=0; m.vy=0; m.spinV=0; }
+    // frame walls
+    const L=WALL+m.r, R=W-WALL-m.r, T=WALL+m.r, B=H-WALL-m.r;
+    if(m.x<L){ m.x=L; m.vx=-m.vx*WALL_REST; wallHit(m); }
+    else if(m.x>R){ m.x=R; m.vx=-m.vx*WALL_REST; wallHit(m); }
+    if(m.y<T){ m.y=T; m.vy=-m.vy*WALL_REST; wallHit(m); }
+    else if(m.y>B){ m.y=B; m.vy=-m.vy*WALL_REST; wallHit(m); }
+  }
+  // pairwise collisions
+  const n = G.marbles.length;
+  for(let i=0;i<n;i++){
+    const a = G.marbles[i];
+    for(let j=i+1;j<n;j++){
+      const b = G.marbles[j];
+      let dx = b.x-a.x, dy = b.y-a.y;
+      let d2 = dx*dx+dy*dy;
+      const rr = a.r+b.r;
+      if(d2 >= rr*rr || d2===0) continue;
+      let d = Math.sqrt(d2);
+      const nx = dx/d, ny = dy/d;
+      const rel = (b.vx-a.vx)*nx + (b.vy-a.vy)*ny;
+      const overlap = rr-d;
+      const ima = 1/a.m, imb = 1/b.m, ims = ima+imb;
+      // positional correction
+      const push = overlap/ims * 0.85;
+      a.x -= nx*push*ima; a.y -= ny*push*ima;
+      b.x += nx*push*imb; b.y += ny*push*imb;
+      if(rel >= 0) continue;
+      const jimp = -(1+REST)*rel/ims;
+      a.vx -= jimp*nx*ima; a.vy -= jimp*ny*ima;
+      b.vx += jimp*nx*imb; b.vy += jimp*ny*imb;
+      // spin + sound + flash
+      a.spinV -= jimp*0.02; b.spinV += jimp*0.02;
+      const power = Math.min(1, jimp/28);
+      if(power>0.03){
+        clack(0.06+power*0.34, 380+Math.random()*260+power*380);
+        a.hit = b.hit = Math.max(0.35, power);
+        G.shake = Math.min(7, G.shake + power*3.2);
+        const mx=(a.x+b.x)/2, my=(a.y+b.y)/2;
+        for(let k=0;k<Math.round(power*5);k++)
+          G.fx.push({x:mx,y:my,vx:gauss(90),vy:gauss(90),r:rnd(1,2.4),life:rnd(.15,.35),t:0,c:'rgba(255,244,214,'});
+        if(power>0.25 && G.waves.length<24)
+          G.waves.push({x:mx,y:my,r0:8,r1:26+power*54,t:0,life:.34,w:2.6*power+1,c:'255,240,205'});
+      }
+    }
+  }
+  // knockout detection
+  for(const m of G.marbles){
+    if(m.out) continue;
+    const d = len(m.x-CX, m.y-CY);
+    if(m.kind==='shooter'){
+      if(!m.enteredRing && d + m.r < RING) m.enteredRing = true;
+      if(m.enteredRing && d - m.r > RING) knockOut(m);
+    }else{
+      if(d - m.r > RING) knockOut(m);
+    }
+  }
+}
+function wallHit(m){
+  const sp = len(m.vx,m.vy);
+  if(sp>60){ clack(Math.min(0.3, sp/2600), 150+Math.random()*70); m.hit=Math.max(m.hit,0.3); }
+}
+function allAsleep(){
+  for(const m of G.marbles) if(m.vx!==0||m.vy!==0) return false;
+  return true;
+}
+
+/* ======================================================================
+   aiming — raycast preview
+   ====================================================================== */
+function predict(sx, sy, dx, dy, power){
+  const reach = (MAX_SPEED*clamp(power,0,1))/DRAG_K;
+  let best = null;
+  for(const m of G.marbles){
+    if(m.kind==='shooter' && m.owner===G.cur) continue;
+    const rr = m.r + SR;
+    const ox = m.x-sx, oy = m.y-sy;
+    const proj = ox*dx + oy*dy;
+    if(proj <= 0) continue;
+    const perp2 = (ox*ox+oy*oy) - proj*proj;
+    if(perp2 > rr*rr) continue;
+    const t = proj - Math.sqrt(rr*rr - perp2);
+    if(t < 0) continue;
+    if(!best || t < best.t) best = {t, m};
+  }
+  const dist = best ? Math.min(best.t, reach) : reach;
+  const hit = best && best.t <= reach ? best : null;
+  return {dist, hit, reach};
+}
+
+/* ======================================================================
+   CPU brain
+   ====================================================================== */
+function ringPoint(a){ const rr = RING + SR + 3; return {x:CX+Math.cos(a)*rr, y:CY+Math.sin(a)*rr}; }
+
+function pathBlocked(sx,sy,tx,ty,skip){
+  const dx=tx-sx, dy=ty-sy, L=len(dx,dy); if(L<1) return false;
+  const ux=dx/L, uy=dy/L;
+  for(const m of G.marbles){
+    if(m===skip) continue;
+    if(m.kind==='shooter' && m.owner===G.cur) continue;
+    const ox=m.x-sx, oy=m.y-sy;
+    const proj = ox*ux+oy*uy;
+    if(proj<=0 || proj>=L) continue;
+    const perp = Math.abs(ox*uy - oy*ux);
+    if(perp < m.r + SR - 1.5) return true;
+  }
+  return false;
+}
+
+function cpuPlan(){
+  const p = cp();
+  const cand = [];
+  const origins = p.shooter ? [{x:p.shooter.x, y:p.shooter.y, a:null}]
+                            : Array.from({length:60},(_,i)=>{ const a=i/60*Math.PI*2; const q=ringPoint(a); q.a=a; return q; });
+  for(const o of origins){
+    for(const m of G.marbles){
+      if(m===p.shooter || m.out) continue;
+      if(m.kind==='shooter' && m.owner===p.idx) continue;
+      let ex = m.x-CX, ey = m.y-CY, el = len(ex,ey);
+      if(el < 1){ ex = Math.cos(G.t); ey = Math.sin(G.t); el = 1; }
+      ex/=el; ey/=el;
+      const toEdge = RING - el + m.r;             // how far it must travel to be out
+      const cx = m.x - ex*(m.r+SR+0.5), cy = m.y - ey*(m.r+SR+0.5);
+      let dx = cx-o.x, dy = cy-o.y; const dl = len(dx,dy);
+      if(dl < 4) continue;
+      dx/=dl; dy/=dl;
+      const align = dx*ex + dy*ey;                 // 1 = perfect line through the marble
+      if(align < 0.25) continue;
+      if(pathBlocked(o.x,o.y,cx,cy,m)) continue;
+      let score = -toEdge*1.35 - dl*0.16 + align*130;
+      if(m.kind==='shooter'){
+        const v = G.players[m.owner];
+        score += v.score>0 ? 150 : 30;             // stealing is juicy
+      }
+      cand.push({o, m, dx, dy, dl, toEdge, score, align});
+    }
+  }
+  if(!cand.length){
+    // desperate: line up on the middle of the pack
+    const o = p.shooter ? {x:p.shooter.x,y:p.shooter.y} : ringPoint(rnd(0,6.283));
+    let dx = CX-o.x, dy = CY-o.y; const dl=len(dx,dy);
+    return {pos:o, dir:{x:dx/dl,y:dy/dl}, power:0.8};
+  }
+  cand.sort((a,b)=>b.score-a.score);
+  // pick from the top few so the CPU isn't a robot metronome
+  const pool = cand.slice(0, [8,4,2][G.skill]);
+  const pick = pool[(Math.random()*pool.length)|0];
+  const noise = [0.15,0.085,0.035][G.skill];        // radians of aim wobble
+  const ang = Math.atan2(pick.dy, pick.dx) + gauss(noise);
+  const need = (pick.dl + pick.toEdge*2.4 + 230) * DRAG_K;
+  const power = clamp(need/MAX_SPEED * (1 + gauss([0.22,0.13,0.06][G.skill])), 0.3, 1);
+  return {pos:{x:pick.o.x,y:pick.o.y}, dir:{x:Math.cos(ang), y:Math.sin(ang)}, power};
+}
+
+function cpuTick(dt){
+  const c = G.cpu; if(!c) return;
+  const p = cp();
+  c.t += dt;
+  if(c.phase==='think'){
+    if(c.t > 0.55){
+      c.plan = cpuPlan();
+      if(!p.shooter){
+        p.shooter = makeMarble(c.plan.pos.x, c.plan.pos.y, SR, 'shooter', p.hue, p.idx);
+        G.marbles.push(p.shooter);
+        clack(0.16, 500);
+      }
+      c.phase='aim'; c.t=0; G.state='aim';
+    }
+  }else if(c.phase==='aim'){
+    const k = clamp(c.t/0.85, 0, 1);
+    G.ghostA = {dir:c.plan.dir, power:c.plan.power*k};
+    if(c.t > 0.95){
+      G.ghostA = null;
+      fire(c.plan.dir.x, c.plan.dir.y, c.plan.power);
+    }
+  }
+}
+
+/* ======================================================================
+   input
+   ====================================================================== */
+function toWorld(e){
+  const r = cv.getBoundingClientRect();
+  return { x:(e.clientX-r.left)*(W/r.width), y:(e.clientY-r.top)*(H/r.height) };
+}
+function placeAt(pt){
+  const a = Math.atan2(pt.y-CY, pt.x-CX);
+  return ringPoint(a);
+}
+let hoverPt = null;
+
+cv.addEventListener('pointerdown', e=>{
+  if(!G.players.length) return;
+  const p = cp(); if(p.type==='cpu') return;
+  ac();
+  const pt = toWorld(e);
+  cv.setPointerCapture(e.pointerId);
+  if(G.state==='place'){
+    const q = placeAt(pt);
+    p.shooter = makeMarble(q.x, q.y, SR, 'shooter', p.hue, p.idx);
+    G.marbles.push(p.shooter);
+    G.state='aim';
+    clack(0.16, 520);
+    say(`<b>${p.name}</b> &mdash; drag back &amp; release to shoot`, p.color);
+  }else if(G.state==='aim'){
+    G.aim.active = true; G.aim.x = pt.x; G.aim.y = pt.y;
+  }
+}, {passive:true});
+
+cv.addEventListener('pointermove', e=>{
+  const pt = toWorld(e);
+  hoverPt = pt;
+  if(G.aim.active){ G.aim.x = pt.x; G.aim.y = pt.y; }
+}, {passive:true});
+
+function endAim(){
+  if(!G.aim.active) return;
+  G.aim.active = false;
+  const p = cp(); const s = p.shooter; if(!s) return;
+  const dx = s.x-G.aim.x, dy = s.y-G.aim.y;
+  const d = len(dx,dy);
+  if(d < 14) return;                       // tap = cancel
+  const power = clamp(d/MAX_DRAG, 0.08, 1);
+  fire(dx/d, dy/d, power);
+}
+window.addEventListener('pointerup', endAim, {passive:true});   // catches releases off-canvas
+cv.addEventListener('pointercancel', ()=>{ G.aim.active=false; }, {passive:true});
+window.addEventListener('blur', ()=>{ G.aim.active=false; });
+cv.addEventListener('contextmenu', e=>{
+  e.preventDefault();
+  rePlace();
+});
+window.addEventListener('keydown', e=>{
+  if(e.key==='Escape') rePlace();
+});
+function rePlace(){
+  const p = cp && G.players.length ? cp() : null;
+  if(!p || p.type==='cpu') return;
+  if(G.state==='aim' && G.placedThisTurn && p.shooter){
+    G.marbles = G.marbles.filter(m=>m!==p.shooter);
+    p.shooter = null; G.aim.active=false; G.state='place';
+    say(`<b>${p.name}</b> &mdash; click the ring to place your shooter`, p.color);
+  }
+}
+
+/* ======================================================================
+   rendering
+   ====================================================================== */
+let dpr = 1;
+function resize(){
+  const r = cv.getBoundingClientRect();
+  dpr = Math.min(2, window.devicePixelRatio||1);
+  cv.width = Math.round(r.width*dpr);
+  cv.height = Math.round(r.height*dpr);
+  ctx.setTransform(cv.width/W, 0, 0, cv.height/H, 0, 0);
+  makeGround();
+}
+window.addEventListener('resize', resize);
+
+/* baked playfield: lit dirt court, chalk ring, wooden frame */
+let ground = null;
+function makeGround(){
+  ground = document.createElement('canvas');
+  ground.width = W; ground.height = H;
+  const g = ground.getContext('2d');
+
+  // --- lit earth ---
+  const bg = g.createRadialGradient(CX, CY-90, 40, CX, CY+40, 700);
+  bg.addColorStop(0,'#8a6f52'); bg.addColorStop(.28,'#6d5740');
+  bg.addColorStop(.62,'#4a3a2a'); bg.addColorStop(1,'#211a13');
+  g.fillStyle = bg; g.fillRect(0,0,W,H);
+
+  // sweeping tone bands, like raked earth
+  g.save(); g.globalCompositeOperation='overlay';
+  for(let i=0;i<26;i++){
+    const y = i/26*H + Math.sin(i)*8;
+    g.fillStyle = `rgba(${i%2?255:0},${i%2?230:0},${i%2?190:0},.035)`;
+    g.fillRect(0, y, W, H/26*0.6);
+  }
+  g.restore();
+
+  // grain
+  for(let i=0;i<16000;i++){
+    const x = Math.random()*W, y = Math.random()*H;
+    const a = Math.random()*0.10;
+    g.fillStyle = Math.random()<0.5 ? `rgba(255,238,205,${a})` : `rgba(14,8,3,${a*1.6})`;
+    g.fillRect(x,y,Math.random()<0.14?2:1,1);
+  }
+  // pebbles with tiny cast shadows
+  for(let i=0;i<170;i++){
+    const x=Math.random()*W, y=Math.random()*H, r=rnd(1.2,3.6);
+    g.beginPath(); g.arc(x+r*.35,y+r*.4,r,0,6.283); g.fillStyle='rgba(0,0,0,.14)'; g.fill();
+    g.beginPath(); g.arc(x,y,r,0,6.283);
+    g.fillStyle=`rgba(${195+Math.random()*45|0},${175+Math.random()*40|0},${140+Math.random()*40|0},.2)`; g.fill();
+  }
+
+  // --- ground shading around the ring: a shallow dished court ---
+  const dish = g.createRadialGradient(CX,CY,RING*0.2,CX,CY,RING*1.16);
+  dish.addColorStop(0,'rgba(255,226,178,.10)');
+  dish.addColorStop(.74,'rgba(255,226,178,.03)');
+  dish.addColorStop(.94,'rgba(0,0,0,.20)');
+  dish.addColorStop(1,'rgba(0,0,0,0)');
+  g.fillStyle = dish; g.beginPath(); g.arc(CX,CY,RING*1.16,0,6.283); g.fill();
+
+  // --- chalk ring: soft bloom, crisp core, dusty speckle ---
+  const wobble = (a,p)=> Math.sin(a*3.1+p)*1.7 + Math.sin(a*7.7+p*2)*1.15 + Math.sin(a*13.3+p)*0.75;
+  const ringPath = (rOff,p)=>{
+    g.beginPath();
+    for(let i=0;i<=300;i++){
+      const a=i/300*Math.PI*2, rr = RING + wobble(a,p) + rOff;
+      const x=CX+Math.cos(a)*rr, y=CY+Math.sin(a)*rr;
+      i?g.lineTo(x,y):g.moveTo(x,y);
+    }
+    g.closePath();
+  };
+  g.lineCap='round';
+  ringPath(0,0); g.strokeStyle='rgba(180,205,255,.10)'; g.lineWidth=26; g.stroke();  // cool bloom
+  ringPath(0,0); g.strokeStyle='rgba(255,248,232,.16)'; g.lineWidth=13; g.stroke();
+  ringPath(1.4,1); g.strokeStyle='rgba(245,240,228,.36)'; g.lineWidth=7;  g.stroke();
+  ringPath(0,0);   g.strokeStyle='rgba(255,253,247,.92)'; g.lineWidth=4.2; g.stroke();
+  ringPath(-1.2,2);g.strokeStyle='rgba(255,255,255,.55)'; g.lineWidth=1.6; g.stroke();
+  for(let i=0;i<1600;i++){
+    const a=Math.random()*6.283, rr=RING+gauss(7);
+    g.fillStyle=`rgba(252,249,242,${Math.random()*0.45})`;
+    g.fillRect(CX+Math.cos(a)*rr, CY+Math.sin(a)*rr, 1.5, 1.5);
+  }
+
+  // --- vignette ---
+  const vig = g.createRadialGradient(CX,CY,RING*0.75,CX,CY,Math.max(W,H)*0.78);
+  vig.addColorStop(0,'rgba(0,0,0,0)'); vig.addColorStop(.6,'rgba(0,0,0,.30)');
+  vig.addColorStop(1,'rgba(0,0,0,.72)');
+  g.fillStyle=vig; g.fillRect(0,0,W,H);
+
+  // ===================== frame =====================
+  // shadow the playfield casts up onto the rail
+  const inset = WALL;
+  g.save();
+  g.beginPath(); g.rect(0,0,W,H); g.rect(inset,inset,W-inset*2,H-inset*2); g.fill('evenodd');
+  g.clip('evenodd');
+
+  // polished rail
+  const SK = SKINS[G.skin] || SKINS[0];
+  const wood = g.createLinearGradient(0,0,W*0.35,H);
+  [0,.28,.55,.8,1].forEach((s,i)=>wood.addColorStop(s, SK.wood[i]));
+  g.fillStyle = wood; g.fillRect(0,0,W,H);
+  // grain
+  for(let i=0;i<520;i++){
+    const horiz = Math.random()<.5;
+    const x=Math.random()*W, y=Math.random()*H, l=rnd(30,190);
+    g.strokeStyle = Math.random()<.5 ? `rgba(255,214,160,${Math.random()*.05})`
+                                     : `rgba(30,14,4,${Math.random()*.16})`;
+    g.lineWidth = rnd(.6,2.1); g.beginPath();
+    g.moveTo(x,y); g.lineTo(horiz?x+l:x+rnd(-3,3), horiz?y+rnd(-3,3):y+l); g.stroke();
+  }
+  // lacquer sheen sweeping across the top-left
+  const sheen = g.createLinearGradient(0,0,W*.7,H*.7);
+  sheen.addColorStop(0,'rgba(255,236,205,.16)'); sheen.addColorStop(.45,'rgba(255,236,205,.02)');
+  sheen.addColorStop(1,'rgba(0,0,0,.22)');
+  g.fillStyle=sheen; g.fillRect(0,0,W,H);
+  g.restore();
+
+  // outer lip
+  g.lineWidth=6; g.strokeStyle=SK.lip; g.strokeRect(3,3,W-6,H-6);
+  g.lineWidth=1.5; g.strokeStyle=`rgba(${SK.hair},.18)`; g.strokeRect(6.5,6.5,W-13,H-13);
+
+  // metal bead around the playfield, with a matching glow
+  const bead = (o,w,style)=>{ g.lineWidth=w; g.strokeStyle=style;
+    g.strokeRect(inset-o, inset-o, W-(inset-o)*2, H-(inset-o)*2); };
+  bead(9, 14, `rgba(${SK.glow},.07)`);
+  bead(4,  7, `rgba(${SK.glow},.13)`);
+  const brass = g.createLinearGradient(0,inset-4,0,H-inset+4);
+  [0,.35,.6,1].forEach((s,i)=>brass.addColorStop(s, SK.metal[i]));
+  bead(1.5, 3, brass);
+  bead(-2, 1.2, 'rgba(0,0,0,.6)');
+
+  // corner plates with rivets
+  const plate = 74;
+  [[0,0,1,1],[W,0,-1,1],[0,H,1,-1],[W,H,-1,-1]].forEach(([px,py,sx,sy])=>{
+    g.save(); g.translate(px,py); g.scale(sx,sy);
+    const pg = g.createLinearGradient(0,0,plate,plate);
+    [0,.4,.7,1].forEach((s,i)=>pg.addColorStop(s, SK.metal[i]));
+    g.beginPath();
+    g.moveTo(5,5); g.lineTo(plate,5); g.lineTo(plate-16,20);
+    g.lineTo(20,20); g.lineTo(20,plate-16); g.lineTo(5,plate);
+    g.closePath();
+    g.fillStyle=pg; g.fill();
+    g.lineWidth=1.2; g.strokeStyle='rgba(60,36,6,.75)'; g.stroke();
+    // rivets
+    [[12,12],[plate-24,12],[12,plate-24]].forEach(([rx,ry])=>{
+      const rg=g.createRadialGradient(rx-1.4,ry-1.6,.4,rx,ry,4.6);
+      rg.addColorStop(0,SK.metal[0]); rg.addColorStop(.55,SK.metal[1]); rg.addColorStop(1,SK.metal[2]);
+      g.beginPath(); g.arc(rx,ry,4.2,0,6.283); g.fillStyle=rg; g.fill();
+      g.beginPath(); g.arc(rx,ry,4.2,0,6.283); g.strokeStyle='rgba(40,24,4,.6)'; g.lineWidth=.8; g.stroke();
+    });
+    g.restore();
+  });
+
+  // engraved maker's mark on the bottom rail
+  g.save();
+  g.font='700 11px "Trebuchet MS", sans-serif';
+  g.textAlign='center'; g.letterSpacing='4px';
+  g.fillStyle='rgba(0,0,0,.5)';   g.fillText('· RINGER ·', W/2, H-11);
+  g.fillStyle=`rgba(${SK.hair},.30)`; g.fillText('· RINGER ·', W/2, H-12);
+  g.restore();
+}
+
+function drawTrail(m){
+  if(!m.trail || m.trail.length<2) return;
+  ctx.save();
+  ctx.globalCompositeOperation='lighter';
+  for(let i=1;i<m.trail.length;i++){
+    const a = m.trail[i-1], b = m.trail[i];
+    const k = i/m.trail.length;
+    ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y);
+    ctx.strokeStyle = `hsla(${m.hue},95%,70%,${0.30*k})`;
+    ctx.lineWidth = m.r*1.75*k; ctx.lineCap='round'; ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawMarble(m){
+  const {x,y,r} = m;
+  const hue = m.hue;
+  const isShooter = m.kind==='shooter';
+  const sat = isShooter? 90 : 82;
+  ctx.save();
+  ctx.globalAlpha = m.fade;
+
+  // soft coloured light pooling on the ground (caustic)
+  ctx.save();
+  ctx.globalCompositeOperation='lighter';
+  const cg = ctx.createRadialGradient(x+r*.3, y+r*.45, 0, x+r*.3, y+r*.45, r*2.1);
+  cg.addColorStop(0,`hsla(${hue},95%,62%,.28)`);
+  cg.addColorStop(1,`hsla(${hue},95%,62%,0)`);
+  ctx.fillStyle=cg; ctx.beginPath(); ctx.arc(x+r*.3,y+r*.45,r*2.1,0,6.283); ctx.fill();
+  ctx.restore();
+
+  // contact shadow
+  ctx.beginPath();
+  ctx.ellipse(x+r*0.26, y+r*0.34, r*1.02, r*0.82, 0, 0, 6.283);
+  ctx.fillStyle='rgba(0,0,0,.42)'; ctx.fill();
+
+  // glass body
+  const g = ctx.createRadialGradient(x-r*.36, y-r*.44, r*.06, x+r*.1, y+r*.12, r*1.12);
+  g.addColorStop(0, `hsl(${hue},${sat}%,96%)`);
+  g.addColorStop(.22, `hsl(${hue},${sat}%,${isShooter?74:80}%)`);
+  g.addColorStop(.62, `hsl(${hue},${sat}%,${isShooter?48:54}%)`);
+  g.addColorStop(.9,  `hsl(${hue},${sat}%,${isShooter?26:30}%)`);
+  g.addColorStop(1,   `hsl(${hue},${sat}%,${isShooter?16:19}%)`);
+  ctx.beginPath(); ctx.arc(x,y,r,0,6.283); ctx.fillStyle=g; ctx.fill();
+
+  // cat's-eye swirl
+  ctx.save();
+  ctx.beginPath(); ctx.arc(x,y,r*0.98,0,6.283); ctx.clip();
+  ctx.translate(x,y); ctx.rotate(m.spin);
+  const sg = ctx.createLinearGradient(-r,0,r,0);
+  sg.addColorStop(0,`hsla(${(hue+300)%360},90%,97%,0)`);
+  sg.addColorStop(.5,`hsla(${(hue+300)%360},98%,98%,.95)`);
+  sg.addColorStop(1,`hsla(${(hue+300)%360},90%,97%,0)`);
+  ctx.beginPath(); ctx.ellipse(0,-r*.05,r*0.82,r*0.30,0,0,6.283); ctx.fillStyle=sg; ctx.fill();
+  ctx.beginPath(); ctx.ellipse(0,0,r*0.28,r*0.76,0,0,6.283);
+  ctx.fillStyle=`hsla(${(hue+45)%360},98%,74%,.6)`; ctx.fill();
+  ctx.beginPath(); ctx.ellipse(0,0,r*0.16,r*0.44,0,0,6.283);
+  ctx.fillStyle='rgba(255,255,255,.55)'; ctx.fill();
+  ctx.restore();
+
+  // depth: dark rim + bounced warm light on the lower right
+  const rim = ctx.createRadialGradient(x,y,r*.52,x,y,r);
+  rim.addColorStop(0,'rgba(0,0,0,0)');
+  rim.addColorStop(1,'rgba(14,4,0,.55)');
+  ctx.beginPath(); ctx.arc(x,y,r,0,6.283); ctx.fillStyle=rim; ctx.fill();
+  ctx.beginPath(); ctx.arc(x,y,r-0.9,Math.PI*0.12,Math.PI*0.86);
+  ctx.strokeStyle='rgba(255,226,180,.55)'; ctx.lineWidth=1.6; ctx.stroke();
+  ctx.beginPath(); ctx.arc(x,y,r-0.6,Math.PI*1.05,Math.PI*1.55);
+  ctx.strokeStyle='rgba(255,255,255,.35)'; ctx.lineWidth=1; ctx.stroke();
+
+  // speculars
+  ctx.beginPath();
+  ctx.ellipse(x-r*.33, y-r*.4, r*.31, r*.21, -0.7, 0, 6.283);
+  ctx.fillStyle='rgba(255,255,255,.95)'; ctx.fill();
+  ctx.beginPath(); ctx.ellipse(x-r*.52, y-r*.12, r*.11, r*.2, -0.4, 0, 6.283);
+  ctx.fillStyle='rgba(255,255,255,.45)'; ctx.fill();
+  ctx.beginPath(); ctx.arc(x+r*.3, y+r*.32, r*.12, 0, 6.283);
+  ctx.fillStyle='rgba(255,236,206,.5)'; ctx.fill();
+
+  // owner ring for shooters
+  if(isShooter && G.players[m.owner]){
+    const p = G.players[m.owner];
+    const mine = G.cur===m.owner;
+    ctx.save();
+    ctx.globalCompositeOperation='lighter';
+    ctx.beginPath(); ctx.arc(x,y,r+3.6,0,6.283);
+    ctx.strokeStyle = p.color; ctx.lineWidth = 2.6;
+    ctx.globalAlpha = m.fade*(mine ? .95 : .5); ctx.stroke();
+    if(mine && G.state!=='sim'){
+      const pulse = 7+Math.sin(G.t*4)*2.6;
+      ctx.beginPath(); ctx.arc(x,y,r+pulse,0,6.283);
+      ctx.strokeStyle=p.color; ctx.globalAlpha=m.fade*.45; ctx.lineWidth=2; ctx.stroke();
+      const hg = ctx.createRadialGradient(x,y,r*.6,x,y,r*3);
+      hg.addColorStop(0, p.color+'55'); hg.addColorStop(1, p.color+'00');
+      ctx.globalAlpha=m.fade*.5; ctx.fillStyle=hg;
+      ctx.beginPath(); ctx.arc(x,y,r*3,0,6.283); ctx.fill();
+    }
+    ctx.restore();
+  }
+  // impact flash
+  if(m.hit>0){
+    ctx.save(); ctx.globalCompositeOperation='lighter';
+    ctx.beginPath(); ctx.arc(x,y,r+2,0,6.283);
+    ctx.fillStyle=`rgba(255,248,225,${m.hit*0.55})`; ctx.fill();
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
+function drawAim(){
+  const p = cp(); const s = p && p.shooter; if(!s) return;
+  let dirx, diry, power;
+  if(G.ghostA){ dirx=G.ghostA.dir.x; diry=G.ghostA.dir.y; power=G.ghostA.power; }
+  else if(G.aim.active){
+    const dx = s.x-G.aim.x, dy = s.y-G.aim.y, d = len(dx,dy);
+    if(d<6) return;
+    dirx=dx/d; diry=dy/d; power=clamp(d/MAX_DRAG,0,1);
+  }else return;
+
+  const pr = predict(s.x, s.y, dirx, diry, power);
+  const ex = s.x+dirx*pr.dist, ey = s.y+diry*pr.dist;
+
+  ctx.save();
+  // no guide line — direction reads off the shooter's own aim flare
+  ctx.save();
+  ctx.globalCompositeOperation='lighter';
+  const fl = ctx.createLinearGradient(s.x, s.y, s.x+dirx*46, s.y+diry*46);
+  fl.addColorStop(0, p.color+'cc'); fl.addColorStop(1, p.color+'00');
+  ctx.beginPath();
+  ctx.moveTo(s.x - diry*SR*0.85, s.y + dirx*SR*0.85);
+  ctx.lineTo(s.x + dirx*(SR+16+power*22), s.y + diry*(SR+16+power*22));
+  ctx.lineTo(s.x + diry*SR*0.85, s.y - dirx*SR*0.85);
+  ctx.closePath(); ctx.fillStyle=fl; ctx.fill();
+  ctx.restore();
+
+  if(G.assist){
+    // ghost shooter at contact
+    ctx.beginPath(); ctx.arc(ex,ey,SR,0,6.283);
+    ctx.strokeStyle='rgba(255,255,255,.5)'; ctx.lineWidth=1.6; ctx.stroke();
+    if(pr.hit){
+      const m = pr.hit.m;
+      let kx = m.x-ex, ky = m.y-ey; const kl=len(kx,ky)||1; kx/=kl; ky/=kl;
+      // predicted push direction — short arrow off the target marble
+      const px = -ky, py = kx;                       // perpendicular
+      const x0 = m.x+kx*(m.r+5),  y0 = m.y+ky*(m.r+5);
+      const x1 = m.x+kx*(m.r+50), y1 = m.y+ky*(m.r+50);
+      ctx.beginPath(); ctx.moveTo(x0,y0); ctx.lineTo(x1-kx*12, y1-ky*12);
+      ctx.strokeStyle='rgba(255,240,180,.9)'; ctx.lineWidth=4; ctx.lineCap='round'; ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x1-kx*16+px*9, y1-ky*16+py*9);
+      ctx.lineTo(x1-kx*16-px*9, y1-ky*16-py*9);
+      ctx.closePath(); ctx.fillStyle='rgba(255,240,180,.9)'; ctx.fill();
+      ctx.beginPath(); ctx.arc(m.x,m.y,m.r+4,0,6.283);
+      ctx.strokeStyle='rgba(255,240,180,.6)'; ctx.lineWidth=1.6; ctx.stroke();
+    }
+  }
+  // power meter arc around shooter — green → gold → hot
+  ctx.beginPath(); ctx.arc(s.x,s.y,SR+11,-Math.PI/2, -Math.PI/2, true);
+  ctx.strokeStyle='rgba(0,0,0,.35)'; ctx.lineWidth=5.5; ctx.stroke();
+  ctx.beginPath(); ctx.arc(s.x,s.y,SR+11,0,6.283);
+  ctx.strokeStyle='rgba(255,255,255,.10)'; ctx.lineWidth=5; ctx.stroke();
+  const pc = power>0.86 ? '#ff6a3d' : power>0.55 ? '#ffc73d' : '#7fe08a';
+  ctx.save(); ctx.globalCompositeOperation='lighter';
+  ctx.beginPath(); ctx.arc(s.x,s.y,SR+11,-Math.PI/2, -Math.PI/2 + power*6.283);
+  ctx.strokeStyle = pc; ctx.lineWidth=5; ctx.lineCap='round'; ctx.stroke();
+  ctx.beginPath(); ctx.arc(s.x,s.y,SR+11,-Math.PI/2, -Math.PI/2 + power*6.283);
+  ctx.globalAlpha=.35; ctx.lineWidth=11; ctx.stroke();
+  ctx.restore();
+  ctx.restore();
+}
+
+function drawPlaceGhost(){
+  const p = cp(); if(!p || p.type==='cpu' || G.state!=='place') return;
+  const pt = hoverPt || {x:CX, y:CY-RING-40};
+  const q = placeAt(pt);
+  ctx.save();
+  // legal placement ring
+  ctx.beginPath(); ctx.arc(CX,CY,RING+SR+3,0,6.283);
+  ctx.strokeStyle=p.color; ctx.globalAlpha=.22+Math.sin(G.t*3)*.08; ctx.lineWidth=2.5;
+  ctx.setLineDash([6,10]); ctx.lineDashOffset=-G.t*40; ctx.stroke();
+  ctx.setLineDash([]); ctx.globalAlpha=1;
+  const ghost = {x:q.x, y:q.y, r:SR, kind:'shooter', hue:p.hue, owner:p.idx, spin:G.t*0.6, fade:0.55, hit:0};
+  drawMarble(ghost);
+  ctx.restore();
+}
+
+/* the chalk ring strobes: the whole circle snaps to a new colour on every beat */
+const RING_HUES = [0, 32, 55, 100, 145, 190, 218, 265, 300, 330];
+const RING_BEAT = 0.26;               // seconds a colour is held
+function drawRingFlash(){
+  const beat = Math.floor(G.t / RING_BEAT);
+  const hue  = RING_HUES[beat % RING_HUES.length];
+  const k    = (G.t / RING_BEAT) % 1;                 // 0 = just struck
+  const env  = 0.45 + 0.55*Math.pow(1-k, 1.5) + G.flash;   // hard attack, quick decay
+  ctx.save();
+  ctx.beginPath(); ctx.arc(CX,CY,RING,0,6.283);
+  // glow first (additive), so the core isn't washed out by it
+  ctx.globalCompositeOperation='lighter';
+  ctx.strokeStyle = `hsla(${hue},98%,52%,${0.20*env})`; ctx.lineWidth = 34; ctx.stroke();
+  ctx.strokeStyle = `hsla(${hue},98%,56%,${0.30*env})`; ctx.lineWidth = 16; ctx.stroke();
+  // then paint the chalk line itself in the beat colour — opaque, so it really changes
+  ctx.globalCompositeOperation='source-over';
+  ctx.strokeStyle = `hsl(${hue},98%,${46 + 16*Math.pow(1-k,1.5)}%)`;
+  ctx.lineWidth = 8; ctx.globalAlpha = 1; ctx.stroke();
+  ctx.strokeStyle = `hsl(${hue},100%,${64 + 14*Math.pow(1-k,1.5)}%)`;
+  ctx.lineWidth = 2.6; ctx.globalAlpha = 0.95; ctx.stroke();
+  ctx.restore();
+}
+
+/* the rail picks up whoever is shooting */
+function drawRailAccent(){
+  const p = G.players[G.cur];
+  if(!p || G.state==='over' || G.state==='setup') return;
+  const i = WALL, a = .46 + Math.sin(G.t*2.1)*.12;
+  ctx.save();
+  ctx.globalCompositeOperation='lighter';
+  ctx.strokeStyle = p.color;
+  ctx.globalAlpha = a*.30; ctx.lineWidth = 16;
+  ctx.strokeRect(i-7, i-7, W-(i-7)*2, H-(i-7)*2);
+  ctx.globalAlpha = a*.85; ctx.lineWidth = 2.4;
+  ctx.strokeRect(i-1.5, i-1.5, W-(i-1.5)*2, H-(i-1.5)*2);
+  ctx.restore();
+}
+
+function drawWaves(dt){
+  ctx.save();
+  ctx.globalCompositeOperation='lighter';
+  for(let i=G.waves.length-1;i>=0;i--){
+    const w = G.waves[i];
+    w.t += dt;
+    if(w.t>=w.life){ G.waves.splice(i,1); continue; }
+    const k = w.t/w.life, a = (1-k)*(1-k);
+    ctx.beginPath();
+    ctx.arc(w.x, w.y, w.r0 + (w.r1-w.r0)*(1-Math.pow(1-k,2)), 0, 6.283);
+    ctx.strokeStyle = `rgba(${w.c},${a*0.75})`;
+    ctx.lineWidth = w.w*(1-k)+0.4;
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawFX(dt){
+  for(let i=G.fx.length-1;i>=0;i--){
+    const f = G.fx[i];
+    f.t += dt;
+    if(f.t>=f.life){ G.fx.splice(i,1); continue; }
+    f.x += f.vx*dt; f.y += f.vy*dt;
+    f.vx *= 0.94; f.vy *= 0.94;
+    const a = (1-f.t/f.life);
+    ctx.beginPath(); ctx.arc(f.x,f.y,f.r*a+0.4,0,6.283);
+    ctx.fillStyle = f.c + (a*0.9) + ')';
+    ctx.fill();
+  }
+  for(let i=G.pops.length-1;i>=0;i--){
+    const q = G.pops[i];
+    q.t += dt;
+    if(q.t>1.1){ G.pops.splice(i,1); continue; }
+    const a = q.t<0.15 ? q.t/0.15 : 1-(q.t-0.15)/0.95;
+    ctx.save();
+    ctx.globalAlpha = clamp(a,0,1);
+    ctx.font = '800 35px "Trebuchet MS", sans-serif';
+    ctx.textAlign='center';
+    ctx.lineWidth = 6.5; ctx.strokeStyle='rgba(0,0,0,.65)';
+    ctx.strokeText(q.txt, q.x, q.y - q.t*48);
+    ctx.fillStyle = q.c;
+    ctx.fillText(q.txt, q.x, q.y - q.t*48);
+    ctx.restore();
+  }
+}
+
+function drawHeader(){
+  // counter lives in the HUD now — the board is all playfield
+  const left = G.marbles.filter(m=>m.kind==='target' && !m.out).length;
+  const shot = G.turnCap>0
+    ? ` &middot; SHOT <b>${Math.min(G.turnShots + (G.state==='sim'||G.state==='resolve'?0:1), G.turnCap)}</b>/${G.turnCap}`
+    : '';
+  const el = document.getElementById('status');
+  const html = `<b>${left}</b> IN THE RING${shot}`;
+  if(el.innerHTML !== html) el.innerHTML = html;
+}
+
+/* ======================================================================
+   main loop
+   ====================================================================== */
+let last = performance.now(), acc = 0;
+function frame(now){
+  const dt = Math.min(0.05, (now-last)/1000); last = now;
+  G.t += dt;
+
+  if(G.state==='sim'){
+    acc += dt;
+    let guard = 0;
+    while(acc >= PHYS_DT && guard < 24){ stepPhysics(PHYS_DT); acc -= PHYS_DT; guard++; }
+    if(acc > PHYS_DT) acc = 0;
+    if(allAsleep()) settle();
+  }else{
+    acc = 0;
+  }
+  if(G.cpu && (G.state==='place'||G.state==='aim')) cpuTick(dt);
+
+  for(const m of G.marbles){
+    if(m.hit>0) m.hit = Math.max(0, m.hit - dt*4.5);
+    const sp = len(m.vx,m.vy);
+    if(sp > 140){ m.trail.push({x:m.x,y:m.y}); if(m.trail.length>9) m.trail.shift(); }
+    else if(m.trail.length) m.trail.shift();
+  }
+  G.shake = Math.max(0, G.shake - dt*24);
+  G.flash = Math.max(0, G.flash - dt*1.6);
+
+  /* ---- draw ---- */
+  ctx.save();
+  ctx.clearRect(0,0,W,H);
+  if(G.shake>0.1) ctx.translate(gauss(G.shake*0.35), gauss(G.shake*0.35));
+  if(ground) ctx.drawImage(ground,0,0);
+  drawRingFlash();
+  if(G.players.length) drawRailAccent();
+
+  // in-ring tint so the play area reads clearly
+  ctx.save();
+  ctx.beginPath(); ctx.arc(CX,CY,RING,0,6.283);
+  ctx.fillStyle='rgba(255,236,200,.05)'; ctx.fill();
+  ctx.restore();
+
+  if(G.players.length) drawHeader();
+
+  // sort by y for a touch of depth
+  const list = [...G.marbles].sort((a,b)=>a.y-b.y);
+  for(const m of list) drawTrail(m);
+  for(const m of list) drawMarble(m);
+
+  if(G.state==='place') drawPlaceGhost();
+  if(G.state==='aim') drawAim();
+  drawWaves(dt);
+  drawFX(dt);
+
+  // knockout flash + warm bloom over the court
+  if(G.flash>0.002){
+    ctx.save(); ctx.globalCompositeOperation='lighter';
+    ctx.fillStyle=`rgba(255,244,214,${G.flash*0.16})`; ctx.fillRect(0,0,W,H);
+    ctx.restore();
+  }
+  ctx.save();
+  ctx.globalCompositeOperation='lighter';
+  const bl = ctx.createRadialGradient(CX,CY-70,10,CX,CY,RING*1.5);
+  bl.addColorStop(0,'rgba(255,214,150,.075)'); bl.addColorStop(1,'rgba(255,180,90,0)');
+  ctx.fillStyle=bl; ctx.fillRect(0,0,W,H);
+  ctx.restore();
+  ctx.restore();
+
+  requestAnimationFrame(frame);
+}
+
+/* boot */
+if(!CanvasRenderingContext2D.prototype.roundRect){
+  CanvasRenderingContext2D.prototype.roundRect = function(x,y,w,h,r){
+    this.moveTo(x+r,y); this.arcTo(x+w,y,x+w,y+h,r); this.arcTo(x+w,y+h,x,y+h,r);
+    this.arcTo(x,y+h,x,y,r); this.arcTo(x,y,x+w,y,r); this.closePath(); return this;
+  };
+}
+resize();
+requestAnimationFrame(frame);
+startGame(true);              // attract mode rolls behind the menu
+say('&nbsp;');
+</script>
+</body>
+</html>
