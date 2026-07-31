@@ -39,6 +39,10 @@
   .wc-btn.cyan{background:transparent;border:1.5px solid #3fd0e0;color:#7fe6f5}
   .wc-btn.cyan:hover{background:rgba(63,208,224,.14);box-shadow:0 0 18px rgba(63,208,224,.3)}
   .wc-btn:disabled{opacity:.5;cursor:not-allowed;box-shadow:none}
+  .wc-msg{min-height:14px;margin-top:12px;font-family:'Share Tech Mono',monospace;font-size:12px;
+    letter-spacing:.3px;color:#14f195;line-height:1.3}
+  .wc-icon:disabled,.wc-ref:disabled,.wc-dc:disabled{opacity:.4;cursor:not-allowed}
+  .wc-addr{ -webkit-user-select:text; user-select:text }
   .wc-foot{display:flex;align-items:center;justify-content:space-between;margin-top:14px}
   .wc-ref{display:inline-flex;align-items:center;gap:6px;font-family:'Orbitron',monospace;font-size:10px;
     letter-spacing:.5px;color:#7fe6f5;background:rgba(63,208,224,.08);border:1px solid rgba(63,208,224,.3);
@@ -226,6 +230,7 @@
         <button class="wc-btn green" id="wcDeposit">DEPOSIT</button>
         <button class="wc-btn cyan" id="wcCashout">CASH OUT</button>
       </div>
+      <div class="wc-msg" id="wcMsg"></div>
       <div class="wc-foot">
         <button class="wc-ref" id="wcRef">&#128184; Referral<br>earnings</button>
         <button class="wc-dc" id="wcDisconnect">DISCONNECT</button>
@@ -1448,28 +1453,68 @@ if(!CanvasRenderingContext2D.prototype.roundRect){
 const RINGER_SERVER = 'https://ringer-solana.fly.dev';
 const WALLET = { address:null, sol:0, usd:0, price:0, serverUp:false };
 
+const B58 = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 function short(a){ return a ? a.slice(0,6)+'…'+a.slice(-4) : 'not connected'; }
+
+/* status line inside the card — never hide the menu just to show a message */
+let wmsgT = 0;
+function wmsg(text, kind){
+  const el = document.getElementById('wcMsg');
+  if(!el) return;
+  el.textContent = text;
+  el.style.color = kind==='bad' ? '#ff8a8a' : kind==='warn' ? '#ffd76a' : '#14f195';
+  clearTimeout(wmsgT);
+  wmsgT = setTimeout(()=>{ el.textContent=''; }, 4200);
+}
+
 function walletRender(){
   document.getElementById('wcAddr').textContent = short(WALLET.address);
   document.getElementById('wcBal').textContent = WALLET.sol.toFixed(4);
   document.getElementById('wcUsd').innerHTML = '&asymp; $' + WALLET.usd.toFixed(2);
-  const on = !!WALLET.address;
-  ['wcCopy','wcScan','wcCashout','wcRef','wcDisconnect'].forEach(id=>{
-    const el=document.getElementById(id); if(el) el.disabled = !on;
-  });
-  document.getElementById('wcDeposit').textContent = on ? 'DEPOSIT' : 'CONNECT';
+  // Every control stays clickable and answers — a button that looks live but
+  // does nothing is worse than one that explains why it can't.
+  document.getElementById('wcDeposit').textContent = WALLET.address ? 'DEPOSIT' : 'CONNECT';
 }
 
-/* the main slither-sol.com session stashes the signed-in pubkey; reuse it */
+/* Copy that still works without a secure context / clipboard permission. */
+async function copyText(t){
+  try{
+    if(navigator.clipboard && window.isSecureContext){ await navigator.clipboard.writeText(t); return true; }
+  }catch(e){}
+  try{
+    const ta=document.createElement('textarea');
+    ta.value=t; ta.setAttribute('readonly','');
+    ta.style.cssText='position:fixed;top:-1000px;opacity:0';
+    document.body.appendChild(ta); ta.select(); ta.setSelectionRange(0,t.length);
+    const ok=document.execCommand('copy'); document.body.removeChild(ta); return ok;
+  }catch(e){ return false; }
+}
+
+/* Find the wallet the main site signed in with.
+   slither-sol.com stores the local keypair as ss_kp_<email> and the address as
+   ss_kp_<email>_addr — the address is all we read, never the secret key. */
 function readSiteWallet(){
-  for(const k of ['ss_pubkey','privy:address','walletAddress','solana_pubkey']){
+  try{
+    for(let i=0;i<localStorage.length;i++){
+      const k = localStorage.key(i);
+      if(!k || !/^ss_kp_.*_addr$/.test(k)) continue;
+      const v = (localStorage.getItem(k)||'').replace(/"/g,'').trim();
+      if(B58.test(v)) return v;
+    }
+  }catch(e){}
+  for(const k of ['ss_pubkey','walletAddress','solana_pubkey','privy:address']){
     try{
-      const v = localStorage.getItem(k);
-      if(v && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(v.replace(/"/g,''))) return v.replace(/"/g,'');
+      const v = (localStorage.getItem(k)||'').replace(/"/g,'').trim();
+      if(B58.test(v)) return v;
     }catch(e){}
   }
+  // an injected wallet (Phantom etc.) that's already connected
+  try{
+    const pk = window.solana?.publicKey || window.phantom?.solana?.publicKey;
+    if(pk) { const s = pk.toBase58 ? pk.toBase58() : String(pk); if(B58.test(s)) return s; }
+  }catch(e){}
   const q = new URLSearchParams(location.search).get('pubkey');
-  return q && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(q) ? q : null;
+  return q && B58.test(q) ? q : null;
 }
 
 async function walletRefresh(){
@@ -1487,35 +1532,42 @@ async function walletRefresh(){
   walletRender();
 }
 
-document.getElementById('wcCopy').onclick = ()=>{
-  if(!WALLET.address) return;
-  navigator.clipboard?.writeText(WALLET.address);
-  const el=document.getElementById('wcAddr'); const old=el.textContent;
-  el.textContent='COPIED!'; setTimeout(()=>{ el.textContent=old; }, 1100);
+const NO_WALLET = 'no wallet yet — sign in on slither-sol.com first';
+
+document.getElementById('wcCopy').onclick = async ()=>{
+  if(!WALLET.address) return wmsg(NO_WALLET, 'warn');
+  if(await copyText(WALLET.address)){
+    const el=document.getElementById('wcAddr'), old=el.textContent;
+    el.textContent='COPIED!'; setTimeout(()=>{ el.textContent=old; }, 1100);
+    wmsg('address copied to clipboard');
+  } else wmsg('couldn\'t copy — tap the address to select it', 'bad');
 };
 document.getElementById('wcScan').onclick = ()=>{
-  if(WALLET.address) window.open('https://solscan.io/account/'+WALLET.address,'_blank','noopener');
+  if(!WALLET.address) return wmsg(NO_WALLET, 'warn');
+  window.open('https://solscan.io/account/'+WALLET.address,'_blank','noopener');
+  wmsg('opening Solscan…');
 };
-document.getElementById('wcDeposit').onclick = ()=>{
-  if(!WALLET.address){ window.location.href = '/'; return; }   // sign in on the main site
-  navigator.clipboard?.writeText(WALLET.address);
-  say('address copied &mdash; send mainnet SOL to it, then hit refresh', '#14f195');
-  setupEl.classList.add('hidden');
+document.getElementById('wcAddr').onclick = ()=> document.getElementById('wcCopy').onclick();
+document.getElementById('wcDeposit').onclick = async ()=>{
+  if(!WALLET.address){ window.location.href='/'; return; }   // sign in on the main site
+  const ok = await copyText(WALLET.address);
+  wmsg(ok ? 'address copied — send mainnet SOL to it, balance updates in ~30s'
+          : 'your address is shown above — send mainnet SOL to it', ok ? 'ok' : 'warn');
 };
 document.getElementById('wcCashout').onclick = ()=>{
-  say(WALLET.serverUp
-      ? 'winnings are paid straight to your wallet when a table ends'
-      : '$1 tables aren\'t live yet &mdash; Ringer is free play for now', '#14f195');
-  setupEl.classList.add('hidden');
+  if(!WALLET.serverUp) return wmsg('$1 tables aren\'t live yet — Ringer is free play for now', 'warn');
+  if(!WALLET.address)  return wmsg(NO_WALLET, 'warn');
+  wmsg('winnings are paid straight to your wallet when a table ends');
 };
-document.getElementById('wcRef').onclick = ()=>{
-  if(!WALLET.address) return;
-  navigator.clipboard?.writeText(location.origin+'/ringer.html?ref='+WALLET.address);
-  say('referral link copied', '#14f195');
-  setupEl.classList.add('hidden');
+document.getElementById('wcRef').onclick = async ()=>{
+  if(!WALLET.address) return wmsg(NO_WALLET, 'warn');
+  const link = location.origin+'/ringer.html?ref='+WALLET.address;
+  wmsg(await copyText(link) ? 'referral link copied' : link, 'ok');
 };
 document.getElementById('wcDisconnect').onclick = ()=>{
+  if(!WALLET.address) return wmsg('nothing connected', 'warn');
   WALLET.address=null; WALLET.sol=0; WALLET.usd=0; walletRender();
+  wmsg('disconnected from this page only', 'warn');
 };
 
 walletRender();
