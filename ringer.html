@@ -8,6 +8,85 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
 <style>
+  /* ── arcade lobby (SolOrbit layout) ── */
+  .menu{width:100%;max-width:1180px;margin:0 auto;padding:6px 4px 30px;font-family:'Orbitron',monospace}
+  .menu-top{display:flex;justify-content:center;gap:10px;margin:2px 0 6px}
+  .stake-pill{font-family:'Orbitron',monospace;font-size:12px;font-weight:700;letter-spacing:1px;color:#7fe6f5;
+    background:rgba(20,241,149,.05);border:1px solid rgba(63,208,224,.4);border-radius:11px;padding:9px 20px;cursor:pointer;transition:all .14s}
+  .stake-pill.active{color:#04121a;background:linear-gradient(135deg,#14f195,#0fbf77);border-color:transparent;box-shadow:0 0 16px rgba(20,241,149,.45)}
+  .menu-title{text-align:center;margin:8px 0 20px}
+  .menu-title h1{font-family:'Orbitron',monospace;font-weight:900;font-size:clamp(32px,6.5vw,62px);letter-spacing:4px;margin:0;
+    background:linear-gradient(90deg,#14f195 20%,#3fd0e0 80%);-webkit-background-clip:text;background-clip:text;color:transparent;
+    filter:drop-shadow(0 0 20px rgba(20,241,149,.45))}
+  .menu-sub{font-size:12px;letter-spacing:4px;color:#3fd0e0;margin-top:6px}
+  .menu-grid{display:grid;grid-template-columns:minmax(230px,1fr) minmax(320px,1.35fr) minmax(230px,1fr);
+    gap:18px;align-items:start}
+  @media (max-width:920px){ .menu-grid{grid-template-columns:1fr;max-width:460px;margin:0 auto} }
+  .col{display:flex;flex-direction:column}
+  .mpanel{background:rgba(8,12,22,.6);border:1px solid rgba(63,208,224,.22);border-radius:16px;padding:16px}
+  .mpanel-h{display:flex;align-items:center;gap:8px;justify-content:space-between;font-size:12px;font-weight:700;
+    letter-spacing:1.5px;color:#eef4ff;margin-bottom:12px}
+  .live-badge{font-size:9px;color:#14f195;border:1px solid rgba(20,241,149,.4);border-radius:999px;
+    padding:3px 9px;display:inline-flex;gap:5px;align-items:center;letter-spacing:1px}
+  .empty{font-size:12px;color:#8a94ad;text-align:center;padding:14px 4px;line-height:1.6}
+  .howto{margin:0 0 0 16px;font-family:'Trebuchet MS',sans-serif;font-size:12.5px;line-height:1.65;color:#c3ccdd}
+  .howto b{color:#14f195}
+  .lb-row{display:flex;align-items:center;gap:10px;padding:8px 3px;border-bottom:1px solid rgba(255,255,255,.04);font-size:12px}
+  .lb-rank{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+    font-size:10px;font-weight:700;flex-shrink:0;background:rgba(20,241,149,.15);color:#14f195}
+  .lb-name{flex:1;color:#dfe6f5;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .lb-val{color:#ffd21e;font-weight:700}
+  .name-row{display:flex;gap:8px;align-items:center;margin-bottom:14px}
+  .name-row input{flex:1;padding:12px 14px;border-radius:11px;border:1px solid #2a344f;background:#0d1220;
+    color:#e8ecf5;font-size:15px;font-family:'Orbitron',monospace}
+  .name-ava{width:42px;height:42px;flex:0 0 42px;border-radius:11px;background:linear-gradient(135deg,#14f195,#3fd0e0);
+    display:flex;align-items:center;justify-content:center;font-weight:900;color:#04121a;font-size:18px}
+  .save-btn{font-size:11px;font-weight:700;color:#14f195;background:rgba(20,241,149,.08);font-family:'Orbitron',monospace;
+    border:1px solid rgba(20,241,149,.4);border-radius:10px;padding:11px 15px;cursor:pointer}
+  .save-btn:hover{background:rgba(20,241,149,.18)}
+  .stake-row{display:flex;gap:8px;margin-bottom:14px}
+  .stake-tab{flex:1;text-align:center;padding:11px 4px;border-radius:11px;font-family:'Orbitron',monospace;font-size:13px;
+    font-weight:700;cursor:pointer;border:1px solid rgba(63,208,224,.35);color:#7fe6f5;background:rgba(20,241,149,.04);transition:all .14s}
+  .stake-tab.active{color:#04121a;border-color:transparent;
+    background:repeating-linear-gradient(135deg,#14f195,#14f195 11px,#0fbf77 11px,#0fbf77 22px);box-shadow:0 0 16px rgba(20,241,149,.4)}
+  .stake-tab small{display:block;font-size:8px;opacity:.85;margin-top:4px;letter-spacing:.5px;font-weight:700}
+  .play-now{width:100%;padding:19px;border:0;border-radius:13px;font-family:'Orbitron',monospace;font-weight:900;
+    font-size:19px;letter-spacing:2px;color:#04121a;cursor:pointer;
+    background:repeating-linear-gradient(135deg,#14f195,#14f195 15px,#0fbf77 15px,#0fbf77 30px);
+    box-shadow:0 0 26px rgba(20,241,149,.45);transition:all .14s}
+  .play-now:hover{box-shadow:0 0 40px rgba(20,241,149,.7)}
+  .play-now:disabled{opacity:.6;cursor:not-allowed;box-shadow:none}
+  .watch-bet{width:100%;margin-top:10px;padding:14px;border:0;border-radius:11px;font-family:'Orbitron',monospace;
+    font-weight:800;letter-spacing:1px;font-size:12px;color:#1a1400;background:linear-gradient(135deg,#ffe14d,#ffcf1e);cursor:pointer}
+  .watch-bet:hover{box-shadow:0 0 22px rgba(255,207,30,.5)}
+  #liveMsg{min-height:15px;margin-top:8px;text-align:center;font-family:'Share Tech Mono',monospace;font-size:12px;color:#14f195}
+  .orow{display:flex;align-items:center;gap:10px;margin-top:10px}
+  .orow .lab{font-size:10px;letter-spacing:1.5px;color:#8a94ad;flex:0 0 88px}
+  .stat-row{display:flex;gap:10px;margin-top:12px}
+  .stat-box{flex:1;background:rgba(0,0,0,.28);border:1px solid rgba(255,255,255,.06);border-radius:11px;padding:11px}
+  .stat-box .v{font-size:17px;font-weight:800;color:#14f195}
+  .stat-box .k{font-size:9px;color:#8a94ad;letter-spacing:1px;margin-top:3px}
+  .mini-row{display:flex;gap:8px;justify-content:center;margin-top:14px}
+  .mini-btn{font-family:'Orbitron',monospace;font-size:10px;font-weight:700;border-radius:9px;padding:8px 13px;
+    cursor:pointer;letter-spacing:.5px}
+  .mini-btn.test{background:rgba(153,69,255,.15);border:1px solid rgba(153,69,255,.5);color:#c9a3ff}
+  .mini-btn.logout{background:rgba(255,60,60,.12);border:1px solid rgba(255,80,80,.5);color:#ff8a8a}
+  .skin-preview{height:96px;border-radius:12px;border:1px solid rgba(255,255,255,.06);margin-bottom:12px;
+    background:linear-gradient(180deg,#5b3f26,#2b1c10);box-shadow:inset 0 0 0 6px rgba(0,0,0,.35)}
+  .menu-footer{margin:26px auto 0;text-align:center;display:flex;gap:10px;justify-content:center;align-items:center;
+    flex-wrap:wrap;font-size:11px;letter-spacing:.5px;color:#66708a}
+  .menu-footer a{color:#8a94ad;text-decoration:none}
+  .menu-footer a:hover{color:#14f195}
+  /* slots + segs restyled for the neon lobby */
+  #setup .slots{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:14px}
+  #setup .slot{background:rgba(0,0,0,.28);border:1px solid rgba(255,255,255,.07);border-radius:11px;padding:8px;gap:8px}
+  #setup .slot .lbl{font-family:'Orbitron',monospace;font-size:11px;color:#dfe6f5}
+  #setup .seg{border:1px solid rgba(63,208,224,.35);border-radius:9px;background:rgba(0,0,0,.25)}
+  #setup .seg.wide{display:flex;width:100%}
+  #setup .seg.wide button{flex:1}
+  #setup .seg button{background:transparent;color:#7fe6f5;font-family:'Orbitron',monospace;font-size:10px;padding:7px 9px}
+  #setup .seg button.sel{background:linear-gradient(135deg,#14f195,#0fbf77);color:#04121a}
+
   /* ── wallet card — matches SolOrbit / agar-solana exactly ── */
   .wcard{background:rgba(8,12,22,.55);border:1px solid rgba(20,241,149,.22);
     border-radius:16px;padding:16px 16px 14px;font-family:'Orbitron',monospace;margin-top:16px}
@@ -183,35 +262,85 @@
 
 <!-- ================= SETUP ================= -->
 <div class="overlay" id="setup">
-  <div class="sheet">
+ <div class="menu">
+  <div class="menu-top">
+    <button class="stake-pill active" data-stake="free">FREE</button>
+    <button class="stake-pill" data-stake="1">$1</button>
+  </div>
+  <div class="menu-title">
     <h1>RINGER</h1>
-    <div class="tag">MARBLE KNOCKOUT &nbsp;&middot;&nbsp; 1&ndash;4 PLAYERS &nbsp;&middot;&nbsp; HOT SEAT PVP</div>
-    <div class="slots" id="slots"></div>
-    <div class="row">
-      <span class="lab">MARBLES</span>
-      <div class="seg" id="segCount" style="--c:#ffd76a">
-        <button data-v="9">9</button><button data-v="13" class="sel">13</button><button data-v="17">17</button>
-      </div>
-      <span class="lab">CPU SKILL</span>
-      <div class="seg" id="segSkill" style="--c:#ffd76a">
-        <button data-v="0">CHILL</button><button data-v="1" class="sel">KEEN</button><button data-v="2">SHARP</button>
-      </div>
-    </div>
-    <div class="row">
-      <span class="lab">FRAME</span>
-      <div class="seg" id="segSkin" style="--c:#ffd76a">
-        <button data-v="0" class="sel">WALNUT</button><button data-v="1">MIDNIGHT</button><button data-v="2">JADE</button><button data-v="3">CRIMSON</button>
-      </div>
-    </div>
-    <div class="row">
-      <span class="lab">SHOTS PER TURN</span>
-      <div class="seg" id="segCap" style="--c:#ffd76a">
-        <button data-v="2">2</button><button data-v="3" class="sel">3</button><button data-v="0">UNLIMITED</button>
-      </div>
-    </div>
-    <button class="big" id="bStart">SHOOT MARBLES</button>
+    <div class="menu-sub">&middot; SOLANA PVP MARBLE KNOCKOUT &middot;</div>
+  </div>
 
-    <!-- ══ WALLET ══ -->
+  <div class="menu-grid">
+    <!-- ══════════ LEFT ══════════ -->
+    <div class="col">
+      <div class="mpanel">
+        <div class="mpanel-h"><span>&#127942; LEADERBOARD</span><span class="live-badge">&#9679; LIVE</span></div>
+        <div id="lbList"><div class="empty">No cash-outs yet &mdash; the board fills as players bank winnings.</div></div>
+      </div>
+      <div class="mpanel" style="margin-top:14px">
+        <div class="mpanel-h"><span>&#128214; HOW TO PLAY</span></div>
+        <ul class="howto">
+          <li>Marbles sit in an <b>X</b> inside the ring. Fire your big <b>shooter</b> into the pack.</li>
+          <li><b>Click the ring</b> to place, then <b>drag back &amp; release</b> like a slingshot.</li>
+          <li>Knock a marble <b>fully outside</b> the ring and it's yours.</li>
+          <li>Score and you <b>shoot again</b>, from where your shooter lies.</li>
+          <li>Miss and it <b>stays in the pot</b> &mdash; rivals can knock it out and <b>steal</b> a marble.</li>
+          <li>Ring empty = game over. Most marbles wins the pot.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- ══════════ CENTRE ══════════ -->
+    <div class="col">
+      <div class="mpanel">
+        <div class="name-row">
+          <span class="name-ava" id="avaLetter">P</span>
+          <input id="pname" maxlength="16" placeholder="Your name">
+          <button class="save-btn" id="bSaveName">SAVE</button>
+        </div>
+
+        <div class="stake-row">
+          <button class="stake-tab active" data-stake="free">FREE<small>PRACTICE &middot; HOT SEAT</small></button>
+          <button class="stake-tab" data-stake="1">$1<small>TABLE &middot; 2-4P</small></button>
+        </div>
+
+        <button class="play-now" id="bStart">&#9654; SHOOT MARBLES</button>
+        <button class="watch-bet" id="bLive">&#128176; PLAY $1 TABLE &middot; WINNER TAKES THE POT</button>
+        <div id="liveMsg"></div>
+
+        <div class="slots" id="slots"></div>
+
+        <div class="orow"><span class="lab">MARBLES</span>
+          <div class="seg" id="segCount">
+            <button data-v="9">9</button><button data-v="13" class="sel">13</button><button data-v="17">17</button>
+          </div>
+        </div>
+        <div class="orow"><span class="lab">CPU SKILL</span>
+          <div class="seg" id="segSkill">
+            <button data-v="0">CHILL</button><button data-v="1" class="sel">KEEN</button><button data-v="2">SHARP</button>
+          </div>
+        </div>
+        <div class="orow"><span class="lab">SHOTS / TURN</span>
+          <div class="seg" id="segCap">
+            <button data-v="2">2</button><button data-v="3" class="sel">3</button><button data-v="0">UNLIMITED</button>
+          </div>
+        </div>
+
+        <div class="stat-row">
+          <div class="stat-box"><div class="v" id="statOnline">0</div><div class="k">TABLES OPEN</div></div>
+          <div class="stat-box"><div class="v" id="statPaid">$0.00</div><div class="k">TOTAL PAID OUT</div></div>
+        </div>
+        <div class="mini-row">
+          <button class="mini-btn test" id="bInfo">&#9432; TABLE INFO</button>
+          <a class="mini-btn logout" href="/" style="text-decoration:none">&#8592; SLITHER.SOL</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════ RIGHT ══════════ -->
+    <div class="col">
     <div class="wcard" id="wcard">
       <div class="wc-head">
         <div class="wc-title"><span class="wc-dot"></span>WALLET</div>
@@ -236,18 +365,24 @@
         <button class="wc-dc" id="wcDisconnect">DISCONNECT</button>
       </div>
     </div>
-    <details>
-      <summary>HOW TO PLAY</summary>
-      <ul>
-        <li>Marbles are set in an <b>X</b> inside a chalk ring. Take turns firing your big <b>shooter</b> (taw) into the pack.</li>
-        <li><b>Place</b> your shooter anywhere on the ring line, then <b>drag back and release</b> to fire &mdash; like a slingshot.</li>
-        <li>Any marble knocked <b>completely outside</b> the ring is yours to keep.</li>
-        <li>Knock one out and you <b>shoot again</b>, from wherever your shooter came to rest &mdash; up to the shots-per-turn limit (set it to UNLIMITED for the purist rule).</li>
-        <li>Miss and your shooter <b>stays in the pot</b> &mdash; rivals who knock it out of the ring <b>steal a marble</b> from you.</li>
-        <li>Ring empty = game over. Most marbles wins.</li>
-      </ul>
-    </details>
+
+      <div class="mpanel" style="margin-top:16px">
+        <div class="mpanel-h"><span>&#127912; CUSTOMIZE</span><span id="skinName">Walnut</span></div>
+        <div class="skin-preview" id="skinPreview"></div>
+        <div class="seg wide" id="segSkin">
+          <button data-v="0" class="sel">WALNUT</button><button data-v="1">MIDNIGHT</button
+          ><button data-v="2">JADE</button><button data-v="3">CRIMSON</button>
+        </div>
+      </div>
+    </div>
   </div>
+
+  <div class="menu-footer">
+    <a href="/terms.html">Terms of Service</a><span>&middot;</span>
+    <a href="/privacy.html">Privacy Policy</a><span>&middot;</span>
+    <span>&copy; 2026 Ringer</span>
+  </div>
+ </div>
 </div>
 
 <!-- ================= GAME OVER ================= -->
@@ -320,7 +455,7 @@ const G = {
   placedThisTurn:false, // shooter was placed this turn (so re-place is allowed)
   aim:{active:false, x:0, y:0}, ghostA:null, turnTimer:0,
   cpu:null,
-  skill:1, count:13, skin:0,
+  skill:1, count:13, skin:0, stake:'free',
   assist:true, muted:false
 };
 
@@ -439,7 +574,11 @@ document.querySelectorAll('#segCap button').forEach(b=>b.onclick=()=>{
   G.turnCap = +b.dataset.v;
   document.querySelectorAll('#segCap button').forEach(x=>x.classList.toggle('sel',x===b));
 });
-document.getElementById('bStart').onclick = ()=>{ ac(); startGame(false); };
+document.getElementById('bStart').onclick = ()=>{
+  ac();
+  if(G.stake === '1'){ joinLiveTable(); return; }
+  startGame(false);
+};
 document.getElementById('bAgain').onclick = ()=>{ overEl.classList.add('hidden'); startGame(false); };
 document.getElementById('bBack').onclick = ()=>{ overEl.classList.add('hidden'); startGame(true); setupEl.classList.remove('hidden'); };
 document.getElementById('bMenu').onclick = ()=>{ setupEl.classList.remove('hidden'); };
@@ -556,6 +695,8 @@ function nextPlayer(){
 
 function fire(dirx, diry, power){
   const p = cp(); const s = p.shooter; if(!s) return;
+  // Live table: the server owns the physics — send the intent, don't simulate.
+  if(LIVE.on){ liveShoot(dirx, diry, power); return; }
   const sp = MAX_SPEED * clamp(power,0,1);
   s.vx = dirx*sp; s.vy = diry*sp;
   s.enteredRing = len(s.x-CX, s.y-CY) < RING - s.r*0.5;
@@ -879,6 +1020,7 @@ cv.addEventListener('pointerdown', e=>{
   cv.setPointerCapture(e.pointerId);
   if(G.state==='place'){
     const q = placeAt(pt);
+    if(LIVE.on) LIVE.pendingAngle = Math.atan2(pt.y-CY, pt.x-CX);  // server places it
     p.shooter = makeMarble(q.x, q.y, SR, 'shooter', p.hue, p.idx);
     G.marbles.push(p.shooter);
     G.state='aim';
@@ -1450,7 +1592,25 @@ if(!CanvasRenderingContext2D.prototype.roundRect){
    wallet panel — reads the wallet the main site already signed in with,
    shows live mainnet balance. Money play talks to the Ringer game server.
    ====================================================================== */
-const RINGER_SERVER = 'https://ringer-solana.fly.dev';
+/* Talk to whichever host is actually serving tables: same-origin when this page
+   is served by the game server itself, otherwise the deployed host. */
+let RINGER_SERVER = 'https://ringer-solana.fly.dev';
+(async function resolveServer(){
+  const tryHost = async (host)=>{
+    try{
+      const r = await fetch(host+'/config', { signal:AbortSignal.timeout(2500) });
+      if(!r.ok) return null;
+      const j = await r.json();
+      return j.treasury ? j : null;
+    }catch(e){ return null; }
+  };
+  let cfg = await tryHost(location.origin);
+  if(cfg) RINGER_SERVER = location.origin;
+  else cfg = await tryHost(RINGER_SERVER);
+  if(cfg){ LIVE.cfg = cfg; WALLET.serverUp = true; }   // so TABLE INFO / CASH OUT tell the truth
+  walletRefresh();
+  refreshLobbyStats();
+})();
 const WALLET = { address:null, sol:0, usd:0, price:0, serverUp:false };
 
 const B58 = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
@@ -1573,6 +1733,245 @@ document.getElementById('wcDisconnect').onclick = ()=>{
 walletRender();
 walletRefresh();
 setInterval(walletRefresh, 30000);
+
+/* ======================================================================
+   LIVE $1 TABLES — server-authoritative.
+   We send an intent (place angle, direction, power). The server runs the
+   physics and tells us what happened; we replay it with the SAME module it
+   judged with, then snap to its snapshot. We never decide a knockout.
+   ====================================================================== */
+const LIVE = {
+  on:false, ws:null, seat:-1, lobby:null, P:null, st:null,
+  anim:null, cfg:null, pendingAngle:null, busy:false,
+};
+
+const lmsg = (t,k)=>{ wmsg(t,k); const el=document.getElementById('liveMsg'); if(el) el.textContent=t; };
+
+async function loadPhysics(){
+  if(LIVE.P) return LIVE.P;
+  LIVE.P = await import(`${RINGER_SERVER}/physics.js`);
+  return LIVE.P;
+}
+
+/** Rebuild a physics state object from a server snapshot. */
+function stateFromSnapshot(s){
+  return {
+    ring:s.ring, count:0, turnCap:s.turnCap, nextId:10000,
+    marbles:s.marbles.map(m=>({ ...m, vx:0, vy:0, m:(m.r*m.r*m.r)/1000,
+                                out:false, enteredRing:false })),
+    players:s.scores.map((sc,i)=>({ score:sc,
+      shooter:(s.marbles.find(m=>m.kind==='shooter'&&m.owner===i)||{}).id ?? null })),
+    cur:s.cur, turnShots:s.turnShots, shots:s.shots, over:s.over,
+  };
+}
+
+/** Paint a server snapshot onto the renderer's board. */
+function showSnapshot(s){
+  RING = s.ring;
+  makeGround();
+  G.marbles = s.marbles.map(m=>{
+    const mm = makeMarble(m.x, m.y, m.r, m.kind, m.hue, m.owner);
+    mm.id = m.id; return mm;
+  });
+  G.players.forEach((p,i)=>{ p.score = s.scores[i] ?? 0; p.shooter =
+    G.marbles.find(m=>m.kind==='shooter'&&m.owner===i) || null; });
+  G.cur = s.cur; G.turnShots = s.turnShots; G.turnCap = s.turnCap;
+  updHUD();
+}
+
+/** Replay one server-resolved shot locally, then snap to its authoritative end. */
+async function animateServerShot(msg){
+  const P = await loadPhysics();
+  const st = stateFromSnapshot(msg.before);
+  st.cur = msg.seat;
+  const prep = P.prepareShot(st, msg.shot);
+  if(!prep.ok){ showSnapshot(msg.after); return; }   // desync: trust the server
+  showSnapshot(msg.before);
+  LIVE.anim = { st, P, done:false };
+  await new Promise(res=>{
+    let n = 0;
+    (function tick(){
+      for(let i=0;i<4 && !P.atRest(st) && n<P.MAX_STEPS; i++){ P.step(st, P.PHYS_DT, n, []); n++; }
+      // mirror onto the render board
+      for(const m of st.marbles){
+        const g = G.marbles.find(x=>x.id===m.id);
+        if(g){ g.x=m.x; g.y=m.y; g.vx=m.vx; g.vy=m.vy; }
+      }
+      if(P.atRest(st) || n>=P.MAX_STEPS){ LIVE.anim=null; res(); return; }
+      requestAnimationFrame(tick);
+    })();
+  });
+  showSnapshot(msg.after);          // authoritative
+  if(msg.scored>0) G.pops.push({x:CX,y:CY-RING*0.55,txt:'+'+msg.scored,
+                                c:G.players[msg.seat]?.color||'#fff',t:0});
+}
+
+function liveHud(){
+  const l = LIVE.lobby; if(!l) return;
+  const seats = l.players.map((p,i)=>
+    `${i===LIVE.seat?'YOU':'P'+(i+1)} ${p.score}`).join('  ·  ');
+  const turn = l.state ? (l.state.cur===LIVE.seat ? 'YOUR SHOT' : `P${l.state.cur+1} shooting`) : '';
+  document.getElementById('status').innerHTML =
+    `<b>$${LIVE.cfg?.buyinUsd??1} TABLE</b> · ${seats} · ${turn}`;
+}
+
+function liveConnect(ticket){
+  const ws = new WebSocket(RINGER_SERVER.replace(/^http/,'ws') + '/ws');
+  LIVE.ws = ws;
+  ws.onopen = ()=> ws.send(JSON.stringify({ type:'join', ticket,
+                              name: WALLET.address ? short(WALLET.address) : 'Player' }));
+  ws.onerror = ()=> lmsg('connection failed — table server unreachable','bad');
+  ws.onclose = ()=>{ if(LIVE.on) lmsg('disconnected from the table','bad'); LIVE.on=false; };
+  ws.onmessage = async (e)=>{
+    const m = JSON.parse(e.data);
+    if(m.type==='joined'){ LIVE.seat=m.seat; LIVE.lobby=m.lobby; lmsg(`seated — waiting for players (${m.lobby.players.length}/${m.lobby.maxPlayers})`); }
+    if(m.type==='lobby'){ LIVE.lobby=m.lobby;
+      lmsg(`waiting — ${m.lobby.players.length}/${m.lobby.maxPlayers} seated`
+           + (m.lobby.startsInMs!=null?` · starts in ${Math.ceil(m.lobby.startsInMs/1000)}s`:'')); }
+    if(m.type==='start'){
+      LIVE.on=true; LIVE.lobby=m.lobby;
+      setupEl.classList.add('hidden');
+      G.players = m.lobby.players.map((p,i)=>({ idx:i, slot:i, name:i===LIVE.seat?'YOU':`PLAYER ${i+1}`,
+        color:PCOL[i], hue:PHUE[i], type:'human', score:0, shooter:null }));
+      G.demo=false; buildHUD();
+      showSnapshot(m.lobby.state);
+      G.state = (m.lobby.state.cur===LIVE.seat) ? 'place' : 'wait';
+      say(m.lobby.state.cur===LIVE.seat ? '<b>your shot</b> — click the ring to place' : 'waiting for your turn…');
+      liveHud();
+    }
+    if(m.type==='shot'){
+      await animateServerShot(m);
+      LIVE.lobby.state = m.after;
+      const mine = m.after.cur===LIVE.seat;
+      G.state = m.after.over ? 'over' : mine ? (G.players[LIVE.seat].shooter?'aim':'place') : 'wait';
+      say(mine ? '<b>your shot</b>' : `P${m.after.cur+1} is shooting…`);
+      liveHud();
+    }
+    if(m.type==='timeout'){ lmsg(`P${m.seat+1} ran out of time`, 'warn'); LIVE.lobby=m.lobby; }
+    if(m.type==='over'){
+      LIVE.on=false; G.state='over';
+      const won = m.winners.includes(LIVE.seat);
+      lmsg(won ? `you win ${(m.shareLamports/1e9).toFixed(4)} SOL` : 'table over', won?'ok':'warn');
+      say(won ? '<b>YOU WIN</b>' : 'table over', won?'#14f195':'#ffd76a');
+    }
+    if(m.type==='payout_ok') lmsg(`paid ${(m.lamports/1e9).toFixed(4)} SOL — ${m.signature.slice(0,12)}…`);
+    if(m.type==='payout_err') lmsg('payout failed: '+m.error,'bad');
+    if(m.type==='error') lmsg(m.error,'bad');
+  };
+}
+
+/** Send this player's shot intent. Called instead of local physics in live mode. */
+function liveShoot(dirx, diry, power){
+  if(!LIVE.ws || LIVE.ws.readyState!==1) return;
+  const shot = { dir:{x:dirx,y:diry}, power };
+  if(LIVE.pendingAngle!=null){ shot.angle = LIVE.pendingAngle; LIVE.pendingAngle=null; }
+  LIVE.ws.send(JSON.stringify({ type:'shoot', shot }));
+  G.state='wait'; say('shot sent…');
+}
+
+async function joinLiveTable(){
+  if(LIVE.busy) return; LIVE.busy=true;
+  try{
+    lmsg('checking table server…');
+    const cfg = await (await fetch(`${RINGER_SERVER}/config`)).json();
+    LIVE.cfg = cfg;
+    await loadPhysics();
+    if(!WALLET.address){ lmsg('sign in on slither-sol.com to play for money','warn'); return; }
+    lmsg(`buy-in ${cfg.buyinSol} SOL — approve in your wallet…`);
+    const sig = await payBuyIn(cfg);
+    if(!sig) return;
+    lmsg('verifying payment on-chain…');
+    const r = await fetch(`${RINGER_SERVER}/verify-entry`,{ method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ signature:sig, pubkey:WALLET.address }) });
+    const j = await r.json();
+    if(!j.ticket){ lmsg('entry rejected: '+(j.error||'unknown'),'bad'); return; }
+    lmsg('paid — seating you…');
+    liveConnect(j.ticket);
+  }catch(e){
+    lmsg('table unavailable: '+e.message,'bad');
+  }finally{ LIVE.busy=false; }
+}
+
+/** Buy-in transfer, signed by the player's own wallet. We never hold a key. */
+async function payBuyIn(cfg){
+  const prov = window.solana || window.phantom?.solana;
+  if(!prov?.signAndSendTransaction){
+    lmsg('need a Solana wallet extension to pay the buy-in','warn');
+    return null;
+  }
+  const web3 = await import('https://esm.sh/@solana/web3.js@1.95.3');
+  if(!prov.isConnected) await prov.connect();
+  const from = new web3.PublicKey(prov.publicKey.toBase58());
+  const { blockhash } = await (await fetch(`${RINGER_SERVER}/blockhash`)).json();
+  const tx = new web3.Transaction({ recentBlockhash:blockhash, feePayer:from }).add(
+    web3.SystemProgram.transfer({ fromPubkey:from,
+      toPubkey:new web3.PublicKey(cfg.treasury), lamports:cfg.buyinLamports })
+  );
+  const { signature } = await prov.signAndSendTransaction(tx);
+  return signature;
+}
+
+document.getElementById('bLive').onclick = joinLiveTable;
+
+/* ── lobby chrome: stake tabs, name, leaderboard, stats, skin preview ── */
+const SKIN_PREVIEW = ['linear-gradient(180deg,#5b3f26,#2b1c10)','linear-gradient(180deg,#33405f,#12172a)',
+                      'linear-gradient(180deg,#24493f,#0d1f1a)','linear-gradient(180deg,#632723,#28100e)'];
+function setStake(s){
+  G.stake = s;
+  document.querySelectorAll('[data-stake]').forEach(el=>
+    el.classList.toggle('active', el.dataset.stake===s));
+  const play = document.getElementById('bStart');
+  play.textContent = s==='free' ? '▶ SHOOT MARBLES' : '▶ JOIN $1 TABLE';
+}
+document.querySelectorAll('[data-stake]').forEach(el=> el.onclick = ()=> setStake(el.dataset.stake));
+
+function playerName(){ return (localStorage.getItem('ringer_name')||'').slice(0,16); }
+function syncName(){
+  const n = playerName();
+  document.getElementById('pname').value = n;
+  document.getElementById('avaLetter').textContent = (n||'P')[0].toUpperCase();
+}
+document.getElementById('bSaveName').onclick = ()=>{
+  const v = document.getElementById('pname').value.trim().slice(0,16);
+  localStorage.setItem('ringer_name', v); syncName(); wmsg('name saved');
+};
+syncName();
+
+function skinPreview(){
+  document.getElementById('skinPreview').style.background = SKIN_PREVIEW[G.skin] || SKIN_PREVIEW[0];
+  document.getElementById('skinName').textContent = (SKINS[G.skin]||SKINS[0]).name
+    .replace(/^(.)(.*)$/,(m,a,b)=>a+b.toLowerCase());
+}
+document.querySelectorAll('#segSkin button').forEach(b=> b.addEventListener('click', skinPreview));
+skinPreview();
+
+async function refreshLobbyStats(){
+  try{
+    const [lb, lo] = await Promise.all([
+      fetch(`${RINGER_SERVER}/leaderboard`).then(r=>r.json()),
+      fetch(`${RINGER_SERVER}/lobbies`).then(r=>r.json()),
+    ]);
+    document.getElementById('statOnline').textContent = (lo.lobbies||[]).length;
+    const usd = (lb.totalLamports/1e9) * (WALLET.price||0);
+    document.getElementById('statPaid').textContent = '$'+usd.toFixed(2);
+    const host = document.getElementById('lbList');
+    if(lb.top?.length){
+      host.innerHTML = lb.top.slice(0,6).map((r,i)=>
+        `<div class="lb-row"><div class="lb-rank">${i+1}</div>
+         <div class="lb-name">${r.name.replace(/[<>]/g,'')}</div>
+         <div class="lb-val">${(r.lamports/1e9).toFixed(3)} SOL</div></div>`).join('');
+    }
+  }catch(e){ /* server down — leave the empty state in place */ }
+}
+refreshLobbyStats();
+setInterval(refreshLobbyStats, 20000);
+
+document.getElementById('bInfo').onclick = ()=>{
+  const c = LIVE.cfg;
+  wmsg(c ? `$${c.buyinUsd} buy-in · ${c.minPlayers}-${c.maxPlayers}p · rake ${c.rakeBps/100}% · ${c.shotSeconds}s per shot`
+         : 'table server offline — free play only', c?'ok':'warn');
+};
 
 resize();
 requestAnimationFrame(frame);
