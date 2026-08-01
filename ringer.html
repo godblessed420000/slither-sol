@@ -121,6 +121,8 @@
   .wc-msg{min-height:14px;margin-top:12px;font-family:'Share Tech Mono',monospace;font-size:12px;
     letter-spacing:.3px;color:#14f195;line-height:1.3}
   .wc-icon:disabled,.wc-ref:disabled,.wc-dc:disabled{opacity:.4;cursor:not-allowed}
+  .wc-icon.spin{animation:wcspin .7s linear infinite}
+  @keyframes wcspin{to{transform:rotate(360deg)}}
   .wc-addr{ -webkit-user-select:text; user-select:text }
   .wc-foot{display:flex;align-items:center;justify-content:space-between;margin-top:14px}
   .wc-ref{display:inline-flex;align-items:center;gap:6px;font-family:'Orbitron',monospace;font-size:10px;
@@ -345,6 +347,7 @@
       <div class="wc-head">
         <div class="wc-title"><span class="wc-dot"></span>WALLET</div>
         <div class="wc-icons">
+          <button class="wc-icon" id="wcRefresh" title="Refresh balance">&#8635;</button>
           <button class="wc-icon" id="wcCopy" title="Copy address">&#10689;</button>
           <button class="wc-icon" id="wcScan" title="View on Solscan">&#9649;</button>
         </div>
@@ -1722,23 +1725,66 @@ function readSiteWallet(){
   return q && B58.test(q) ? q : null;
 }
 
+/* Balance comes straight from Solana RPC — the same way the main site reads it —
+   so every game on slither-sol.com shows the identical wallet and balance, with
+   no dependency on the Ringer game server being up. */
+const SOLANA_RPCS = [
+  'https://solana-rpc.publicnode.com',
+  'https://api.mainnet-beta.solana.com',
+];
+async function fetchLamports(pubkey){
+  for(const url of SOLANA_RPCS){
+    try{
+      const r = await fetch(url, { method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ jsonrpc:'2.0', id:1, method:'getBalance', params:[pubkey] }),
+        signal: AbortSignal.timeout(6000) });
+      const j = await r.json();
+      if(typeof j?.result?.value === 'number') return j.result.value;
+    }catch(e){}
+  }
+  return null;
+}
+async function fetchSolPrice(){
+  try{
+    const r = await fetch('https://api.coinbase.com/v2/prices/SOL-USD/spot',
+                          { signal: AbortSignal.timeout(5000) });
+    const p = Number((await r.json())?.data?.amount);
+    if(p > 0) return p;
+  }catch(e){}
+  return WALLET.price || 0;
+}
+
 async function walletRefresh(){
   WALLET.address = readSiteWallet();
   if(!WALLET.address){ walletRender(); return; }
-  try{
-    const r = await fetch(`${RINGER_SERVER}/balance?pubkey=${WALLET.address}`);
-    if(r.ok){
-      const j = await r.json();
-      WALLET.sol = j.sol || 0; WALLET.price = j.solPriceUsd || 0;
-      WALLET.usd = WALLET.sol * WALLET.price;
-      WALLET.serverUp = true;
-    }
-  }catch(e){ WALLET.serverUp = false; }   // game server not up yet → free play only
+  const [lamports, price] = await Promise.all([
+    fetchLamports(WALLET.address),
+    fetchSolPrice(),
+  ]);
+  if(lamports != null){
+    WALLET.sol = lamports / 1e9;
+    WALLET.price = price;
+    WALLET.usd = WALLET.sol * price;
+    WALLET.rpcUp = true;
+  }else{
+    WALLET.rpcUp = false;
+  }
   walletRender();
 }
 
 const NO_WALLET = 'no wallet yet — sign in on slither-sol.com first';
 
+document.getElementById('wcRefresh').onclick = async ()=>{
+  if(!WALLET.address) return wmsg(NO_WALLET, 'warn');
+  const el = document.getElementById('wcRefresh');
+  el.classList.add('spin'); wmsg('refreshing balance…');
+  await walletRefresh();
+  el.classList.remove('spin');
+  wmsg(WALLET.rpcUp
+       ? `balance updated — ${WALLET.sol.toFixed(4)} SOL`
+       : 'couldn\'t reach Solana RPC — check your connection and retry',
+       WALLET.rpcUp ? 'ok' : 'bad');
+};
 document.getElementById('wcCopy').onclick = async ()=>{
   if(!WALLET.address) return wmsg(NO_WALLET, 'warn');
   if(await copyText(WALLET.address)){
@@ -1918,9 +1964,25 @@ async function joinLiveTable(){
   if(LIVE.busy) return; LIVE.busy=true;
   try{
     lmsg('checking table server…');
-    const cfg = await (await fetch(`${RINGER_SERVER}/config`)).json();
-    LIVE.cfg = cfg;
+    let cfg;
+    try{
+      cfg = await (await fetch(`${RINGER_SERVER}/config`)).json();
+    }catch(e){
+      lmsg('online tables are offline right now — free hot-seat play still works','warn');
+      return;
+    }
+    LIVE.cfg = cfg; WALLET.serverUp = true;
     await loadPhysics();
+
+    // Server running without a treasury → real multiplayer, no money involved.
+    if(!cfg.paidEnabled){
+      lmsg('joining a free online table…');
+      const t = await (await fetch(`${RINGER_SERVER}/free-entry`,{method:'POST'})).json();
+      if(!t.ticket){ lmsg('could not get a seat','bad'); return; }
+      liveConnect(t.ticket);
+      return;
+    }
+
     if(!WALLET.address){ lmsg('sign in on slither-sol.com to play for money','warn'); return; }
     lmsg(`buy-in ${cfg.buyinSol} SOL — approve in your wallet…`);
     const sig = await payBuyIn(cfg);
