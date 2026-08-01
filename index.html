@@ -1575,7 +1575,7 @@ canvas{display:block;width:100%;height:100%;}
 // slither-sol.com is served by Vercel, which deploys this file verbatim on push.
 // This is the number players actually see. (The old GitHub Pages workflow that
 // auto-stamped V<VERSION> deployed to a dead host and is now disabled.)
-var GAME_BUILD = 'V439';
+var GAME_BUILD = 'V440';
 
 var PRIVY_APP_ID          = 'client-WY6aEf1eS4reRDrBq7ghh8arEiMaKSj1Vk37ZG8CAawEF';
 var HOUSE_WALLET_ADDRESS  = '2QnrdhxXYt8ythhGYHDz6MtTZE1z2bYvbss8z3ZGj2uJ';
@@ -2988,10 +2988,18 @@ async function execCashout(gross, label, destAddr) {
   var escrow = 0;
 
   // ── Live balance fetch — ensure we never overdraw ─────────────────────────
+  // A failed read must NOT fall through to a cached/zero value: broadcasting an
+  // unfundable TX looks like success to the UI while nothing lands on chain.
+  var _balanceOk = false;
   try {
     var _lr = await _fetchBalanceWithFallback(W.pubkey);
     W.onChainBalance = _lr.lamports / 1e9;
-  } catch(_le) { /* use cached value — scale check handles overdraft */ }
+    _balanceOk = true;
+  } catch(_le) { _balanceOk = false; }
+  if (!_balanceOk) {
+    toast('Could not read your wallet balance — check connection and retry', 'error');
+    return null;
+  }
 
   var onChainLam  = Math.floor((W.onChainBalance || 0) * 1e9);
   var feeLamports = Math.round(fee * 1e9);
@@ -2999,18 +3007,24 @@ async function execCashout(gross, label, destAddr) {
   var totalOut    = feeLamports + netLamports;
 
   // ── Scale if wallet can't cover the full amount ───────────────────────────
-  if (onChainLam > 0) {
-    var maxOut = Math.max(0, onChainLam - 5000); // reserve ~5k lamports for Solana TX fee
-    if (totalOut > maxOut) {
-      if (maxOut < 1000) { toast('Wallet balance too low to withdraw', 'error'); return null; }
-      var _sc     = maxOut / totalOut;
-      feeLamports = Math.floor(feeLamports * _sc);
-      if (isExternal) netLamports = maxOut; // for external: send everything available
-      fee  = feeLamports / 1e9;
-      net  = isExternal ? (netLamports / 1e9) : +(gross - fee).toFixed(6);
-      gross = +(fee + net).toFixed(6);
-      totalOut = feeLamports + (isExternal ? netLamports : 0);
-    }
+  // This check runs ALWAYS. It used to be wrapped in `if (onChainLam > 0)`, so a
+  // wallet with nothing on chain skipped every guard: the TX was built, signed and
+  // broadcast with skipPreflight, no RPC rejected it outright, the UI reported
+  // "✓ Withdraw complete" and the game balance was deducted — while nothing ever
+  // landed on chain. Verified: 0 lamports, 0 transactions, "success" shown.
+  var maxOut = Math.max(0, onChainLam - 5000); // reserve ~5k lamports for the network fee
+  if (maxOut < 1000) {
+    toast('No SOL in your wallet on-chain to withdraw — game winnings must be funded before cashing out', 'error');
+    return null;
+  }
+  if (totalOut > maxOut) {
+    var _sc     = maxOut / totalOut;
+    feeLamports = Math.floor(feeLamports * _sc);
+    if (isExternal) netLamports = maxOut; // for external: send everything available
+    fee  = feeLamports / 1e9;
+    net  = isExternal ? (netLamports / 1e9) : +(gross - fee).toFixed(6);
+    gross = +(fee + net).toFixed(6);
+    totalOut = feeLamports + (isExternal ? netLamports : 0);
   }
   if (!isExternal && feeLamports < 50) { toast('Balance too small to cashout', 'error'); return null; }
   if (isExternal && netLamports < 50)  { toast('Balance too small to withdraw', 'error'); return null; }
@@ -3089,17 +3103,23 @@ async function execCashout(gross, label, destAddr) {
     var rawTx = tx.serialize();
 
     toast('Broadcasting to Solana mainnet…', 'info');
-    txSent = true;
+    // txSent is set only once an RPC actually accepts the TX. It used to be set
+    // here, before sending — so if every endpoint rejected it, the catch block
+    // still treated it as broadcast, deducted the balance and told the player
+    // their money was on the way.
+    // skipPreflight is off so the network rejects an unfundable TX up front
+    // instead of accepting one that silently dies.
     var _coSendPs = SOLANA_RPCS.map(function(ep) {
       return Promise.race([
         (new solanaWeb3.Connection(ep, { commitment: 'confirmed' }))
-          .sendRawTransaction(rawTx, { skipPreflight: true, maxRetries: 3 }),
+          .sendRawTransaction(rawTx, { skipPreflight: false, maxRetries: 3 }),
         new Promise(function(_, rej){ setTimeout(function(){ rej(new Error('timeout')); }, 5000); })
       ]).catch(function(e){ console.warn('[cashout] send', ep.split('/')[2], e.message); return null; });
     });
     var _coSendAll = await Promise.all(_coSendPs);
     var sig = _coSendAll.find(function(s){ return s; }) || null;
     if (!sig) throw new Error('All RPC endpoints rejected cashout TX — check network');
+    txSent = true; // a real endpoint accepted it; only now is it genuinely in flight
     try { localStorage.setItem(_coLsKey, JSON.stringify({ sig: sig, ts: Date.now() })); } catch(_) {}
     console.log('[cashout] ✓ sig:', sig);
 
