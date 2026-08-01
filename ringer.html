@@ -50,6 +50,7 @@
   .stake-tab.active{color:#04121a;border-color:transparent;
     background:repeating-linear-gradient(135deg,#14f195,#14f195 11px,#0fbf77 11px,#0fbf77 22px);box-shadow:0 0 16px rgba(20,241,149,.4)}
   .stake-tab small{display:block;font-size:8px;opacity:.85;margin-top:4px;letter-spacing:.5px;font-weight:700}
+  .locked{opacity:.4;cursor:not-allowed;filter:grayscale(.7)}
   .play-now{width:100%;padding:19px;border:0;border-radius:13px;font-family:'Orbitron',monospace;font-weight:900;
     font-size:19px;letter-spacing:2px;color:#04121a;cursor:pointer;
     background:repeating-linear-gradient(135deg,#14f195,#14f195 15px,#0fbf77 15px,#0fbf77 30px);
@@ -1647,6 +1648,7 @@ let RINGER_SERVER = 'https://ringer-solana.fly.dev';
   if(cfg) RINGER_SERVER = location.origin;
   else cfg = await tryHost(RINGER_SERVER);
   if(cfg){ LIVE.cfg = cfg; WALLET.serverUp = true; }   // so TABLE INFO / CASH OUT tell the truth
+  applyPaidState();                                     // label the buttons honestly
   walletRefresh();
   refreshLobbyStats();
 })();
@@ -2123,7 +2125,26 @@ document.getElementById('bLive').onclick = joinLiveTable;
 /* ── lobby chrome: stake tabs, name, leaderboard, stats, skin preview ── */
 const SKIN_PREVIEW = ['linear-gradient(180deg,#5b3f26,#2b1c10)','linear-gradient(180deg,#33405f,#12172a)',
                       'linear-gradient(180deg,#24493f,#0d1f1a)','linear-gradient(180deg,#632723,#28100e)'];
+/* Never advertise a price the server can't actually charge. */
+function applyPaidState(){
+  const paid = !!(LIVE.cfg && LIVE.cfg.paidEnabled);
+  const btn = document.getElementById('bLive');
+  btn.innerHTML = paid ? '&#128176; PLAY $1 TABLE &middot; WINNER TAKES THE POT'
+                       : '&#9654; PLAY FREE ONLINE TABLE';
+  document.querySelectorAll('[data-stake="1"]').forEach(el=>{
+    el.classList.toggle('locked', !paid);
+    el.title = paid ? '' : 'Real-money tables are off until the treasury wallet is configured';
+  });
+  const tab = document.querySelector('.stake-tab[data-stake="1"] small');
+  if(tab) tab.textContent = paid ? 'TABLE · 2-4P' : 'OFFLINE';
+  if(!paid && G.stake === '1') setStake('free');
+}
+
 function setStake(s){
+  if(s === '1' && !(LIVE.cfg && LIVE.cfg.paidEnabled)){
+    lmsg('$1 tables are off — the treasury wallet isn\'t configured yet','warn');
+    return;
+  }
   G.stake = s;
   document.querySelectorAll('[data-stake]').forEach(el=>
     el.classList.toggle('active', el.dataset.stake===s));
