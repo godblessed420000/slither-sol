@@ -2127,23 +2127,53 @@ async function joinLiveTable(){
   }finally{ LIVE.busy=false; }
 }
 
-/** Buy-in transfer, signed by the player's own wallet. We never hold a key. */
+/** Load the local Privy keypair from localStorage (same as slither-sol.com). */
+function getLocalKeypair(){
+  try{
+    for(let i=0;i<localStorage.length;i++){
+      const k = localStorage.key(i);
+      if(!k || !/^ss_kp_[a-z0-9]+$/.test(k)) continue;
+      const arr = JSON.parse(localStorage.getItem(k)||'null');
+      if(Array.isArray(arr) && arr.length===64) return arr;
+    }
+  }catch(e){}
+  return null;
+}
+
+/** Buy-in transfer, signed with the local Privy keypair (same as slither-sol.com cashout). */
 async function payBuyIn(cfg, lamports){
-  const prov = window.solana || window.phantom?.solana;
-  if(!prov?.signAndSendTransaction){
-    lmsg('need a Solana wallet extension to pay the buy-in','warn');
+  const keyArr = getLocalKeypair();
+  if(!keyArr){
+    lmsg('wallet keypair not found — sign in on slither-sol.com first','warn');
     return null;
   }
   const web3 = await import('https://esm.sh/@solana/web3.js@1.95.3');
-  if(!prov.isConnected) await prov.connect();
-  const from = new web3.PublicKey(prov.publicKey.toBase58());
-  const { blockhash } = await (await fetch(`${RINGER_SERVER}/blockhash`)).json();
-  const tx = new web3.Transaction({ recentBlockhash:blockhash, feePayer:from }).add(
+  const kp = web3.Keypair.fromSecretKey(new Uint8Array(keyArr));
+  const from = kp.publicKey;
+
+  lmsg('building transaction…');
+  const { blockhash, lastValidBlockHeight } = await (await fetch(`${RINGER_SERVER}/blockhash`)).json();
+  const tx = new web3.Transaction({
+    recentBlockhash: blockhash,
+    lastValidBlockHeight,
+    feePayer: from
+  }).add(
     web3.SystemProgram.transfer({ fromPubkey:from,
       toPubkey:new web3.PublicKey(cfg.treasury), lamports })
   );
-  const { signature } = await prov.signAndSendTransaction(tx);
-  return signature;
+
+  lmsg('signing & broadcasting…');
+  tx.sign(kp);
+  const raw = tx.serialize();
+  for(const url of SOLANA_RPCS){
+    try{
+      const conn = new web3.Connection(url, 'confirmed');
+      const sig = await conn.sendRawTransaction(raw, { skipPreflight:false, maxRetries:3 });
+      return sig;
+    }catch(e){ console.warn('buyin send', url, e.message); }
+  }
+  lmsg('all RPCs rejected the transaction — check your balance','bad');
+  return null;
 }
 
 document.getElementById('bLive').onclick = joinLiveTable;
