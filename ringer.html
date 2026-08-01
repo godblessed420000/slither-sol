@@ -2149,18 +2149,8 @@ document.getElementById('bLive').onclick = joinLiveTable;
 /* ── lobby chrome: stake tabs, name, leaderboard, stats, skin preview ── */
 const SKIN_PREVIEW = ['linear-gradient(180deg,#5b3f26,#2b1c10)','linear-gradient(180deg,#33405f,#12172a)',
                       'linear-gradient(180deg,#24493f,#0d1f1a)','linear-gradient(180deg,#632723,#28100e)'];
-/* Never advertise a price the server can't actually charge. */
 function applyPaidState(){
-  const paid = !!(LIVE.cfg && LIVE.cfg.paidEnabled);
-  const btn = document.getElementById('bLive');
   updateLiveBtn();
-  document.querySelectorAll('[data-stake]').forEach(el=>{
-    if(el.dataset.stake !== 'free' && el.dataset.stake !== 'custom'){
-      el.classList.toggle('locked', !paid);
-      el.title = paid ? '' : 'Real-money tables are off until the treasury wallet is configured';
-    }
-  });
-  if(!paid && G.stake !== 'free') setStake('free');
 }
 
 function updateLiveBtn(){
@@ -2174,7 +2164,6 @@ function updateLiveBtn(){
 }
 
 function setStake(s){
-  const paid = !!(LIVE.cfg && LIVE.cfg.paidEnabled);
   if(s === 'custom'){
     document.getElementById('customAmtRow').classList.remove('hidden');
     document.querySelectorAll('[data-stake]').forEach(el=>
@@ -2182,10 +2171,6 @@ function setStake(s){
     return;
   }
   document.getElementById('customAmtRow').classList.add('hidden');
-  if(s !== 'free' && !paid){
-    lmsg('paid tables are off — the treasury wallet isn\'t configured yet','warn');
-    return;
-  }
   G.stake = s;
   G.stakeUsd = s === 'free' ? 0 : parseFloat(s);
   document.querySelectorAll('[data-stake]').forEach(el=>
