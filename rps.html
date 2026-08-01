@@ -372,6 +372,150 @@ body::after{content:'';position:fixed;inset:0;z-index:-1;background:linear-gradi
 .rps-open-stake{flex-shrink:0;font-family:'Orbitron',monospace;font-size:.5rem;font-weight:800;color:var(--gold);
   padding:2px 7px;border-radius:6px;background:rgba(255,215,0,.1);border:1px solid rgba(255,215,0,.3);}
 canvas#bgCanvas{position:fixed;top:0;left:0;width:100%;height:100%;z-index:-2;pointer-events:none;}
+/* ══════════════════ ARCADE LOBBY (SolOrbit layout, RPS flavour) ══════════════════ */
+#rpsMenu{position:relative;z-index:3;width:100%;max-width:1200px;margin:0 auto;padding:4px 14px 40px;
+  font-family:'Orbitron',monospace}
+.rl-top{display:flex;justify-content:center;gap:10px;margin:2px 0 4px;flex-wrap:wrap}
+.rl-pill{font-family:'Orbitron',monospace;font-size:12px;font-weight:700;letter-spacing:1px;color:#7fe6f5;
+  background:rgba(20,241,149,.05);border:1px solid rgba(63,208,224,.4);border-radius:11px;padding:9px 20px;
+  cursor:pointer;transition:all .16s}
+.rl-pill:hover{transform:translateY(-1px);border-color:#3fd0e0}
+.rl-pill.active{color:#04121a;background:linear-gradient(135deg,#14f195,#0fbf77);border-color:transparent;
+  box-shadow:0 0 16px rgba(20,241,149,.45)}
+.rl-title{text-align:center;margin:10px 0 22px;position:relative}
+.rl-title h1{font-family:'Orbitron',monospace;font-weight:900;letter-spacing:5px;margin:0;
+  font-size:clamp(26px,5.4vw,58px);line-height:1.05;
+  background:linear-gradient(92deg,#14f195 0%,#3fd0e0 38%,#9945ff 72%,#ff5fd2 100%);
+  background-size:220% auto;-webkit-background-clip:text;background-clip:text;color:transparent;
+  filter:drop-shadow(0 0 22px rgba(20,241,149,.4)) drop-shadow(0 0 40px rgba(153,69,255,.28));
+  animation:rlflow 7s linear infinite}
+@keyframes rlflow{to{background-position:220% center}}
+.rl-sub{font-size:11px;letter-spacing:5px;color:#3fd0e0;margin-top:8px;opacity:.9}
+.rl-glyphs{position:absolute;inset:-14px 0 auto;display:flex;justify-content:center;gap:34px;
+  font-size:26px;opacity:.16;pointer-events:none}
+.rl-glyphs span{animation:rlbob 4.2s ease-in-out infinite}
+.rl-glyphs span:nth-child(2){animation-delay:.5s}
+.rl-glyphs span:nth-child(3){animation-delay:1s}
+@keyframes rlbob{0%,100%{transform:translateY(0) rotate(-4deg)}50%{transform:translateY(-9px) rotate(4deg)}}
+
+.rl-grid{display:grid;grid-template-columns:minmax(230px,1fr) minmax(330px,1.4fr) minmax(230px,1fr);
+  gap:18px;align-items:start}
+@media(max-width:960px){.rl-grid{grid-template-columns:1fr;max-width:480px;margin:0 auto}}
+.rl-col{display:flex;flex-direction:column;gap:16px}
+.rl-panel{position:relative;background:rgba(8,12,22,.62);border:1px solid rgba(63,208,224,.22);
+  border-radius:16px;padding:16px;backdrop-filter:blur(4px);overflow:hidden}
+/* animated hairline that sweeps the panel edge — the "cooler" bit */
+.rl-panel::before{content:'';position:absolute;inset:-1px;border-radius:17px;padding:1px;
+  background:linear-gradient(120deg,transparent 30%,rgba(20,241,149,.55),rgba(153,69,255,.5),transparent 70%);
+  background-size:300% 100%;-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  -webkit-mask-composite:xor;mask-composite:exclude;opacity:.75;animation:rlsweep 6s linear infinite;pointer-events:none}
+@keyframes rlsweep{to{background-position:300% 0}}
+.rl-h{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12px;font-weight:700;
+  letter-spacing:1.5px;color:#eef4ff;margin-bottom:12px}
+.rl-live{font-size:9px;color:#14f195;border:1px solid rgba(20,241,149,.4);border-radius:999px;padding:3px 9px;
+  display:inline-flex;gap:5px;align-items:center;letter-spacing:1px}
+.rl-live i{width:6px;height:6px;border-radius:50%;background:#14f195;box-shadow:0 0 7px #14f195;
+  animation:rlpulse 1.6s ease-in-out infinite}
+@keyframes rlpulse{50%{opacity:.35}}
+.rl-namerow{display:flex;gap:8px;align-items:center;margin-bottom:14px}
+.rl-ava{width:42px;height:42px;flex:0 0 42px;border-radius:11px;display:flex;align-items:center;justify-content:center;
+  font-weight:900;color:#04121a;font-size:19px;background:linear-gradient(135deg,#14f195,#3fd0e0)}
+.rl-namerow input{flex:1;padding:12px 14px;border-radius:11px;border:1px solid #2a344f;background:#0d1220;
+  color:#e8ecf5;font-size:14px;font-family:'Orbitron',monospace}
+.rl-modes{display:flex;gap:8px;margin-bottom:12px}
+.rl-mode{flex:1;text-align:center;padding:11px 4px;border-radius:11px;font-family:'Orbitron',monospace;
+  font-size:13px;font-weight:700;cursor:pointer;border:1px solid rgba(63,208,224,.35);color:#7fe6f5;
+  background:rgba(20,241,149,.04);transition:all .16s}
+.rl-mode small{display:block;font-size:8px;opacity:.85;margin-top:4px;letter-spacing:.5px}
+.rl-mode.active{color:#04121a;border-color:transparent;
+  background:repeating-linear-gradient(135deg,#14f195,#14f195 11px,#0fbf77 11px,#0fbf77 22px);
+  box-shadow:0 0 16px rgba(20,241,149,.4)}
+.rl-play{width:100%;padding:19px;border:0;border-radius:13px;font-family:'Orbitron',monospace;font-weight:900;
+  font-size:19px;letter-spacing:2px;color:#04121a;cursor:pointer;position:relative;overflow:hidden;
+  background:repeating-linear-gradient(135deg,#14f195,#14f195 15px,#0fbf77 15px,#0fbf77 30px);
+  box-shadow:0 0 26px rgba(20,241,149,.45);transition:all .16s}
+.rl-play:hover{box-shadow:0 0 44px rgba(20,241,149,.75);transform:translateY(-1px)}
+.rl-play::after{content:'';position:absolute;top:0;left:-60%;width:40%;height:100%;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.5),transparent);animation:rlshine 3.4s ease-in-out infinite}
+@keyframes rlshine{0%{left:-60%}55%,100%{left:130%}}
+.rl-stats{display:flex;gap:10px;margin-top:12px}
+.rl-stat{flex:1;background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.06);border-radius:11px;padding:11px;text-align:center}
+.rl-stat .v{font-size:18px;font-weight:800;color:#14f195}
+.rl-stat .k{font-size:9px;color:#8a94ad;letter-spacing:1px;margin-top:3px}
+.rl-mini{display:flex;gap:8px;justify-content:center;margin-top:14px;flex-wrap:wrap}
+.rl-minibtn{font-family:'Orbitron',monospace;font-size:10px;font-weight:700;border-radius:9px;padding:8px 13px;
+  cursor:pointer;letter-spacing:.5px;text-decoration:none;
+  background:rgba(153,69,255,.15);border:1px solid rgba(153,69,255,.5);color:#c9a3ff}
+.rl-minibtn.back{background:rgba(255,60,60,.12);border-color:rgba(255,80,80,.5);color:#ff8a8a}
+/* weapon showcase */
+.rl-weapons{display:flex;gap:10px;justify-content:center}
+.rl-weapon{flex:1;aspect-ratio:1;border-radius:14px;display:flex;align-items:center;justify-content:center;
+  font-size:30px;cursor:pointer;border:1px solid rgba(63,208,224,.3);background:radial-gradient(circle at 50% 35%,#131c33,#070b14);
+  transition:all .16s}
+.rl-weapon:hover{transform:translateY(-3px) scale(1.04);border-color:#14f195;box-shadow:0 0 22px rgba(20,241,149,.4)}
+.rl-weapon.sel{border-color:#14f195;box-shadow:0 0 26px rgba(20,241,149,.5) inset,0 0 18px rgba(20,241,149,.35)}
+.rl-foot{margin:26px auto 0;text-align:center;display:flex;gap:10px;justify-content:center;align-items:center;
+  flex-wrap:wrap;font-size:11px;letter-spacing:.5px;color:#66708a}
+.rl-foot a{color:#8a94ad;text-decoration:none}
+.rl-foot a:hover{color:#14f195}
+/* scanline sheen over the whole lobby */
+#rpsMenu::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:1;opacity:.05;
+  background:repeating-linear-gradient(0deg,#fff 0 1px,transparent 1px 3px)}
+.rl-howto{margin:0 0 0 16px;font-family:'Share Tech Mono',monospace;font-size:12px;line-height:1.75;color:#c3ccdd}
+.rl-howto b{color:#14f195}
+.rl-fair{color:#7fe6f5}
+.rl-friends-empty{font-size:12px;color:#8a94ad;text-align:center;padding:14px 4px;line-height:1.6;font-family:'Share Tech Mono',monospace}
+
+/* ── wallet card — matches SolOrbit / agar-solana exactly ── */
+.wcard{background:rgba(8,12,22,.55);border:1px solid rgba(20,241,149,.22);
+  border-radius:16px;padding:16px 16px 14px;font-family:'Orbitron',monospace}
+.wc-head{display:flex;align-items:center;justify-content:space-between}
+.wc-title{display:flex;align-items:center;gap:9px;font-size:13px;font-weight:700;letter-spacing:2px;color:#eef4ff}
+.wc-dot{width:11px;height:11px;border-radius:50%;
+  background:radial-gradient(circle at 35% 30%,#ff9d6e,#e8563d);box-shadow:0 0 8px rgba(232,86,61,.6)}
+.wc-icons{display:flex;gap:8px}
+.wc-icon{width:38px;height:38px;border-radius:9px;background:rgba(20,241,149,.06);
+  border:1px solid rgba(63,208,224,.5);color:#7fe6f5;font-size:15px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;transition:all .14s}
+.wc-icon:hover{background:rgba(63,208,224,.18);box-shadow:0 0 12px rgba(63,208,224,.35)}
+.wc-mid{display:flex;align-items:center;justify-content:space-between;margin-top:14px;gap:10px}
+.wc-addr{font-family:'Share Tech Mono',monospace;font-size:13px;color:#14f195;cursor:pointer;letter-spacing:.5px;user-select:text}
+.wc-addr:hover{color:#7dffc6}
+.wc-net{display:inline-flex;align-items:center;gap:6px;font-size:10px;font-weight:700;letter-spacing:1.5px;
+  color:#14f195;border:1px solid rgba(20,241,149,.5);border-radius:999px;padding:5px 11px;
+  background:rgba(20,241,149,.06);white-space:nowrap}
+.wc-net::before{content:'';width:6px;height:6px;border-radius:50%;background:#14f195;box-shadow:0 0 6px #14f195}
+.wc-bal{margin-top:12px;font-size:34px;font-weight:900;letter-spacing:1px;color:#14f195;
+  text-shadow:0 0 14px rgba(20,241,149,.4);line-height:1}
+.wc-unit{font-size:20px;font-weight:700;margin-left:6px}
+.wc-usd{margin-top:6px;font-size:14px;color:#8a94ad}
+.wc-actions{display:flex;gap:10px;margin-top:16px}
+.wc-btn{flex:1;padding:13px 10px;border-radius:11px;font-family:'Orbitron',monospace;font-size:13px;
+  font-weight:700;letter-spacing:1px;cursor:pointer;transition:all .14s}
+.wc-btn.green{border:0;background:linear-gradient(135deg,#14f195,#0fbf77);color:#04121a;box-shadow:0 0 18px rgba(20,241,149,.25)}
+.wc-btn.green:hover{box-shadow:0 0 26px rgba(20,241,149,.5)}
+.wc-btn.cyan{background:transparent;border:1.5px solid #3fd0e0;color:#7fe6f5}
+.wc-btn.cyan:hover{background:rgba(63,208,224,.14);box-shadow:0 0 18px rgba(63,208,224,.3)}
+.wc-btn:disabled{opacity:.5;cursor:not-allowed;box-shadow:none}
+.wc-msg{min-height:14px;margin-top:12px;font-family:'Share Tech Mono',monospace;font-size:12px;
+  letter-spacing:.3px;color:#14f195;line-height:1.3}
+.wc-foot{display:flex;align-items:center;justify-content:space-between;margin-top:14px}
+.wc-ref{display:inline-flex;align-items:center;gap:6px;font-family:'Orbitron',monospace;font-size:10px;
+  letter-spacing:.5px;color:#7fe6f5;background:rgba(63,208,224,.08);border:1px solid rgba(63,208,224,.3);
+  border-radius:9px;padding:8px 10px;cursor:pointer;line-height:1.15;text-align:left}
+.wc-ref:hover{background:rgba(63,208,224,.16)}
+.wc-dc{font-family:'Orbitron',monospace;font-size:10px;letter-spacing:1px;color:#8a94ad;background:none;border:0;cursor:pointer}
+.wc-dc:hover{color:#ff6b6b}
+
+/* keep relocated widgets tidy inside the new panels — these were built to
+   float free (fixed top-left card, centred 520px panel); the lobby now owns
+   their position, so neutralise the old placement rules when nested. */
+#rpsMenu .rps-lb-card,#rpsMenu .rps-open-card{position:static !important;background:none;border:0;padding:0;
+  margin:0;box-shadow:none;width:auto;max-width:none;top:auto;left:auto}
+#rpsMenu .rps-lb-inner{padding:0;background:none;border:0}
+#rpsMenu .panel{max-width:none;width:100%;align-items:stretch}
+#rpsMenu .wager-box{max-width:none}
+body.rl-active{padding-top:60px}
 </style>
 </head>
 <body>
@@ -383,50 +527,83 @@ canvas#bgCanvas{position:fixed;top:0;left:0;width:100%;height:100%;z-index:-2;po
   SLITHER.SOL
 </a>
 
-<div class="subtitle">Choose your weapon</div>
-
-<div class="modes">
-  <div class="mode-tab active" id="tabCpu" onclick="setMode('cpu')">Free · vs CPU</div>
-  <div class="mode-tab live" id="tabLive" onclick="setMode('live')">💰 Live · PvP</div>
-</div>
-
-<!-- ══════════ CPU (FREE) PANEL ══════════ -->
-<div class="panel" id="cpuPanel">
-  <div class="scoreboard">
-    <div class="score-item"><div class="score-label">Wins</div><div class="score-val win" id="wins">0</div></div>
-    <div class="score-item"><div class="score-label">Losses</div><div class="score-val lose" id="losses">0</div></div>
-    <div class="score-item"><div class="score-label">Draws</div><div class="score-val draw" id="draws">0</div></div>
+<div id="rpsMenu">
+  <div class="rl-top">
+    <button class="rl-pill active" id="tabCpu" onclick="setMode('cpu')">FREE</button>
+    <button class="rl-pill" id="tabLive" onclick="setMode('live')">💰 LIVE $1</button>
   </div>
-  <div class="arena">
-    <div class="fighter"><div class="fighter-label">You</div><div class="fighter-choice" id="cpuPlayerPick">❓</div></div>
-    <div class="vs">VS</div>
-    <div class="fighter"><div class="fighter-label">CPU</div><div class="fighter-choice" id="cpuCpuPick">❓</div></div>
+  <div class="rl-title">
+    <div class="rl-glyphs"><span>🪨</span><span>📄</span><span>✂️</span></div>
+    <h1>ROCK PAPER SCISSORS</h1>
+    <div class="rl-sub">· SOLANA PVP CASHOUT ARENA ·</div>
   </div>
-  <div class="result" id="cpuResult">&nbsp;</div>
-  <div class="picks">
-    <button class="pick-btn" data-choice="rock" onclick="cpuPlay('rock')" title="Rock">🪨</button>
-    <button class="pick-btn" data-choice="paper" onclick="cpuPlay('paper')" title="Paper">📄</button>
-    <button class="pick-btn" data-choice="scissors" onclick="cpuPlay('scissors')" title="Scissors">✂️</button>
-  </div>
-  <div class="streak" id="cpuStreak">&nbsp;</div>
-</div>
 
-<!-- Local TOP STREAKS leaderboard (top-left, persistent across modes) -->
-<div class="rps-lb-card cpu-lb-card">
-  <div class="rps-lb-inner">
-    <div class="rps-lb-hdr">
-      <span class="rps-lb-title">🏆 Top Streaks — This Device</span>
-      <span class="rps-lb-live"><i></i>LIVE</span>
+  <div class="rl-grid">
+    <!-- ══════════ LEFT ══════════ -->
+    <div class="rl-col">
+      <div class="rl-panel">
+        <div class="rl-h"><span>🏆 TOP STREAKS</span><span class="rl-live"><i></i>LIVE</span></div>
+        <!-- Local TOP STREAKS leaderboard (persistent across modes) -->
+        <div class="rps-lb-card cpu-lb-card">
+          <div class="rps-lb-inner">
+            <div class="cpu-lb-nick">
+              <label>PLAYING AS</label>
+              <input id="cpuNickInput" maxlength="16" placeholder="Your name" oninput="onCpuNickChange(this.value)">
+              <button class="cpu-lb-reset" onclick="resetCpuLb()" title="Clear leaderboard">CLEAR</button>
+            </div>
+            <div id="cpuLbList" class="rps-lb-list"></div>
+            <div class="rps-lb-note">Personal-best streaks are saved on this device. Beat your record!</div>
+          </div>
+        </div>
+      </div>
+      <div class="rl-panel">
+        <div class="rl-h"><span>📖 HOW TO PLAY</span></div>
+        <ul class="rl-howto">
+          <li>Pick <b>rock, paper or scissors</b> — best of 5 wins the match.</li>
+          <li><b>FREE</b> mode plays instantly against the CPU, no wallet needed.</li>
+          <li><b>$1 LIVE</b> matches you with a real opponent for real SOL.</li>
+          <li>Winner takes the pot, minus a small house fee.</li>
+          <li><span class="rl-fair">🔒 Provably fair</span> — commit-reveal, true 1-in-3 odds.</li>
+        </ul>
+      </div>
     </div>
-    <div class="cpu-lb-nick">
-      <label>PLAYING AS</label>
-      <input id="cpuNickInput" maxlength="16" placeholder="Your name" oninput="onCpuNickChange(this.value)">
-      <button class="cpu-lb-reset" onclick="resetCpuLb()" title="Clear leaderboard">CLEAR</button>
+
+    <!-- ══════════ CENTRE ══════════ -->
+    <div class="rl-col">
+      <div class="rl-panel">
+
+  <!-- ══════════ CPU (FREE) PANEL ══════════ -->
+  <div class="panel" id="cpuPanel">
+    <div class="rl-modes">
+      <div class="rl-mode active" data-m="cpu">FREE<small>PRACTICE VS CPU</small></div>
+      <div class="rl-mode" data-m="live" onclick="setMode('live')">$1 LIVE<small>WINNER TAKES POT</small></div>
     </div>
-    <div id="cpuLbList" class="rps-lb-list"></div>
-    <div class="rps-lb-note">Personal-best streaks are saved on this device. Beat your record!</div>
+    <div class="scoreboard">
+      <div class="score-item"><div class="score-label">Wins</div><div class="score-val win" id="wins">0</div></div>
+      <div class="score-item"><div class="score-label">Losses</div><div class="score-val lose" id="losses">0</div></div>
+      <div class="score-item"><div class="score-label">Draws</div><div class="score-val draw" id="draws">0</div></div>
+    </div>
+    <div class="arena">
+      <div class="fighter"><div class="fighter-label">You</div><div class="fighter-choice" id="cpuPlayerPick">❓</div></div>
+      <div class="vs">VS</div>
+      <div class="fighter"><div class="fighter-label">CPU</div><div class="fighter-choice" id="cpuCpuPick">❓</div></div>
+    </div>
+    <div class="result" id="cpuResult">&nbsp;</div>
+    <div class="picks">
+      <button class="pick-btn" data-choice="rock" onclick="cpuPlay('rock')" title="Rock">🪨</button>
+      <button class="pick-btn" data-choice="paper" onclick="cpuPlay('paper')" title="Paper">📄</button>
+      <button class="pick-btn" data-choice="scissors" onclick="cpuPlay('scissors')" title="Scissors">✂️</button>
+    </div>
+    <div class="streak" id="cpuStreak">&nbsp;</div>
+    <div class="rl-stats">
+      <div class="rl-stat"><div class="v" id="rlOnline">—</div><div class="k">PLAYERS ONLINE</div></div>
+      <div class="rl-stat"><div class="v" id="rlPaid">—</div><div class="k">TOTAL PAID OUT</div></div>
+    </div>
+    <div class="rl-mini">
+      <a class="rl-minibtn" href="#" onclick="setMode('live');return false">ⓘ LIVE TABLE INFO</a>
+      <a class="rl-minibtn back" href="/">← SLITHER.SOL</a>
+    </div>
   </div>
-</div>
 
 <!-- ══════════ LIVE ($1) PANEL ══════════ -->
 <div class="panel hidden" id="livePanel">
@@ -445,6 +622,10 @@ canvas#bgCanvas{position:fixed;top:0;left:0;width:100%;height:100%;z-index:-2;po
       <input id="rpsCustomStake" class="rps-custom-input" type="number" min="0.25" step="0.25" placeholder="Custom $" oninput="onCustomStake(this.value)">
     </div>
 
+    <div class="rl-modes">
+      <div class="rl-mode" data-m="cpu" onclick="setMode('cpu')">FREE<small>PRACTICE VS CPU</small></div>
+      <div class="rl-mode active" data-m="live">$1 LIVE<small>WINNER TAKES POT</small></div>
+    </div>
     <div class="live-status" id="lobbyStatus">Ready to find a match.</div>
     <button class="big-btn" id="findBtn" onclick="findMatch()">Play $1</button>
     <div id="searchActions" class="search-actions hidden">
@@ -516,6 +697,48 @@ canvas#bgCanvas{position:fixed;top:0;left:0;width:100%;height:100%;z-index:-2;po
   </div>
 
 </div>
+      </div><!-- /rl-panel centre -->
+    </div><!-- /rl-col centre -->
+
+    <!-- ══════════ RIGHT ══════════ -->
+    <div class="rl-col">
+      <div class="wcard" id="rlWallet">
+        <div class="wc-head">
+          <div class="wc-title"><span class="wc-dot"></span>WALLET</div>
+          <div class="wc-icons">
+            <button class="wc-icon" id="rlCopy" title="Copy address">&#10689;</button>
+            <button class="wc-icon" id="rlScan" title="View on Solscan">&#9649;</button>
+          </div>
+        </div>
+        <div class="wc-mid">
+          <span class="wc-addr" id="rlAddr">not connected</span>
+          <span class="wc-net">MAINNET</span>
+        </div>
+        <div class="wc-bal"><span id="rlBal">0.0000</span><span class="wc-unit">SOL</span></div>
+        <div class="wc-usd" id="rlUsd">&asymp; $0.00</div>
+        <div class="wc-actions">
+          <button class="wc-btn green" id="rlDeposit">DEPOSIT</button>
+          <button class="wc-btn cyan" id="rlCashout">CASH OUT</button>
+        </div>
+        <div class="wc-msg" id="rlMsg"></div>
+        <div class="wc-foot">
+          <button class="wc-ref" id="rlRef">&#128184; Referral<br>earnings</button>
+          <button class="wc-dc" id="rlDisconnect">DISCONNECT</button>
+        </div>
+      </div>
+      <div class="rl-panel">
+        <div class="rl-h"><span>👥 FRIENDS</span></div>
+        <div class="rl-friends-empty">No friends yet — add someone by their in-game name to challenge them directly.</div>
+      </div>
+    </div>
+  </div><!-- /rl-grid -->
+
+  <div class="rl-foot">
+    <a href="/terms.html">Terms of Service</a><span>&middot;</span>
+    <a href="/privacy.html">Privacy Policy</a><span>&middot;</span>
+    <span>&copy; 2026 Slither.SOL</span>
+  </div>
+</div><!-- /rpsMenu -->
 
 <!-- ══════════ CHALLENGE MODALS ══════════ -->
 <div id="challengeSendModal" class="chal-back hidden" onclick="closeChallengeModal(event)">
@@ -1604,6 +1827,76 @@ async function watchForPayout(){
 })();
 
 window.addEventListener('beforeunload', function(){ try{ if(_queue) _queue.presence.leave(); if(_match) _match.presence.leave(); if(_lobby) _lobby.presence.leave(); }catch(e){} });
+
+/* ══════════ lobby wallet card (right column) ══════════
+   Reuses loadWallet() and TX_RPC verbatim — the exact same signed-in-wallet
+   lookup the live $1 games already trust — instead of re-deriving it. */
+var _rlWallet = null, _rlMsgT = 0;
+
+function rlShort(a){ return a ? a.slice(0,6)+'…'+a.slice(-4) : 'not connected'; }
+function rlMsg(text, kind){
+  var el = $('rlMsg'); if(!el) return;
+  el.textContent = text;
+  el.style.color = kind==='bad' ? '#ff8a8a' : kind==='warn' ? '#ffd76a' : '#14f195';
+  clearTimeout(_rlMsgT);
+  _rlMsgT = setTimeout(function(){ el.textContent=''; }, 4200);
+}
+async function rlCopy(text){
+  try{ if(navigator.clipboard && window.isSecureContext){ await navigator.clipboard.writeText(text); return true; } }catch(e){}
+  try{
+    var ta=document.createElement('textarea'); ta.value=text; ta.setAttribute('readonly','');
+    ta.style.cssText='position:fixed;top:-1000px;opacity:0';
+    document.body.appendChild(ta); ta.select(); ta.setSelectionRange(0,text.length);
+    var ok=document.execCommand('copy'); document.body.removeChild(ta); return ok;
+  }catch(e){ return false; }
+}
+function rlRender(){
+  $('rlAddr').textContent = rlShort(_rlWallet && _rlWallet.pubkey);
+  $('rlDeposit').textContent = _rlWallet ? 'DEPOSIT' : 'CONNECT';
+}
+async function rlRefresh(){
+  _rlWallet = loadWallet();          // same function the live $1 matches use
+  rlRender();
+  if(!_rlWallet) return;
+  try{
+    var conn = new solanaWeb3.Connection(TX_RPC, 'confirmed');
+    var lamports = await conn.getBalance(new solanaWeb3.PublicKey(_rlWallet.pubkey));
+    var sol = lamports/1e9;
+    $('rlBal').textContent = sol.toFixed(4);
+    $('rlUsd').innerHTML = '&asymp; $' + (sol*solPrice).toFixed(2);
+  }catch(e){ /* RPC hiccup — keep showing the address, last-known balance */ }
+}
+var RL_NO_WALLET = 'sign in on slither-sol.com first';
+$('rlCopy').onclick = async function(){
+  if(!_rlWallet) return rlMsg(RL_NO_WALLET,'warn');
+  rlMsg(await rlCopy(_rlWallet.pubkey) ? 'address copied to clipboard' : "couldn't copy — tap the address to select it", 'ok');
+};
+$('rlAddr').onclick = function(){ $('rlCopy').onclick(); };
+$('rlScan').onclick = function(){
+  if(!_rlWallet) return rlMsg(RL_NO_WALLET,'warn');
+  window.open('https://solscan.io/account/'+_rlWallet.pubkey,'_blank','noopener');
+};
+$('rlDeposit').onclick = async function(){
+  if(!_rlWallet){ window.location.href='/'; return; }
+  var ok = await rlCopy(_rlWallet.pubkey);
+  rlMsg(ok ? 'address copied — send mainnet SOL to it, balance updates shortly' : 'your address is shown above — send mainnet SOL to it', ok?'ok':'warn');
+};
+$('rlCashout').onclick = function(){
+  if(!_rlWallet) return rlMsg(RL_NO_WALLET,'warn');
+  rlMsg('winnings from $1 matches are paid straight to your wallet when a match settles');
+};
+$('rlRef').onclick = async function(){
+  if(!_rlWallet) return rlMsg(RL_NO_WALLET,'warn');
+  var link = location.origin+'/rps.html?ref='+_rlWallet.pubkey;
+  rlMsg(await rlCopy(link) ? 'referral link copied' : link, 'ok');
+};
+$('rlDisconnect').onclick = function(){
+  if(!_rlWallet) return rlMsg('nothing connected','warn');
+  rlMsg('to switch accounts, sign out on slither-sol.com','warn');
+};
+rlRender();
+rlRefresh();
+setInterval(rlRefresh, 30000);
 </script>
 </body>
 </html>
