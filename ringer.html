@@ -71,6 +71,23 @@
     cursor:pointer;letter-spacing:.5px}
   .mini-btn.test{background:rgba(153,69,255,.15);border:1px solid rgba(153,69,255,.5);color:#c9a3ff}
   .mini-btn.logout{background:rgba(255,60,60,.12);border:1px solid rgba(255,80,80,.5);color:#ff8a8a}
+  .table-panel{margin-top:12px;border-color:rgba(20,241,149,.35)}
+  .seat-row{display:flex;align-items:center;gap:9px;padding:9px 4px;font-size:12px;
+    border-bottom:1px solid rgba(255,255,255,.05)}
+  .seat-row:last-child{border-bottom:0}
+  .seat-dot{width:13px;height:13px;border-radius:50%;flex:0 0 auto;
+    background:radial-gradient(circle at 33% 30%,#fff9,transparent 55%),var(--sc,#555);
+    box-shadow:0 0 0 2px #0006 inset}
+  .seat-row.empty{opacity:.45}
+  .seat-row.empty .seat-dot{background:#2a3348;box-shadow:none;border:1px dashed #4a5673}
+  .seat-name{flex:1;color:#dfe6f5;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .seat-name b{color:#14f195}
+  .seat-tag{font-size:9px;letter-spacing:1px;padding:3px 8px;border-radius:999px;
+    border:1px solid rgba(63,208,224,.4);color:#7fe6f5}
+  .seat-tag.paid{border-color:rgba(20,241,149,.5);color:#14f195;background:rgba(20,241,149,.08)}
+  .seat-tag.gone{border-color:rgba(255,90,90,.5);color:#ff8a8a}
+  .table-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;
+    margin-top:12px;font-size:11px;color:#8a94ad;flex-wrap:wrap}
   .skin-preview{height:96px;border-radius:12px;border:1px solid rgba(255,255,255,.06);margin-bottom:12px;
     background:linear-gradient(180deg,#5b3f26,#2b1c10);box-shadow:inset 0 0 0 6px rgba(0,0,0,.35)}
   .menu-footer{margin:26px auto 0;text-align:center;display:flex;gap:10px;justify-content:center;align-items:center;
@@ -311,6 +328,22 @@
         <button class="play-now" id="bStart">&#9654; SHOOT MARBLES</button>
         <button class="watch-bet" id="bLive">&#128176; PLAY $1 TABLE &middot; WINNER TAKES THE POT</button>
         <div id="liveMsg"></div>
+
+        <!-- ══ TABLE: who's actually seated ══ -->
+        <div class="mpanel table-panel hidden" id="tablePanel">
+          <div class="mpanel-h">
+            <span>&#127920; TABLE <span id="tableId"></span></span>
+            <span class="live-badge"><i></i>LIVE</span>
+          </div>
+          <div id="seatList"></div>
+          <div class="table-foot">
+            <span id="tableCountdown">waiting for players…</span>
+            <div style="display:flex;gap:8px">
+              <button class="mbtn outline" id="bStartNow" style="width:auto;padding:8px 14px">START NOW</button>
+              <button class="mbtn outline" id="bLeaveTable" style="width:auto;padding:8px 14px">LEAVE</button>
+            </div>
+          </div>
+        </div>
 
         <div class="slots" id="slots"></div>
 
@@ -645,8 +678,11 @@ function buildHUD(){
   G.players.forEach(p=>{
     const d = document.createElement('div');
     d.className='pcard'; d.style.setProperty('--c',p.color); d.dataset.i=p.idx;
+    // online tables show the real player name; local play keeps P1..P4
+    const nm  = p.label ? p.label : 'P'+(p.slot+1);
+    const sub = p.label ? (p.isMe ? 'YOU' : 'ONLINE') : (p.type==='cpu' ? 'CPU' : 'HUMAN');
     d.innerHTML=`<div class="dot"></div>
-      <div style="min-width:0"><div class="nm">P${p.slot+1}</div><div class="sub">${p.type==='cpu'?'CPU':'HUMAN'}</div></div>
+      <div style="min-width:0"><div class="nm">${esc(nm)}</div><div class="sub">${sub}</div></div>
       <div class="sc">0</div>`;
     playersEl.appendChild(d);
   });
@@ -1897,6 +1933,66 @@ async function animateServerShot(msg){
                                 c:G.players[msg.seat]?.color||'#fff',t:0});
 }
 
+/* Who is actually at this table. Driven by every lobby broadcast, so a player
+   appearing or dropping is visible immediately instead of buried in one line. */
+const esc = s => String(s==null?'':s).replace(/[<>&"]/g, c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+let tableTick = 0;
+
+function renderTable(l){
+  if(!l) return;
+  LIVE.lobby = l;
+  const panel = document.getElementById('tablePanel');
+  panel.classList.remove('hidden');
+  document.getElementById('tableId').textContent = '#'+l.id;
+
+  const rows = [];
+  for(let i=0;i<l.maxPlayers;i++){
+    const p = l.players[i];
+    if(p){
+      const you = (i===LIVE.seat);
+      const tag = !p.connected ? '<span class="seat-tag gone">GONE</span>'
+                : p.paid       ? '<span class="seat-tag paid">PAID</span>'
+                               : '<span class="seat-tag">FREE</span>';
+      rows.push(`<div class="seat-row" style="--sc:${PCOL[i]}">
+        <span class="seat-dot"></span>
+        <span class="seat-name">${esc(p.name)}${you?' <b>(YOU)</b>':''}</span>${tag}</div>`);
+    }else{
+      rows.push(`<div class="seat-row empty"><span class="seat-dot"></span>
+        <span class="seat-name">waiting for a player…</span></div>`);
+    }
+  }
+  document.getElementById('seatList').innerHTML = rows.join('');
+
+  const seated = l.players.length;
+  const canStart = seated >= l.minPlayers;
+  document.getElementById('bStartNow').style.display = canStart ? '' : 'none';
+
+  clearInterval(tableTick);
+  const foot = document.getElementById('tableCountdown');
+  if(l.startsInMs != null){
+    let ms = l.startsInMs;
+    const paint = ()=>{
+      foot.textContent = ms>0 ? `starting in ${Math.ceil(ms/1000)}s…` : 'starting…';
+      ms -= 250; if(ms < -1000) clearInterval(tableTick);
+    };
+    paint(); tableTick = setInterval(paint, 250);
+  }else{
+    foot.textContent = canStart ? `${seated} seated — start when ready`
+                                : `${seated}/${l.minPlayers} needed to start`;
+  }
+}
+
+document.getElementById('bStartNow').onclick = ()=>{
+  if(LIVE.ws?.readyState===1) LIVE.ws.send(JSON.stringify({type:'start_now'}));
+};
+document.getElementById('bLeaveTable').onclick = ()=>{
+  clearInterval(tableTick);
+  try{ LIVE.ws?.close(); }catch(e){}
+  LIVE.on=false; LIVE.seat=-1; LIVE.lobby=null;
+  document.getElementById('tablePanel').classList.add('hidden');
+  lmsg('left the table');
+};
+
 function liveHud(){
   const l = LIVE.lobby; if(!l) return;
   const seats = l.players.map((p,i)=>
@@ -1910,19 +2006,22 @@ function liveConnect(ticket){
   const ws = new WebSocket(RINGER_SERVER.replace(/^http/,'ws') + '/ws');
   LIVE.ws = ws;
   ws.onopen = ()=> ws.send(JSON.stringify({ type:'join', ticket,
-                              name: WALLET.address ? short(WALLET.address) : 'Player' }));
+                              name: playerName() || (WALLET.address ? short(WALLET.address) : 'Player') }));
   ws.onerror = ()=> lmsg('connection failed — table server unreachable','bad');
   ws.onclose = ()=>{ if(LIVE.on) lmsg('disconnected from the table','bad'); LIVE.on=false; };
   ws.onmessage = async (e)=>{
     const m = JSON.parse(e.data);
-    if(m.type==='joined'){ LIVE.seat=m.seat; LIVE.lobby=m.lobby; lmsg(`seated — waiting for players (${m.lobby.players.length}/${m.lobby.maxPlayers})`); }
-    if(m.type==='lobby'){ LIVE.lobby=m.lobby;
-      lmsg(`waiting — ${m.lobby.players.length}/${m.lobby.maxPlayers} seated`
-           + (m.lobby.startsInMs!=null?` · starts in ${Math.ceil(m.lobby.startsInMs/1000)}s`:'')); }
+    if(m.type==='joined'){ LIVE.seat=m.seat; renderTable(m.lobby);
+      lmsg(`you're seated — seat ${m.seat+1}`); }
+    if(m.type==='lobby'){ renderTable(m.lobby); }
+    if(m.type==='left'){ renderTable(m.lobby); lmsg(`a player left the table`,'warn'); }
     if(m.type==='start'){
       LIVE.on=true; LIVE.lobby=m.lobby;
+      clearInterval(tableTick);
+      document.getElementById('tablePanel').classList.add('hidden');
       setupEl.classList.add('hidden');
-      G.players = m.lobby.players.map((p,i)=>({ idx:i, slot:i, name:i===LIVE.seat?'YOU':`PLAYER ${i+1}`,
+      G.players = m.lobby.players.map((p,i)=>({ idx:i, slot:i,
+        name: p.name || `PLAYER ${i+1}`, label: p.name || `PLAYER ${i+1}`, isMe: i===LIVE.seat,
         color:PCOL[i], hue:PHUE[i], type:'human', score:0, shooter:null }));
       G.demo=false; buildHUD();
       showSnapshot(m.lobby.state);
