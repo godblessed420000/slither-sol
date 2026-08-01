@@ -1650,28 +1650,73 @@ async function copyText(t){
   }catch(e){ return false; }
 }
 
-/* Find the wallet the main site signed in with.
-   slither-sol.com stores the local keypair as ss_kp_<email> and the address as
-   ss_kp_<email>_addr — the address is all we read, never the secret key. */
+/* base58 (Bitcoin alphabet) — only used to derive a PUBLIC key locally. */
+const B58A='123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+function b58encode(bytes){
+  const d=[0];
+  for(const byte of bytes){
+    let c=byte;
+    for(let i=0;i<d.length;i++){ c += d[i]<<8; d[i]=c%58; c=(c/58)|0; }
+    while(c){ d.push(c%58); c=(c/58)|0; }
+  }
+  let out='';
+  for(const byte of bytes){ if(byte===0) out+='1'; else break; }
+  for(let i=d.length-1;i>=0;i--) out+=B58A[d[i]];
+  return out;
+}
+
+/* Ringer is served from slither-sol.com, so it shares that origin's
+   localStorage. The site keeps its session as:
+     sso_current      -> userId of the signed-in account
+     sso_<userId>     -> { walletAddress, savedAt, ... }, expiring after 7 days
+   We mirror that lookup (including the expiry) so this page shows exactly the
+   wallet the main site is signed in with — no separate connect step. */
 function readSiteWallet(){
+  const SESSION_MS = 7*86400000;
+  const fromSession = (uid)=>{
+    try{
+      const s = JSON.parse(localStorage.getItem('sso_'+uid) || '{}');
+      if(!s.walletAddress || !s.savedAt) return null;
+      if(Date.now() - s.savedAt > SESSION_MS) return null;      // stale, same as the site
+      return B58.test(s.walletAddress) ? s.walletAddress : null;
+    }catch(e){ return null; }
+  };
+  try{
+    const cur = localStorage.getItem('sso_current');
+    if(cur){ const a = fromSession(cur); if(a) return a; }
+    // no current pointer — fall back to the most recently saved account
+    let best=null, bestAt=0;
+    for(let i=0;i<localStorage.length;i++){
+      const k = localStorage.key(i);
+      if(!k || !k.startsWith('sso_') || k==='sso_current') continue;
+      try{
+        const s = JSON.parse(localStorage.getItem(k)||'{}');
+        if(s.walletAddress && s.savedAt > bestAt && Date.now()-s.savedAt <= SESSION_MS
+           && B58.test(s.walletAddress)){ best=s.walletAddress; bestAt=s.savedAt; }
+      }catch(e){}
+    }
+    if(best) return best;
+  }catch(e){}
+
+  // Last resort: the site's local keypair (ss_kp_<email>, a 64-byte secret).
+  // An ed25519 secret key ends with its own public key, so we take the last 32
+  // bytes and encode them. The secret itself is never read out, logged or sent.
   try{
     for(let i=0;i<localStorage.length;i++){
       const k = localStorage.key(i);
-      if(!k || !/^ss_kp_.*_addr$/.test(k)) continue;
-      const v = (localStorage.getItem(k)||'').replace(/"/g,'').trim();
-      if(B58.test(v)) return v;
+      if(!k || !/^ss_kp_[a-z0-9]+$/.test(k)) continue;
+      const arr = JSON.parse(localStorage.getItem(k)||'null');
+      if(Array.isArray(arr) && arr.length===64){
+        const a = b58encode(Uint8Array.from(arr.slice(32)));
+        if(B58.test(a)) return a;
+      }
     }
   }catch(e){}
-  for(const k of ['ss_pubkey','walletAddress','solana_pubkey','privy:address']){
-    try{
-      const v = (localStorage.getItem(k)||'').replace(/"/g,'').trim();
-      if(B58.test(v)) return v;
-    }catch(e){}
-  }
+
   // an injected wallet (Phantom etc.) that's already connected
   try{
     const pk = window.solana?.publicKey || window.phantom?.solana?.publicKey;
-    if(pk) { const s = pk.toBase58 ? pk.toBase58() : String(pk); if(B58.test(s)) return s; }
+    if(pk){ const s = pk.toBase58 ? pk.toBase58() : String(pk); if(B58.test(s)) return s; }
   }catch(e){}
   const q = new URLSearchParams(location.search).get('pubkey');
   return q && B58.test(q) ? q : null;
