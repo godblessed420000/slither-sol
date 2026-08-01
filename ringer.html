@@ -2114,7 +2114,16 @@ async function joinLiveTable(){
     lmsg(`buy-in $${wantUsd} (${buyinSol} SOL) — approve in your wallet…`);
     const sig = await payBuyIn(cfg, buyinLam);
     if(!sig) return;
-    lmsg('verifying payment on-chain…');
+    lmsg('confirming on-chain — this takes a few seconds…');
+    const web3 = await import('https://esm.sh/@solana/web3.js@1.95.3');
+    for(const url of SOLANA_RPCS){
+      try{
+        const conn = new web3.Connection(url, 'confirmed');
+        await conn.confirmTransaction(sig, 'confirmed');
+        break;
+      }catch(e){ console.warn('confirm', url, e.message); }
+    }
+    lmsg('verified — seating you…');
     const r = await fetch(`${RINGER_SERVER}/verify-entry`,{ method:'POST',
       headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ signature:sig, pubkey:WALLET.address, lamports:buyinLam }) });
