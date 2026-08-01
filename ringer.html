@@ -2152,15 +2152,13 @@ async function payBuyIn(cfg, lamports){
   const from = kp.publicKey;
 
   lmsg('building transaction…');
-  const { blockhash, lastValidBlockHeight } = await (await fetch(`${RINGER_SERVER}/blockhash`)).json();
-  const tx = new web3.Transaction({
-    recentBlockhash: blockhash,
-    lastValidBlockHeight,
-    feePayer: from
-  }).add(
-    web3.SystemProgram.transfer({ fromPubkey:from,
-      toPubkey:new web3.PublicKey(cfg.treasury), lamports })
-  );
+  const bh = await (await fetch(`${RINGER_SERVER}/blockhash`)).json();
+  const tx = new web3.Transaction();
+  tx.recentBlockhash = bh.blockhash;
+  tx.lastValidBlockHeight = bh.lastValidBlockHeight;
+  tx.feePayer = from;
+  tx.add(web3.SystemProgram.transfer({ fromPubkey:from,
+    toPubkey:new web3.PublicKey(cfg.treasury), lamports }));
 
   lmsg('signing & broadcasting…');
   tx.sign(kp);
