@@ -2096,13 +2096,15 @@ async function joinLiveTable(){
     await loadPhysics();
 
     const wantUsd = G.stakeUsd;
-    // Free table or server has no treasury
-    if(wantUsd <= 0 || !cfg.paidEnabled){
-      if(wantUsd > 0 && !cfg.paidEnabled) lmsg('paid tables offline — joining free table','warn');
-      else lmsg('joining a free online table…');
+    if(wantUsd <= 0){
+      lmsg('joining a free online table…');
       const t = await (await fetch(`${RINGER_SERVER}/free-entry`,{method:'POST'})).json();
       if(!t.ticket){ lmsg('could not get a seat','bad'); return; }
       liveConnect(t.ticket);
+      return;
+    }
+    if(!cfg.paidEnabled){
+      lmsg('paid tables are not live yet — select FREE to play online','bad');
       return;
     }
 
