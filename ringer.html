@@ -44,12 +44,17 @@
   .save-btn{font-size:11px;font-weight:700;color:#14f195;background:rgba(20,241,149,.08);font-family:'Orbitron',monospace;
     border:1px solid rgba(20,241,149,.4);border-radius:10px;padding:11px 15px;cursor:pointer}
   .save-btn:hover{background:rgba(20,241,149,.18)}
-  .stake-row{display:flex;gap:8px;margin-bottom:14px}
-  .stake-tab{flex:1;text-align:center;padding:11px 4px;border-radius:11px;font-family:'Orbitron',monospace;font-size:13px;
-    font-weight:700;cursor:pointer;border:1px solid rgba(63,208,224,.35);color:#7fe6f5;background:rgba(20,241,149,.04);transition:all .14s}
+  .stake-row{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}
+  .stake-tab{text-align:center;padding:9px 10px;border-radius:11px;font-family:'Orbitron',monospace;font-size:12px;
+    font-weight:700;cursor:pointer;border:1px solid rgba(63,208,224,.35);color:#7fe6f5;background:rgba(20,241,149,.04);transition:all .14s;flex:1;min-width:0}
   .stake-tab.active{color:#04121a;border-color:transparent;
     background:repeating-linear-gradient(135deg,#14f195,#14f195 11px,#0fbf77 11px,#0fbf77 22px);box-shadow:0 0 16px rgba(20,241,149,.4)}
-  .stake-tab small{display:block;font-size:8px;opacity:.85;margin-top:4px;letter-spacing:.5px;font-weight:700}
+  .stake-tab small{display:block;font-size:8px;opacity:.85;margin-top:3px;letter-spacing:.5px;font-weight:700}
+  .custom-amt-row{display:flex;gap:8px;margin-bottom:14px;align-items:center}
+  .custom-amt-row input{flex:1;padding:10px 12px;border-radius:11px;border:1px solid #2a344f;background:#0d1220;
+    color:#14f195;font-size:16px;font-family:'Orbitron',monospace;font-weight:700;text-align:center;max-width:140px}
+  .custom-amt-row input:focus{outline:none;border-color:#14f195;box-shadow:0 0 12px rgba(20,241,149,.25)}
+  .custom-amt-row .usd-label{font-size:11px;color:#8a94ad;letter-spacing:1px;font-weight:700}
   .locked{opacity:.4;cursor:not-allowed;filter:grayscale(.7)}
   .play-now{width:100%;padding:19px;border:0;border-radius:13px;font-family:'Orbitron',monospace;font-weight:900;
     font-size:19px;letter-spacing:2px;color:#04121a;cursor:pointer;
@@ -285,7 +290,12 @@
  <div class="menu">
   <div class="menu-top">
     <button class="stake-pill active" data-stake="free">FREE</button>
+    <button class="stake-pill" data-stake="0.25">$0.25</button>
+    <button class="stake-pill" data-stake="0.50">$0.50</button>
     <button class="stake-pill" data-stake="1">$1</button>
+    <button class="stake-pill" data-stake="2">$2</button>
+    <button class="stake-pill" data-stake="5">$5</button>
+    <button class="stake-pill" data-stake="custom">CUSTOM</button>
   </div>
   <div class="menu-title">
     <h1>RINGER</h1>
@@ -321,13 +331,23 @@
           <button class="save-btn" id="bSaveName">SAVE</button>
         </div>
 
-        <div class="stake-row">
-          <button class="stake-tab active" data-stake="free">FREE<small>PRACTICE &middot; HOT SEAT</small></button>
-          <button class="stake-tab" data-stake="1">$1<small>TABLE &middot; 2-4P</small></button>
+        <div class="stake-row" id="stakeTabs">
+          <button class="stake-tab active" data-stake="free">FREE<small>PRACTICE</small></button>
+          <button class="stake-tab" data-stake="0.25">$0.25<small>2-4P</small></button>
+          <button class="stake-tab" data-stake="0.50">$0.50<small>2-4P</small></button>
+          <button class="stake-tab" data-stake="1">$1<small>2-4P</small></button>
+          <button class="stake-tab" data-stake="2">$2<small>2-4P</small></button>
+          <button class="stake-tab" data-stake="5">$5<small>2-4P</small></button>
+        </div>
+        <div class="custom-amt-row hidden" id="customAmtRow">
+          <span class="usd-label">$</span>
+          <input type="number" id="customAmt" min="0.25" max="100" step="0.01" value="10" placeholder="amount">
+          <span class="usd-label">USD</span>
+          <button class="save-btn" id="bSetCustom">SET</button>
         </div>
 
         <button class="play-now" id="bStart">&#9654; SHOOT MARBLES</button>
-        <button class="watch-bet" id="bLive">&#128176; PLAY $1 TABLE &middot; WINNER TAKES THE POT</button>
+        <button class="watch-bet" id="bLive">&#128176; JOIN TABLE &middot; WINNER TAKES THE POT</button>
         <div id="liveMsg"></div>
 
         <!-- ══ TABLE: who's actually seated ══ -->
@@ -492,7 +512,7 @@ const G = {
   placedThisTurn:false, // shooter was placed this turn (so re-place is allowed)
   aim:{active:false, x:0, y:0}, ghostA:null, turnTimer:0,
   cpu:null,
-  skill:1, count:13, skin:0, stake:'free',
+  skill:1, count:13, skin:0, stake:'free', stakeUsd:0,
   assist:true, muted:false
 };
 
@@ -613,7 +633,7 @@ document.querySelectorAll('#segCap button').forEach(b=>b.onclick=()=>{
 });
 document.getElementById('bStart').onclick = ()=>{
   ac();
-  if(G.stake === '1'){ joinLiveTable(); return; }
+  if(G.stake !== 'free'){ joinLiveTable(); return; }
   startGame(false);
 };
 document.getElementById('bAgain').onclick = ()=>{ overEl.classList.add('hidden'); startGame(false); };
@@ -1844,7 +1864,7 @@ document.getElementById('wcDeposit').onclick = async ()=>{
           : 'your address is shown above — send mainnet SOL to it', ok ? 'ok' : 'warn');
 };
 document.getElementById('wcCashout').onclick = ()=>{
-  if(!WALLET.serverUp) return wmsg('$1 tables aren\'t live yet — Ringer is free play for now', 'warn');
+  if(!WALLET.serverUp) return wmsg('paid tables aren\'t live yet — Ringer is free play for now', 'warn');
   if(!WALLET.address)  return wmsg(NO_WALLET, 'warn');
   wmsg('winnings are paid straight to your wallet when a table ends');
 };
@@ -1864,7 +1884,7 @@ walletRefresh();
 setInterval(walletRefresh, 30000);
 
 /* ======================================================================
-   LIVE $1 TABLES — server-authoritative.
+   LIVE TABLES — server-authoritative, custom buy-in amounts.
    We send an intent (place angle, direction, power). The server runs the
    physics and tells us what happened; we replay it with the SAME module it
    judged with, then snap to its snapshot. We never decide a knockout.
@@ -2001,7 +2021,7 @@ function liveHud(){
     `${i===LIVE.seat?'YOU':'P'+(i+1)} ${p.score}`).join('  ·  ');
   const turn = l.state ? (l.state.cur===LIVE.seat ? 'YOUR SHOT' : `P${l.state.cur+1} shooting`) : '';
   document.getElementById('status').innerHTML =
-    `<b>$${LIVE.cfg?.buyinUsd??1} TABLE</b> · ${seats} · ${turn}`;
+    `<b>${G.stakeUsd > 0 ? '$'+G.stakeUsd : 'FREE'} TABLE</b> · ${seats} · ${turn}`;
 }
 
 function liveConnect(ticket){
@@ -2075,9 +2095,11 @@ async function joinLiveTable(){
     LIVE.cfg = cfg; WALLET.serverUp = true;
     await loadPhysics();
 
-    // Server running without a treasury → real multiplayer, no money involved.
-    if(!cfg.paidEnabled){
-      lmsg('joining a free online table…');
+    const wantUsd = G.stakeUsd;
+    // Free table or server has no treasury
+    if(wantUsd <= 0 || !cfg.paidEnabled){
+      if(wantUsd > 0 && !cfg.paidEnabled) lmsg('paid tables offline — joining free table','warn');
+      else lmsg('joining a free online table…');
       const t = await (await fetch(`${RINGER_SERVER}/free-entry`,{method:'POST'})).json();
       if(!t.ticket){ lmsg('could not get a seat','bad'); return; }
       liveConnect(t.ticket);
@@ -2085,16 +2107,18 @@ async function joinLiveTable(){
     }
 
     if(!WALLET.address){ lmsg('sign in on slither-sol.com to play for money','warn'); return; }
-    lmsg(`buy-in ${cfg.buyinSol} SOL — approve in your wallet…`);
-    const sig = await payBuyIn(cfg);
+    const buyinLam = Math.round((wantUsd / cfg.solPriceUsd) * 1e9);
+    const buyinSol = (buyinLam / 1e9).toFixed(6);
+    lmsg(`buy-in $${wantUsd} (${buyinSol} SOL) — approve in your wallet…`);
+    const sig = await payBuyIn(cfg, buyinLam);
     if(!sig) return;
     lmsg('verifying payment on-chain…');
     const r = await fetch(`${RINGER_SERVER}/verify-entry`,{ method:'POST',
       headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ signature:sig, pubkey:WALLET.address }) });
+      body: JSON.stringify({ signature:sig, pubkey:WALLET.address, lamports:buyinLam }) });
     const j = await r.json();
     if(!j.ticket){ lmsg('entry rejected: '+(j.error||'unknown'),'bad'); return; }
-    lmsg('paid — seating you…');
+    lmsg(`paid $${wantUsd} — seating you…`);
     liveConnect(j.ticket);
   }catch(e){
     lmsg('table unavailable: '+e.message,'bad');
@@ -2102,7 +2126,7 @@ async function joinLiveTable(){
 }
 
 /** Buy-in transfer, signed by the player's own wallet. We never hold a key. */
-async function payBuyIn(cfg){
+async function payBuyIn(cfg, lamports){
   const prov = window.solana || window.phantom?.solana;
   if(!prov?.signAndSendTransaction){
     lmsg('need a Solana wallet extension to pay the buy-in','warn');
@@ -2114,7 +2138,7 @@ async function payBuyIn(cfg){
   const { blockhash } = await (await fetch(`${RINGER_SERVER}/blockhash`)).json();
   const tx = new web3.Transaction({ recentBlockhash:blockhash, feePayer:from }).add(
     web3.SystemProgram.transfer({ fromPubkey:from,
-      toPubkey:new web3.PublicKey(cfg.treasury), lamports:cfg.buyinLamports })
+      toPubkey:new web3.PublicKey(cfg.treasury), lamports })
   );
   const { signature } = await prov.signAndSendTransaction(tx);
   return signature;
@@ -2129,29 +2153,64 @@ const SKIN_PREVIEW = ['linear-gradient(180deg,#5b3f26,#2b1c10)','linear-gradient
 function applyPaidState(){
   const paid = !!(LIVE.cfg && LIVE.cfg.paidEnabled);
   const btn = document.getElementById('bLive');
-  btn.innerHTML = paid ? '&#128176; PLAY $1 TABLE &middot; WINNER TAKES THE POT'
-                       : '&#9654; PLAY FREE ONLINE TABLE';
-  document.querySelectorAll('[data-stake="1"]').forEach(el=>{
-    el.classList.toggle('locked', !paid);
-    el.title = paid ? '' : 'Real-money tables are off until the treasury wallet is configured';
+  updateLiveBtn();
+  document.querySelectorAll('[data-stake]').forEach(el=>{
+    if(el.dataset.stake !== 'free' && el.dataset.stake !== 'custom'){
+      el.classList.toggle('locked', !paid);
+      el.title = paid ? '' : 'Real-money tables are off until the treasury wallet is configured';
+    }
   });
-  const tab = document.querySelector('.stake-tab[data-stake="1"] small');
-  if(tab) tab.textContent = paid ? 'TABLE · 2-4P' : 'OFFLINE';
-  if(!paid && G.stake === '1') setStake('free');
+  if(!paid && G.stake !== 'free') setStake('free');
+}
+
+function updateLiveBtn(){
+  const btn = document.getElementById('bLive');
+  const paid = !!(LIVE.cfg && LIVE.cfg.paidEnabled);
+  if(G.stake === 'free' || !paid){
+    btn.innerHTML = '&#9654; PLAY FREE ONLINE TABLE';
+  } else {
+    btn.innerHTML = `&#128176; JOIN $${G.stakeUsd} TABLE &middot; WINNER TAKES THE POT`;
+  }
 }
 
 function setStake(s){
-  if(s === '1' && !(LIVE.cfg && LIVE.cfg.paidEnabled)){
-    lmsg('$1 tables are off — the treasury wallet isn\'t configured yet','warn');
+  const paid = !!(LIVE.cfg && LIVE.cfg.paidEnabled);
+  if(s === 'custom'){
+    document.getElementById('customAmtRow').classList.remove('hidden');
+    document.querySelectorAll('[data-stake]').forEach(el=>
+      el.classList.toggle('active', el.dataset.stake==='custom'));
+    return;
+  }
+  document.getElementById('customAmtRow').classList.add('hidden');
+  if(s !== 'free' && !paid){
+    lmsg('paid tables are off — the treasury wallet isn\'t configured yet','warn');
     return;
   }
   G.stake = s;
+  G.stakeUsd = s === 'free' ? 0 : parseFloat(s);
   document.querySelectorAll('[data-stake]').forEach(el=>
     el.classList.toggle('active', el.dataset.stake===s));
   const play = document.getElementById('bStart');
-  play.textContent = s==='free' ? '▶ SHOOT MARBLES' : '▶ JOIN $1 TABLE';
+  play.textContent = s==='free' ? '▶ SHOOT MARBLES' : `▶ JOIN $${G.stakeUsd} TABLE`;
+  updateLiveBtn();
 }
 document.querySelectorAll('[data-stake]').forEach(el=> el.onclick = ()=> setStake(el.dataset.stake));
+
+document.getElementById('bSetCustom').onclick = ()=>{
+  const v = parseFloat(document.getElementById('customAmt').value);
+  if(!v || v < 0.25){ lmsg('minimum buy-in is $0.25','warn'); return; }
+  if(v > 100){ lmsg('maximum buy-in is $100','warn'); return; }
+  const rounded = Math.round(v*100)/100;
+  G.stake = String(rounded);
+  G.stakeUsd = rounded;
+  document.getElementById('customAmtRow').classList.add('hidden');
+  document.querySelectorAll('[data-stake]').forEach(el=> el.classList.remove('active'));
+  document.querySelector('[data-stake="custom"]').classList.add('active');
+  const play = document.getElementById('bStart');
+  play.textContent = `▶ JOIN $${rounded} TABLE`;
+  updateLiveBtn();
+  lmsg(`stake set to $${rounded}`);
+};
 
 function playerName(){ return (localStorage.getItem('ringer_name')||'').slice(0,16); }
 function syncName(){
@@ -2196,7 +2255,7 @@ setInterval(refreshLobbyStats, 20000);
 
 document.getElementById('bInfo').onclick = ()=>{
   const c = LIVE.cfg;
-  wmsg(c ? `$${c.buyinUsd} buy-in · ${c.minPlayers}-${c.maxPlayers}p · rake ${c.rakeBps/100}% · ${c.shotSeconds}s per shot`
+  wmsg(c ? `$${c.minBuyinUsd}–$${c.maxBuyinUsd} buy-in · ${c.minPlayers}-${c.maxPlayers}p · rake ${c.rakeBps/100}% · ${c.shotSeconds}s per shot`
          : 'table server offline — free play only', c?'ok':'warn');
 };
 
