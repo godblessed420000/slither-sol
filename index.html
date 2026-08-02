@@ -1575,7 +1575,7 @@ canvas{display:block;width:100%;height:100%;}
 // slither-sol.com is served by Vercel, which deploys this file verbatim on push.
 // This is the number players actually see. (The old GitHub Pages workflow that
 // auto-stamped V<VERSION> deployed to a dead host and is now disabled.)
-var GAME_BUILD = 'V440';
+var GAME_BUILD = 'V441';
 
 var PRIVY_APP_ID          = 'client-WY6aEf1eS4reRDrBq7ghh8arEiMaKSj1Vk37ZG8CAawEF';
 var HOUSE_WALLET_ADDRESS  = '2QnrdhxXYt8ythhGYHDz6MtTZE1z2bYvbss8z3ZGj2uJ';
@@ -10291,15 +10291,21 @@ window.addEventListener('load', function() {
     <span class="gm-ico">🔵</span>
     <span><span class="gm-name">Ringer</span><span class="gm-sub">Marble knockout · 1–4p</span></span>
   </a>
+  <a class="gm-item" id="gmSorry" href="#" title="Sorry!">
+    <span class="gm-ico">🎲</span>
+    <span><span class="gm-name">Sorry!</span><span class="gm-sub">$1 card game · 2–4p</span></span>
+  </a>
 </div>
 <script>
 // Destinations for sibling games (each on its own Node+WebSocket host — NOT Vercel).
 // Update once the servers are live (e.g. Fly.io).
 var SOLORBIT_URL = 'https://solorbit.fly.dev';
 var WILDS_URL    = 'https://wilds-solana.fly.dev';
+var SORRY_URL    = 'https://sorry-solana.fly.dev';
 (function(){
   var a = document.getElementById('gmOrbit'); if (a) a.href = SOLORBIT_URL;
   var w = document.getElementById('gmWilds'); if (w) w.href = WILDS_URL;
+  var s = document.getElementById('gmSorry'); if (s) s.href = SORRY_URL;
 })();
 function toggleGamesMenu(e){
   if(e) e.stopPropagation();
